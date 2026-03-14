@@ -1,0 +1,254 @@
+using System.Text.Json;
+using DotOcpi.Models.V2_2_1;
+using DotOcpi.Serialization;
+using FluentAssertions;
+using Xunit;
+
+namespace DotOcpi.Tests.Serialization;
+
+/// <summary>
+/// Tests OCPI null-handling semantics: null omission on serialization,
+/// explicit null removal in PATCH, and nullable field round-tripping.
+/// </summary>
+public class NullHandlingTests
+{
+    private static readonly JsonSerializerOptions Options = OcpiJsonOptions.V2_2_1;
+
+    [Fact]
+    public void Serialize_NullOptionalFields_OmitsFromJson()
+    {
+        var location = new Location
+        {
+            CountryCode = new("NL"),
+            PartyId = new("TNM"),
+            Id = new("LOC1"),
+            Publish = true,
+            Address = "Keizersgracht 100",
+            City = "Amsterdam",
+            Country = "NLD",
+            Coordinates = new("52.364115", "4.891860"),
+            TimeZone = "Europe/Amsterdam",
+            LastUpdated = new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero),
+        };
+
+        var json = JsonSerializer.Serialize(location, Options);
+
+        json.Should().NotContain("\"name\":");
+        json.Should().NotContain("\"postal_code\":");
+        json.Should().NotContain("\"state\":");
+        json.Should().NotContain("\"evses\":");
+        json.Should().NotContain("\"directions\":");
+        json.Should().NotContain("\"operator\":");
+        json.Should().NotContain("\"suboperator\":");
+        json.Should().NotContain("\"owner\":");
+        json.Should().NotContain("\"facilities\":");
+        json.Should().NotContain("\"charging_when_closed\":");
+        json.Should().NotContain("\"images\":");
+        json.Should().NotContain("\"energy_mix\":");
+    }
+
+    [Fact]
+    public void Serialize_NullOptionalFields_KeepsRequiredFields()
+    {
+        var location = new Location
+        {
+            CountryCode = new("NL"),
+            PartyId = new("TNM"),
+            Id = new("LOC1"),
+            Publish = true,
+            Address = "Keizersgracht 100",
+            City = "Amsterdam",
+            Country = "NLD",
+            Coordinates = new("52.364115", "4.891860"),
+            TimeZone = "Europe/Amsterdam",
+            LastUpdated = new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero),
+        };
+
+        var json = JsonSerializer.Serialize(location, Options);
+
+        json.Should().Contain("\"country_code\":");
+        json.Should().Contain("\"party_id\":");
+        json.Should().Contain("\"id\":");
+        json.Should().Contain("\"publish\":");
+        json.Should().Contain("\"address\":");
+        json.Should().Contain("\"city\":");
+        json.Should().Contain("\"country\":");
+        json.Should().Contain("\"coordinates\":");
+        json.Should().Contain("\"time_zone\":");
+        json.Should().Contain("\"last_updated\":");
+    }
+
+    [Fact]
+    public void Deserialize_MissingOptionalFields_DefaultsToNull()
+    {
+        var json = """
+            {
+                "country_code":"NL",
+                "party_id":"TNM",
+                "id":"LOC1",
+                "publish":true,
+                "address":"Keizersgracht 100",
+                "city":"Amsterdam",
+                "country":"NLD",
+                "coordinates":{"latitude":"52.364115","longitude":"4.891860"},
+                "time_zone":"Europe/Amsterdam",
+                "last_updated":"2026-01-15T12:00:00Z"
+            }
+            """;
+
+        var location = JsonSerializer.Deserialize<Location>(json, Options);
+
+        location.Should().NotBeNull();
+        location!.Name.Should().BeNull();
+        location.PostalCode.Should().BeNull();
+        location.State.Should().BeNull();
+        location.Evses.Should().BeNull();
+        location.Directions.Should().BeNull();
+        location.Operator.Should().BeNull();
+        location.Suboperator.Should().BeNull();
+        location.Owner.Should().BeNull();
+        location.Facilities.Should().BeNull();
+        location.ChargingWhenClosed.Should().BeNull();
+        location.Images.Should().BeNull();
+        location.EnergyMix.Should().BeNull();
+    }
+
+    [Fact]
+    public void Deserialize_ExplicitNullOptionalFields_SetsNull()
+    {
+        var json = """
+            {
+                "country_code":"NL",
+                "party_id":"TNM",
+                "id":"LOC1",
+                "publish":true,
+                "name":null,
+                "address":"Keizersgracht 100",
+                "city":"Amsterdam",
+                "country":"NLD",
+                "coordinates":{"latitude":"52.364115","longitude":"4.891860"},
+                "time_zone":"Europe/Amsterdam",
+                "last_updated":"2026-01-15T12:00:00Z"
+            }
+            """;
+
+        var location = JsonSerializer.Deserialize<Location>(json, Options);
+
+        location.Should().NotBeNull();
+        location!.Name.Should().BeNull();
+    }
+
+    [Fact]
+    public void Patch_ExplicitNull_RemovesOptionalField()
+    {
+        var target = JsonDocument
+            .Parse(
+                """
+                {
+                    "country_code":"NL",
+                    "party_id":"TNM",
+                    "id":"LOC1",
+                    "publish":true,
+                    "name":"Test Location",
+                    "address":"Keizersgracht 100",
+                    "city":"Amsterdam",
+                    "country":"NLD",
+                    "coordinates":{"latitude":"52.364115","longitude":"4.891860"},
+                    "time_zone":"Europe/Amsterdam",
+                    "last_updated":"2026-01-15T12:00:00Z"
+                }
+                """
+            )
+            .RootElement;
+
+        var patch = JsonDocument.Parse("""{"name":null}""").RootElement;
+
+        var result = OcpiPatchHelper.ApplyPatch(target, patch);
+
+        result.TryGetProperty("name", out _).Should().BeFalse();
+        result.GetProperty("city").GetString().Should().Be("Amsterdam");
+    }
+
+    [Fact]
+    public void Patch_UpdateField_PreservesOtherFields()
+    {
+        var target = JsonDocument
+            .Parse(
+                """
+                {
+                    "country_code":"NL",
+                    "party_id":"TNM",
+                    "id":"LOC1",
+                    "publish":true,
+                    "address":"Keizersgracht 100",
+                    "city":"Amsterdam",
+                    "country":"NLD",
+                    "coordinates":{"latitude":"52.364115","longitude":"4.891860"},
+                    "time_zone":"Europe/Amsterdam",
+                    "last_updated":"2026-01-15T12:00:00Z"
+                }
+                """
+            )
+            .RootElement;
+
+        var patch = JsonDocument.Parse("""{"city":"Rotterdam","last_updated":"2026-02-01T08:00:00Z"}""").RootElement;
+
+        var result = OcpiPatchHelper.ApplyPatch(target, patch);
+
+        result.GetProperty("city").GetString().Should().Be("Rotterdam");
+        result.GetProperty("last_updated").GetString().Should().Be("2026-02-01T08:00:00Z");
+        result.GetProperty("address").GetString().Should().Be("Keizersgracht 100");
+        result.GetProperty("country_code").GetString().Should().Be("NL");
+    }
+
+    [Fact]
+    public void Patch_NestedCoordinates_MergesCorrectly()
+    {
+        var target = JsonDocument
+            .Parse(
+                """
+                {
+                    "id":"LOC1",
+                    "coordinates":{"latitude":"52.364115","longitude":"4.891860"}
+                }
+                """
+            )
+            .RootElement;
+
+        var patch = JsonDocument.Parse("""{"coordinates":{"latitude":"51.920000"}}""").RootElement;
+
+        var result = OcpiPatchHelper.ApplyPatch(target, patch);
+
+        var coords = result.GetProperty("coordinates");
+        coords.GetProperty("latitude").GetString().Should().Be("51.920000");
+        coords.GetProperty("longitude").GetString().Should().Be("4.891860");
+    }
+
+    [Fact]
+    public void Patch_MultipleNullRemovals_RemovesAllSpecified()
+    {
+        var target = JsonDocument
+            .Parse(
+                """
+                {
+                    "id":"LOC1",
+                    "name":"Test",
+                    "postal_code":"1012AB",
+                    "state":"NH",
+                    "city":"Amsterdam"
+                }
+                """
+            )
+            .RootElement;
+
+        var patch = JsonDocument.Parse("""{"name":null,"postal_code":null,"state":null}""").RootElement;
+
+        var result = OcpiPatchHelper.ApplyPatch(target, patch);
+
+        result.TryGetProperty("name", out _).Should().BeFalse();
+        result.TryGetProperty("postal_code", out _).Should().BeFalse();
+        result.TryGetProperty("state", out _).Should().BeFalse();
+        result.GetProperty("id").GetString().Should().Be("LOC1");
+        result.GetProperty("city").GetString().Should().Be("Amsterdam");
+    }
+}
