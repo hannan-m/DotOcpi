@@ -4,6 +4,12 @@
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Suppress public API tracking during initial development; populate before v1.0 release.
+       .editorconfig suppression doesn't cover source-generated code in obj/. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('src'))">
+    <NoWarn>$(NoWarn);RS0016;RS0017;RS0022;RS0024;RS0025;RS0026;RS0027;RS0036;RS0037;RS0041</NoWarn>
+  </PropertyGroup>
+
   <!-- MinVer for source projects only -->
   <ItemGroup Condition="$(MSBuildProjectDirectory.Contains('src'))">
     <PackageReference Include="MinVer" PrivateAssets="all" />
