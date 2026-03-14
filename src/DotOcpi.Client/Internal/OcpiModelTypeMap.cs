@@ -64,4 +64,16 @@ internal static class OcpiModelTypeMap
             OcpiVersion.V2_2_1 => typeof(Models.V2_2_1.CommandResponse),
             _ => throw new ArgumentOutOfRangeException(nameof(version), version, "Unsupported OCPI version."),
         };
+
+    internal static Type GetChargingProfileResponseType(OcpiVersion version) =>
+        version switch
+        {
+            OcpiVersion.V2_2 => typeof(Models.V2_2.ChargingProfileResponse),
+            OcpiVersion.V2_2_1 => typeof(Models.V2_2_1.ChargingProfileResponse),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(version),
+                version,
+                "Charging profiles are only available in OCPI 2.2 and later."
+            ),
+        };
 }
