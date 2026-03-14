@@ -54,4 +54,14 @@ internal static class OcpiModelTypeMap
             OcpiVersion.V2_2_1 => typeof(Models.V2_2_1.Token),
             _ => throw new ArgumentOutOfRangeException(nameof(version), version, "Unsupported OCPI version."),
         };
+
+    internal static Type GetCommandResponseType(OcpiVersion version) =>
+        version switch
+        {
+            OcpiVersion.V2_0 => typeof(Models.V2_0.CommandResponse),
+            OcpiVersion.V2_1_1 => typeof(Models.V2_1_1.CommandResponse),
+            OcpiVersion.V2_2 => typeof(Models.V2_2.CommandResponse),
+            OcpiVersion.V2_2_1 => typeof(Models.V2_2_1.CommandResponse),
+            _ => throw new ArgumentOutOfRangeException(nameof(version), version, "Unsupported OCPI version."),
+        };
 }
