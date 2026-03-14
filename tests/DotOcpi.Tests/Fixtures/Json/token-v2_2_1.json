@@ -1,0 +1,11 @@
+{
+  "country_code": "NL",
+  "party_id": "TNM",
+  "uid": "012345678",
+  "type": "RFID",
+  "contract_id": "NL-TNM-000660-8",
+  "issuer": "TheNewMotion",
+  "valid": true,
+  "whitelist": "ALWAYS",
+  "last_updated": "2015-06-29T22:39:09Z"
+}

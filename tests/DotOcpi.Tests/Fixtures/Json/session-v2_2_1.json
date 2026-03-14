@@ -1,0 +1,25 @@
+{
+  "country_code": "BE",
+  "party_id": "BEC",
+  "id": "101",
+  "start_date_time": "2015-06-29T21:39:09Z",
+  "kwh": 0.0,
+  "cdr_token": {
+    "country_code": "NL",
+    "party_id": "TNM",
+    "uid": "012345678",
+    "type": "RFID",
+    "contract_id": "NL-TNM-000660-8"
+  },
+  "auth_method": "WHITELIST",
+  "location_id": "LOC1",
+  "evse_uid": "3256",
+  "connector_id": "1",
+  "currency": "EUR",
+  "total_cost": {
+    "excl_vat": 2.50,
+    "incl_vat": 3.00
+  },
+  "status": "ACTIVE",
+  "last_updated": "2015-06-29T22:01:13Z"
+}
