@@ -1,4 +1,12 @@
 using DotOcpi.AspNetCore.Filters;
+using DotOcpi.AspNetCore.Handlers.Cdrs;
+using DotOcpi.AspNetCore.Handlers.ChargingProfiles;
+using DotOcpi.AspNetCore.Handlers.Commands;
+using DotOcpi.AspNetCore.Handlers.Credentials;
+using DotOcpi.AspNetCore.Handlers.Locations;
+using DotOcpi.AspNetCore.Handlers.Sessions;
+using DotOcpi.AspNetCore.Handlers.Tariffs;
+using DotOcpi.AspNetCore.Handlers.Tokens;
 using DotOcpi.AspNetCore.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -38,6 +46,35 @@ public static class OcpiEndpointRouteBuilderExtensions
         // Apply cross-cutting OCPI filters to all endpoints in this group
         group.AddEndpointFilter<OcpiRequestIdFilter>();
         group.AddEndpointFilter<OcpiAuthFilter>();
+
+        return group;
+    }
+
+    /// <summary>
+    /// Maps all OCPI module endpoints in a single call.
+    /// Wires Locations, Sessions, CDRs, Tariffs, Tokens, Commands,
+    /// ChargingProfiles, and Credentials endpoints for all supported versions.
+    /// </summary>
+    /// <param name="app">The web application.</param>
+    /// <param name="basePath">The base path for all OCPI endpoints (default: "/ocpi").</param>
+    /// <param name="rateLimitOptions">Optional rate limit configuration.</param>
+    /// <returns>A route group builder for adding additional endpoints.</returns>
+    public static RouteGroupBuilder MapAllOcpiEndpoints(
+        this WebApplication app,
+        string basePath = "/ocpi",
+        OcpiRateLimitOptions? rateLimitOptions = null
+    )
+    {
+        var group = app.MapOcpiEndpoints(basePath, rateLimitOptions);
+
+        group.MapLocationsEndpoints();
+        group.MapSessionsEndpoints();
+        group.MapCdrsEndpoints();
+        group.MapTariffsEndpoints();
+        group.MapTokensEndpoints();
+        group.MapCommandsEndpoints();
+        group.MapChargingProfilesEndpoints();
+        group.MapCredentialsEndpoints();
 
         return group;
     }

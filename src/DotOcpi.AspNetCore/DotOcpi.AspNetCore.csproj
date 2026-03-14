@@ -13,4 +13,8 @@
     <ProjectReference Include="..\DotOcpi\DotOcpi.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="DotOcpi.AspNetCore.Tests" />
+  </ItemGroup>
+
 </Project>
