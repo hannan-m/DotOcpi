@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using DotOcpi.AspNetCore.Filters;
 using DotOcpi.Modules;
 using Microsoft.AspNetCore.Builder;
@@ -42,7 +43,7 @@ public static class TokensEndpoints
 
         var dateFrom = ParseDateTimeOffset(httpContext.Request.Query["date_from"]);
         var dateTo = ParseDateTimeOffset(httpContext.Request.Query["date_to"]);
-        var offset = ParseInt(httpContext.Request.Query["offset"], 0);
+        var offset = Math.Max(0, ParseInt(httpContext.Request.Query["offset"], 0));
         var limit = Math.Clamp(ParseInt(httpContext.Request.Query["limit"], DefaultLimit), 1, MaxLimit);
 
         var sender = httpContext.RequestServices.GetRequiredService<ITokensSender>();
@@ -57,7 +58,12 @@ public static class TokensEndpoints
         {
             var nextOffset = offset + result.Items.Count;
             var basePath = httpContext.Request.PathBase + httpContext.Request.Path;
-            httpContext.Response.Headers["Link"] = $"<{basePath}?offset={nextOffset}&limit={limit}>; rel=\"next\"";
+            var linkQuery = $"offset={nextOffset}&limit={limit}";
+            if (httpContext.Request.Query.ContainsKey("date_from"))
+                linkQuery += $"&date_from={httpContext.Request.Query["date_from"]}";
+            if (httpContext.Request.Query.ContainsKey("date_to"))
+                linkQuery += $"&date_to={httpContext.Request.Query["date_to"]}";
+            httpContext.Response.Headers["Link"] = $"<{basePath}?{linkQuery}>; rel=\"next\"";
         }
 
         await OcpiResponseWriter
@@ -70,18 +76,30 @@ public static class TokensEndpoints
         var ctx = httpContext.GetOcpiContext()!;
         var tokenUid = (string)httpContext.GetRouteValue("tokenUid")!;
 
-        // Body is optional — LocationReferences may be null
+        // Body is optional — LocationReferences may be null for authorization without location filter
         object? locationReferences = null;
         if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType is not null)
         {
-            locationReferences = await EndpointHelper
-                .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.LocationReferences(ctx.NegotiatedVersion))
-                .ConfigureAwait(false);
-            // DeserializeOrRejectAsync returns null for invalid body AND empty body.
-            // For authorize, empty body is valid (no location filter), but invalid JSON is not.
-            // We need to distinguish: if Content-Type was set but deserialization failed, it's an error.
-            if (locationReferences is null && httpContext.Response.HasStarted)
+            try
+            {
+                var handler = ModuleHandlerFactory.LocationReferences(ctx.NegotiatedVersion);
+                locationReferences = await handler
+                    .DeserializeAsync(httpContext.Request.Body, httpContext.RequestAborted)
+                    .ConfigureAwait(false);
+            }
+            catch (JsonException)
+            {
+                await OcpiResponseWriter
+                    .WriteErrorAsync(
+                        httpContext,
+                        400,
+                        OcpiStatusCode.InvalidParameters.Value,
+                        "Request body contains invalid JSON.",
+                        httpContext.RequestAborted
+                    )
+                    .ConfigureAwait(false);
                 return;
+            }
         }
 
         var authorizer = httpContext.RequestServices.GetRequiredService<ITokensAuthorizer>();

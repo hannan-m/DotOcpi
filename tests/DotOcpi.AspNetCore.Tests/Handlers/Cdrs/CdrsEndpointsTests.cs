@@ -98,6 +98,30 @@ public class CdrsEndpointsTests
         }
         """;
 
+    // V2_0 CDR — no country_code/party_id, uses embedded Location, TotalCost is decimal
+    private const string CdrJsonV20 = """
+        {
+            "id": "CDR1",
+            "start_date_time": "2024-01-01T10:00:00Z",
+            "end_date_time": "2024-01-01T12:00:00Z",
+            "auth_id": "TOKEN1",
+            "auth_method": "AUTH_REQUEST",
+            "location": {
+                "id": "LOC1",
+                "address": "St 1",
+                "city": "Berlin",
+                "postal_code": "10115",
+                "country": "DEU",
+                "coordinates": {"latitude": "52.5", "longitude": "13.4"}
+            },
+            "currency": "EUR",
+            "total_cost": 10.0,
+            "total_energy": 30.0,
+            "total_time": 2.0,
+            "charging_periods": []
+        }
+        """;
+
     [Fact]
     public async Task HandleCdrPost_NewCdr_Returns201WithLocationHeader()
     {
@@ -173,6 +197,24 @@ public class CdrsEndpointsTests
         await CdrsEndpoints.HandleCdrPost(httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task HandleCdrPost_V20_LocationHeaderOmitsPartyPrefix()
+    {
+        var receiver = Substitute.For<ICdrsReceiver>();
+        receiver
+            .OnCdrPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<CdrPostResult>.Success(new CdrPostResult("CDR1", true)));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_0, CdrJsonV20);
+        httpContext.Request.Path = "/ocpi/2.0/cdrs";
+
+        await CdrsEndpoints.HandleCdrPost(httpContext);
+
+        var location = httpContext.Response.Headers["Location"].ToString();
+        location.Should().Be("/ocpi/2.0/cdrs/CDR1");
+        location.Should().NotContain("DE/ALL");
     }
 
     [Fact]

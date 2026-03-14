@@ -144,6 +144,8 @@ public static class OcpiResponseWriter
     )
     {
         if (result.IsSuccess)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status200OK;
             return WriteSuccessAsync<object?>(
                 httpContext,
                 null,
@@ -152,9 +154,14 @@ public static class OcpiResponseWriter
                 result.StatusMessage,
                 cancellationToken
             );
+        }
+
+        var httpStatus = result.StatusCode.IsServerError
+            ? StatusCodes.Status500InternalServerError
+            : StatusCodes.Status400BadRequest;
         return WriteErrorAsync(
             httpContext,
-            400,
+            httpStatus,
             result.StatusCode.Value,
             result.StatusMessage ?? "Operation failed.",
             cancellationToken
@@ -172,6 +179,8 @@ public static class OcpiResponseWriter
     )
     {
         if (result.IsSuccess)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status200OK;
             return WriteSuccessObjectAsync(
                 httpContext,
                 result.Data,
@@ -180,9 +189,14 @@ public static class OcpiResponseWriter
                 result.StatusMessage,
                 cancellationToken
             );
+        }
+
+        var httpStatus = result.StatusCode.IsServerError
+            ? StatusCodes.Status500InternalServerError
+            : StatusCodes.Status400BadRequest;
         return WriteErrorAsync(
             httpContext,
-            400,
+            httpStatus,
             result.StatusCode.Value,
             result.StatusMessage ?? "Operation failed.",
             cancellationToken

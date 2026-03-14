@@ -54,12 +54,42 @@ internal static class EndpointHelper
     /// </summary>
     internal static async ValueTask<JsonElement?> ReadPatchAsync(HttpContext httpContext)
     {
+        if (httpContext.Request.ContentLength == 0)
+        {
+            await OcpiResponseWriter
+                .WriteErrorAsync(
+                    httpContext,
+                    400,
+                    OcpiStatusCode.InvalidParameters.Value,
+                    "Request body is required.",
+                    httpContext.RequestAborted
+                )
+                .ConfigureAwait(false);
+            return null;
+        }
+
         try
         {
             using var doc = await JsonDocument
                 .ParseAsync(httpContext.Request.Body, cancellationToken: httpContext.RequestAborted)
                 .ConfigureAwait(false);
-            return doc.RootElement.Clone();
+            var element = doc.RootElement.Clone();
+
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                await OcpiResponseWriter
+                    .WriteErrorAsync(
+                        httpContext,
+                        400,
+                        OcpiStatusCode.InvalidParameters.Value,
+                        "PATCH body must be a JSON object.",
+                        httpContext.RequestAborted
+                    )
+                    .ConfigureAwait(false);
+                return null;
+            }
+
+            return element;
         }
         catch (JsonException)
         {

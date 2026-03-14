@@ -213,6 +213,117 @@ public class TokensEndpointsTests
     }
 
     [Fact]
+    public async Task HandleTokensGet_ParsesDateParameters()
+    {
+        var sender = Substitute.For<ITokensSender>();
+        sender
+            .GetTokensAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(
+                new PaginatedResult<object>
+                {
+                    Items = Array.Empty<object>(),
+                    TotalCount = 0,
+                    Offset = 0,
+                    Limit = 50,
+                }
+            );
+
+        var httpContext = CreateTokensGetContext(
+            sender,
+            OcpiVersion.V2_2_1,
+            "?date_from=2024-01-01T00:00:00Z&date_to=2024-02-01T00:00:00Z"
+        );
+
+        await TokensEndpoints.HandleTokensGet(httpContext);
+
+        await sender
+            .Received(1)
+            .GetTokensAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Is<DateTimeOffset?>(d => d!.Value.Year == 2024 && d.Value.Month == 1),
+                Arg.Is<DateTimeOffset?>(d => d!.Value.Year == 2024 && d.Value.Month == 2),
+                0,
+                50,
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleTokensGet_NegativeOffset_ClampedToZero()
+    {
+        var sender = Substitute.For<ITokensSender>();
+        sender
+            .GetTokensAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(
+                new PaginatedResult<object>
+                {
+                    Items = Array.Empty<object>(),
+                    TotalCount = 0,
+                    Offset = 0,
+                    Limit = 50,
+                }
+            );
+
+        var httpContext = CreateTokensGetContext(sender, OcpiVersion.V2_2_1, "?offset=-5");
+
+        await TokensEndpoints.HandleTokensGet(httpContext);
+
+        await sender
+            .Received(1)
+            .GetTokensAsync(Arg.Any<OcpiRequestContext>(), null, null, 0, 50, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleTokensGet_LinkHeaderPreservesDateFilters()
+    {
+        var sender = Substitute.For<ITokensSender>();
+        sender
+            .GetTokensAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(
+                new PaginatedResult<object>
+                {
+                    Items = new object[] { "token1" },
+                    TotalCount = 5,
+                    Offset = 0,
+                    Limit = 1,
+                }
+            );
+
+        var httpContext = CreateTokensGetContext(
+            sender,
+            OcpiVersion.V2_2_1,
+            "?offset=0&limit=1&date_from=2024-01-01T00:00:00Z"
+        );
+
+        await TokensEndpoints.HandleTokensGet(httpContext);
+
+        var link = httpContext.Response.Headers["Link"].ToString();
+        link.Should().Contain("offset=1");
+        link.Should().Contain("date_from=2024-01-01");
+    }
+
+    [Fact]
     public async Task HandleTokenAuthorize_CallsAuthorizer()
     {
         var authorizer = Substitute.For<ITokensAuthorizer>();

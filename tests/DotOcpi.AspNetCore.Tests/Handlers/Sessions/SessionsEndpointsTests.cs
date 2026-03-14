@@ -196,6 +196,18 @@ public class SessionsEndpointsTests
     }
 
     [Fact]
+    public async Task HandleSessionPatch_ArrayBody_Returns400()
+    {
+        var receiver = Substitute.For<ISessionsReceiver>();
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, """[1, 2, 3]""");
+        httpContext.Request.RouteValues["sessionId"] = "SES1";
+
+        await SessionsEndpoints.HandleSessionPatch(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
     public async Task HandleSessionGet_ReturnsData()
     {
         var sessionData = new Models.V2_2_1.Session
