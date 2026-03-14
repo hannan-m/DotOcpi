@@ -1,63 +1,20 @@
-using System.Text;
 using DotOcpi.AspNetCore.Handlers.Credentials;
 using DotOcpi.Modules;
-using DotOcpi.Registry;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.Credentials;
 
 public class CredentialsEndpointsTests
 {
-    private static readonly CpoConnection TestConnection = new()
-    {
-        CpoCountryCode = "DE",
-        CpoPartyId = "ALL",
-        EmspCountryCode = "NL",
-        EmspPartyId = "TNM",
-        Version = OcpiVersion.V2_2_1,
-        ModuleEndpoints = new Dictionary<string, string>(),
-        TokenBHash = "hash",
-        Status = ConnectionStatus.Connected,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
-
-    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
-        new()
-        {
-            Connection = TestConnection with { Version = version },
-            RequestId = "req-1",
-            CorrelationId = "corr-1",
-            CpoId = "DE_ALL",
-            CpoIdentity = new PartyIdentity("DE", "ALL"),
-            EmspIdentity = new PartyIdentity("NL", "TNM"),
-            NegotiatedVersion = version,
-            ModuleId = "credentials",
-        };
-
     private static DefaultHttpContext CreateHttpContext(
         ICredentialsHandler handler,
         OcpiVersion version,
         string? body = null
-    )
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Response.Body = new MemoryStream();
-        httpContext.RequestServices = new ServiceCollection().AddSingleton(handler).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
-
-        if (body is not null)
-        {
-            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
-            httpContext.Request.ContentType = "application/json";
-        }
-
-        return httpContext;
-    }
+    ) => OcpiEndpointTestHelper.CreateHttpContext(handler, version, "credentials", body);
 
     private const string CredentialsJsonV221 = """
         {
@@ -78,7 +35,7 @@ public class CredentialsEndpointsTests
         """;
 
     [Fact]
-    public async Task HandleCredentialsPost_V221_CallsHandler()
+    public async Task HandleCredentialsPost_V221_DeserializesAndReturnsData()
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
@@ -88,6 +45,11 @@ public class CredentialsEndpointsTests
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+        body.Should().Contain("xyz");
 
         await handler
             .Received(1)
@@ -110,6 +72,7 @@ public class CredentialsEndpointsTests
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await handler
             .Received(1)
             .OnCredentialsPostAsync(
@@ -120,16 +83,21 @@ public class CredentialsEndpointsTests
     }
 
     [Fact]
-    public async Task HandleCredentialsPut_CallsHandler()
+    public async Task HandleCredentialsPut_ReturnsResponseWithData()
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
             .OnCredentialsPutAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<object>.Success(new { token = "xyz" }));
+            .Returns(OcpiResult<object>.Success(new { token = "new-token" }));
 
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
 
         await CredentialsEndpoints.HandleCredentialsPut(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+        body.Should().Contain("new-token");
 
         await handler
             .Received(1)
@@ -141,7 +109,7 @@ public class CredentialsEndpointsTests
     }
 
     [Fact]
-    public async Task HandleCredentialsDelete_CallsHandler()
+    public async Task HandleCredentialsDelete_ReturnsSuccess()
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
@@ -152,22 +120,29 @@ public class CredentialsEndpointsTests
 
         await CredentialsEndpoints.HandleCredentialsDelete(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+
         await handler.Received(1).OnCredentialsDeleteAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleCredentialsGet_CallsHandler()
+    public async Task HandleCredentialsGet_ReturnsDataFromHandler()
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
             .GetCredentialsAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<object>.Success(new { token = "current" }));
+            .Returns(OcpiResult<object>.Success(new { token = "current-token", url = "https://example.com" }));
 
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1);
 
         await CredentialsEndpoints.HandleCredentialsGet(httpContext);
 
-        await handler.Received(1).GetCredentialsAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<CancellationToken>());
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+        body.Should().Contain("current-token");
     }
 
     [Fact]
@@ -178,6 +153,35 @@ public class CredentialsEndpointsTests
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task HandleCredentialsPost_HandlerFailure_Returns400()
+    {
+        var handler = Substitute.For<ICredentialsHandler>();
+        handler
+            .OnCredentialsPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<object>.Failure(OcpiStatusCode.GenericClientError, "Invalid credentials"));
+
+        var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
+
+        await CredentialsEndpoints.HandleCredentialsPost(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2000");
+        body.Should().Contain("Invalid credentials");
+    }
+
+    [Fact]
+    public async Task HandleCredentialsPut_InvalidJson_Returns400()
+    {
+        var handler = Substitute.For<ICredentialsHandler>();
+        var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, "not valid json");
+
+        await CredentialsEndpoints.HandleCredentialsPut(httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
     }

@@ -1,44 +1,17 @@
 using System.Text;
 using DotOcpi.AspNetCore.Handlers.Tokens;
 using DotOcpi.Modules;
-using DotOcpi.Registry;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.Tokens;
 
 public class TokensEndpointsTests
 {
-    private static readonly CpoConnection TestConnection = new()
-    {
-        CpoCountryCode = "DE",
-        CpoPartyId = "ALL",
-        EmspCountryCode = "NL",
-        EmspPartyId = "TNM",
-        Version = OcpiVersion.V2_2_1,
-        ModuleEndpoints = new Dictionary<string, string>(),
-        TokenBHash = "hash",
-        Status = ConnectionStatus.Connected,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
-
-    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
-        new()
-        {
-            Connection = TestConnection with { Version = version },
-            RequestId = "req-1",
-            CorrelationId = "corr-1",
-            CpoId = "DE_ALL",
-            CpoIdentity = new PartyIdentity("DE", "ALL"),
-            EmspIdentity = new PartyIdentity("NL", "TNM"),
-            NegotiatedVersion = version,
-            ModuleId = "tokens",
-        };
-
     private static DefaultHttpContext CreateTokensGetContext(
         ITokensSender sender,
         OcpiVersion version,
@@ -48,7 +21,7 @@ public class TokensEndpointsTests
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = new MemoryStream();
         httpContext.RequestServices = new ServiceCollection().AddSingleton(sender).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
+        httpContext.SetOcpiContext(CreateContext(version, "tokens"));
         httpContext.Request.Path = $"/ocpi/{version.ToVersionString()}/tokens";
 
         if (queryString is not null)
@@ -68,7 +41,7 @@ public class TokensEndpointsTests
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = new MemoryStream();
         httpContext.RequestServices = new ServiceCollection().AddSingleton(authorizer).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
+        httpContext.SetOcpiContext(CreateContext(version, "tokens"));
 
         if (body is not null)
         {
@@ -77,13 +50,6 @@ public class TokensEndpointsTests
         }
 
         return httpContext;
-    }
-
-    private static string ReadResponseBody(DefaultHttpContext httpContext)
-    {
-        httpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(httpContext.Response.Body);
-        return reader.ReadToEnd();
     }
 
     [Fact]
@@ -324,6 +290,38 @@ public class TokensEndpointsTests
     }
 
     [Fact]
+    public async Task HandleTokensGet_LimitClamped_ToMaximum()
+    {
+        var sender = Substitute.For<ITokensSender>();
+        sender
+            .GetTokensAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(
+                new PaginatedResult<object>
+                {
+                    Items = Array.Empty<object>(),
+                    TotalCount = 0,
+                    Offset = 0,
+                    Limit = 1000,
+                }
+            );
+
+        var httpContext = CreateTokensGetContext(sender, OcpiVersion.V2_2_1, "?limit=9999");
+
+        await TokensEndpoints.HandleTokensGet(httpContext);
+
+        await sender
+            .Received(1)
+            .GetTokensAsync(Arg.Any<OcpiRequestContext>(), null, null, 0, 1000, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task HandleTokenAuthorize_CallsAuthorizer()
     {
         var authorizer = Substitute.For<ITokensAuthorizer>();
@@ -340,6 +338,11 @@ public class TokensEndpointsTests
         httpContext.Request.RouteValues["tokenUid"] = "TOKEN123";
 
         await TokensEndpoints.HandleTokenAuthorize(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+        body.Should().Contain("ALLOWED");
 
         await authorizer
             .Received(1)
@@ -369,6 +372,7 @@ public class TokensEndpointsTests
 
         await TokensEndpoints.HandleTokenAuthorize(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await authorizer
             .Received(1)
             .AuthorizeAsync(
@@ -377,5 +381,43 @@ public class TokensEndpointsTests
                 Arg.Is<object?>(o => o != null),
                 Arg.Any<CancellationToken>()
             );
+    }
+
+    [Fact]
+    public async Task HandleTokenAuthorize_InvalidJson_Returns400()
+    {
+        var authorizer = Substitute.For<ITokensAuthorizer>();
+        var httpContext = CreateAuthorizeContext(authorizer, OcpiVersion.V2_2_1, "not valid json{{{");
+        httpContext.Request.RouteValues["tokenUid"] = "TOKEN123";
+
+        await TokensEndpoints.HandleTokenAuthorize(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("invalid JSON");
+    }
+
+    [Fact]
+    public async Task HandleTokenAuthorize_AuthorizerFailure_ReturnsErrorStatus()
+    {
+        var authorizer = Substitute.For<ITokensAuthorizer>();
+        authorizer
+            .AuthorizeAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object?>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult<object>.Failure(OcpiStatusCode.GenericClientError, "Token unknown"));
+
+        var httpContext = CreateAuthorizeContext(authorizer, OcpiVersion.V2_2_1);
+        httpContext.Request.RouteValues["tokenUid"] = "UNKNOWN";
+
+        await TokensEndpoints.HandleTokenAuthorize(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2000");
+        body.Should().Contain("Token unknown");
     }
 }

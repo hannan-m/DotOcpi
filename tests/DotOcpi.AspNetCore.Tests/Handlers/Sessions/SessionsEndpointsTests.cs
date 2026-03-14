@@ -1,71 +1,21 @@
-using System.Text;
 using System.Text.Json;
 using DotOcpi.AspNetCore.Handlers.Sessions;
 using DotOcpi.Modules;
-using DotOcpi.Registry;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.Sessions;
 
 public class SessionsEndpointsTests
 {
-    private static readonly CpoConnection TestConnection = new()
-    {
-        CpoCountryCode = "DE",
-        CpoPartyId = "ALL",
-        EmspCountryCode = "NL",
-        EmspPartyId = "TNM",
-        Version = OcpiVersion.V2_2_1,
-        ModuleEndpoints = new Dictionary<string, string>(),
-        TokenBHash = "hash",
-        Status = ConnectionStatus.Connected,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
-
-    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
-        new()
-        {
-            Connection = TestConnection with { Version = version },
-            RequestId = "req-1",
-            CorrelationId = "corr-1",
-            CpoId = "DE_ALL",
-            CpoIdentity = new PartyIdentity("DE", "ALL"),
-            EmspIdentity = new PartyIdentity("NL", "TNM"),
-            NegotiatedVersion = version,
-            ModuleId = "sessions",
-        };
-
     private static DefaultHttpContext CreateHttpContext(
         ISessionsReceiver receiver,
         OcpiVersion version,
         string? body = null
-    )
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Response.Body = new MemoryStream();
-        httpContext.RequestServices = new ServiceCollection().AddSingleton(receiver).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
-
-        if (body is not null)
-        {
-            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
-            httpContext.Request.ContentType = "application/json";
-        }
-
-        return httpContext;
-    }
-
-    private static string ReadResponseBody(DefaultHttpContext httpContext)
-    {
-        httpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(httpContext.Response.Body);
-        return reader.ReadToEnd();
-    }
+    ) => OcpiEndpointTestHelper.CreateHttpContext(receiver, version, "sessions", body);
 
     private const string SessionJsonV221 = """
         {
@@ -116,6 +66,10 @@ public class SessionsEndpointsTests
 
         await SessionsEndpoints.HandleSessionPut(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+
         await receiver
             .Received(1)
             .OnSessionPutAsync(
@@ -144,6 +98,7 @@ public class SessionsEndpointsTests
 
         await SessionsEndpoints.HandleSessionPut(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnSessionPutAsync(
@@ -168,6 +123,29 @@ public class SessionsEndpointsTests
     }
 
     [Fact]
+    public async Task HandleSessionPut_ReceiverFailure_Returns400()
+    {
+        var receiver = Substitute.For<ISessionsReceiver>();
+        receiver
+            .OnSessionPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Invalid session"));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, SessionJsonV221);
+        httpContext.Request.RouteValues["sessionId"] = "SES1";
+
+        await SessionsEndpoints.HandleSessionPut(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2000");
+    }
+
+    [Fact]
     public async Task HandleSessionPatch_PassesJsonElement()
     {
         var receiver = Substitute.For<ISessionsReceiver>();
@@ -185,6 +163,7 @@ public class SessionsEndpointsTests
 
         await SessionsEndpoints.HandleSessionPatch(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnSessionPatchAsync(
@@ -250,8 +229,27 @@ public class SessionsEndpointsTests
 
         await SessionsEndpoints.HandleSessionGet(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
         body.Should().Contain("1000");
         body.Should().Contain("SES1");
+    }
+
+    [Fact]
+    public async Task HandleSessionGet_NotFound_Returns400()
+    {
+        var receiver = Substitute.For<ISessionsReceiver>();
+        receiver
+            .GetSessionAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Session not found"));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
+        httpContext.Request.RouteValues["sessionId"] = "UNKNOWN";
+
+        await SessionsEndpoints.HandleSessionGet(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2003");
     }
 }

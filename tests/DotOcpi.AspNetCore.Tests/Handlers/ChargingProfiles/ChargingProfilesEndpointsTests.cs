@@ -1,66 +1,23 @@
-using System.Text;
 using DotOcpi.AspNetCore.Handlers.ChargingProfiles;
 using DotOcpi.Modules;
-using DotOcpi.Registry;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.ChargingProfiles;
 
 public class ChargingProfilesEndpointsTests
 {
-    private static readonly CpoConnection TestConnection = new()
-    {
-        CpoCountryCode = "DE",
-        CpoPartyId = "ALL",
-        EmspCountryCode = "NL",
-        EmspPartyId = "TNM",
-        Version = OcpiVersion.V2_2_1,
-        ModuleEndpoints = new Dictionary<string, string>(),
-        TokenBHash = "hash",
-        Status = ConnectionStatus.Connected,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
-
-    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
-        new()
-        {
-            Connection = TestConnection with { Version = version },
-            RequestId = "req-1",
-            CorrelationId = "corr-1",
-            CpoId = "DE_ALL",
-            CpoIdentity = new PartyIdentity("DE", "ALL"),
-            EmspIdentity = new PartyIdentity("NL", "TNM"),
-            NegotiatedVersion = version,
-            ModuleId = "chargingprofiles",
-        };
-
     private static DefaultHttpContext CreateHttpContext(
         IChargingProfilesCallback callback,
         OcpiVersion version,
         string? body = null
-    )
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Response.Body = new MemoryStream();
-        httpContext.RequestServices = new ServiceCollection().AddSingleton(callback).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
-
-        if (body is not null)
-        {
-            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
-            httpContext.Request.ContentType = "application/json";
-        }
-
-        return httpContext;
-    }
+    ) => OcpiEndpointTestHelper.CreateHttpContext(callback, version, "chargingprofiles", body);
 
     [Fact]
-    public async Task HandleChargingProfileResult_CallsCallback()
+    public async Task HandleChargingProfileResult_DeserializesAndReturnsSuccess()
     {
         var callback = Substitute.For<IChargingProfilesCallback>();
         callback
@@ -77,6 +34,10 @@ public class ChargingProfilesEndpointsTests
 
         await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+
         await callback
             .Received(1)
             .OnChargingProfileResultAsync(
@@ -88,7 +49,7 @@ public class ChargingProfilesEndpointsTests
     }
 
     [Fact]
-    public async Task HandleActiveChargingProfileUpdate_CallsCallback()
+    public async Task HandleActiveChargingProfileUpdate_DeserializesAndReturnsSuccess()
     {
         var callback = Substitute.For<IChargingProfilesCallback>();
         callback
@@ -117,6 +78,10 @@ public class ChargingProfilesEndpointsTests
 
         await ChargingProfilesEndpoints.HandleActiveChargingProfileUpdate(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+
         await callback
             .Received(1)
             .OnActiveChargingProfileUpdateAsync(
@@ -138,5 +103,42 @@ public class ChargingProfilesEndpointsTests
         await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task HandleChargingProfileResult_InvalidJson_Returns400()
+    {
+        var callback = Substitute.For<IChargingProfilesCallback>();
+        var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, "broken json{");
+        httpContext.Request.RouteValues["correlationId"] = "cp-000";
+
+        await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("invalid JSON");
+    }
+
+    [Fact]
+    public async Task HandleChargingProfileResult_CallbackFailure_Returns400()
+    {
+        var callback = Substitute.For<IChargingProfilesCallback>();
+        callback
+            .OnChargingProfileResultAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Unknown correlation"));
+
+        var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, """{"result": "ACCEPTED"}""");
+        httpContext.Request.RouteValues["correlationId"] = "unknown";
+
+        await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2000");
     }
 }

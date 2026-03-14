@@ -1,72 +1,21 @@
-using System.Text;
 using DotOcpi.AspNetCore.Handlers.Cdrs;
 using DotOcpi.Modules;
-using DotOcpi.Registry;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.Cdrs;
 
 public class CdrsEndpointsTests
 {
-    private static readonly CpoConnection TestConnection = new()
-    {
-        CpoCountryCode = "DE",
-        CpoPartyId = "ALL",
-        EmspCountryCode = "NL",
-        EmspPartyId = "TNM",
-        Version = OcpiVersion.V2_2_1,
-        ModuleEndpoints = new Dictionary<string, string>(),
-        TokenBHash = "hash",
-        Status = ConnectionStatus.Connected,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
-
-    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
-        new()
-        {
-            Connection = TestConnection with { Version = version },
-            RequestId = "req-1",
-            CorrelationId = "corr-1",
-            CpoId = "DE_ALL",
-            CpoIdentity = new PartyIdentity("DE", "ALL"),
-            EmspIdentity = new PartyIdentity("NL", "TNM"),
-            NegotiatedVersion = version,
-            ModuleId = "cdrs",
-        };
-
     private static DefaultHttpContext CreateHttpContext(
         ICdrsReceiver receiver,
         OcpiVersion version,
         string? body = null
-    )
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Response.Body = new MemoryStream();
-        httpContext.RequestServices = new ServiceCollection().AddSingleton(receiver).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
+    ) => OcpiEndpointTestHelper.CreateHttpContext(receiver, version, "cdrs", body);
 
-        if (body is not null)
-        {
-            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
-            httpContext.Request.ContentType = "application/json";
-        }
-
-        return httpContext;
-    }
-
-    private static string ReadResponseBody(DefaultHttpContext httpContext)
-    {
-        httpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(httpContext.Response.Body);
-        return reader.ReadToEnd();
-    }
-
-    // Minimal valid CDR JSON — all required fields for V2_2_1 deserialization
     private const string CdrJsonV221 = """
         {
             "country_code": "DE",
@@ -98,7 +47,6 @@ public class CdrsEndpointsTests
         }
         """;
 
-    // V2_0 CDR — no country_code/party_id, uses embedded Location, TotalCost is decimal
     private const string CdrJsonV20 = """
         {
             "id": "CDR1",
@@ -137,6 +85,8 @@ public class CdrsEndpointsTests
 
         httpContext.Response.StatusCode.Should().Be(201);
         httpContext.Response.Headers["Location"].ToString().Should().Contain("CDR1");
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
     }
 
     [Fact]
@@ -173,33 +123,6 @@ public class CdrsEndpointsTests
     }
 
     [Fact]
-    public async Task HandleCdrPost_ReceiverFailure_Returns400()
-    {
-        var receiver = Substitute.For<ICdrsReceiver>();
-        receiver
-            .OnCdrPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<CdrPostResult>.Failure(OcpiStatusCode.GenericClientError, "Invalid CDR data"));
-
-        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, CdrJsonV221);
-
-        await CdrsEndpoints.HandleCdrPost(httpContext);
-
-        httpContext.Response.StatusCode.Should().Be(400);
-    }
-
-    [Fact]
-    public async Task HandleCdrPost_EmptyBody_Returns400()
-    {
-        var receiver = Substitute.For<ICdrsReceiver>();
-        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
-
-        await CdrsEndpoints.HandleCdrPost(httpContext);
-
-        httpContext.Response.StatusCode.Should().Be(400);
-    }
-
-    [Fact]
     public async Task HandleCdrPost_V20_LocationHeaderOmitsPartyPrefix()
     {
         var receiver = Substitute.For<ICdrsReceiver>();
@@ -218,7 +141,57 @@ public class CdrsEndpointsTests
     }
 
     [Fact]
-    public async Task HandleCdrGet_CallsReceiverWithCorrectId()
+    public async Task HandleCdrPost_ReceiverFailure_Returns400WithOcpiStatus()
+    {
+        var receiver = Substitute.For<ICdrsReceiver>();
+        receiver
+            .OnCdrPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<CdrPostResult>.Failure(OcpiStatusCode.GenericClientError, "Invalid CDR data"));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, CdrJsonV221);
+
+        await CdrsEndpoints.HandleCdrPost(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2000");
+        body.Should().Contain("Invalid CDR data");
+    }
+
+    [Fact]
+    public async Task HandleCdrPost_EmptyBody_Returns400()
+    {
+        var receiver = Substitute.For<ICdrsReceiver>();
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
+        httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
+
+        await CdrsEndpoints.HandleCdrPost(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task HandleCdrGet_ReturnsDataFromReceiver()
+    {
+        var cdrData = new { id = "CDR1", currency = "EUR" };
+        var receiver = Substitute.For<ICdrsReceiver>();
+        receiver
+            .GetCdrAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<object>.Success(cdrData));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
+        httpContext.Request.RouteValues["cdrId"] = "CDR1";
+
+        await CdrsEndpoints.HandleCdrGet(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(200);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+        body.Should().Contain("CDR1");
+    }
+
+    [Fact]
+    public async Task HandleCdrGet_NotFound_Returns400()
     {
         var receiver = Substitute.For<ICdrsReceiver>();
         receiver
@@ -230,6 +203,7 @@ public class CdrsEndpointsTests
 
         await CdrsEndpoints.HandleCdrGet(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(400);
         await receiver.Received(1).GetCdrAsync(Arg.Any<OcpiRequestContext>(), "CDR1", Arg.Any<CancellationToken>());
     }
 }

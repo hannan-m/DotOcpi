@@ -8,64 +8,17 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.Locations;
 
 public class LocationsEndpointsTests
 {
-    private static readonly CpoConnection TestConnection = new()
-    {
-        CpoCountryCode = "DE",
-        CpoPartyId = "ALL",
-        EmspCountryCode = "NL",
-        EmspPartyId = "TNM",
-        Version = OcpiVersion.V2_2_1,
-        ModuleEndpoints = new Dictionary<string, string>(),
-        TokenBHash = "hash",
-        Status = ConnectionStatus.Connected,
-        CreatedAt = DateTimeOffset.UtcNow,
-        UpdatedAt = DateTimeOffset.UtcNow,
-    };
-
-    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
-        new()
-        {
-            Connection = TestConnection with { Version = version },
-            RequestId = "req-1",
-            CorrelationId = "corr-1",
-            CpoId = "DE_ALL",
-            CpoIdentity = new PartyIdentity("DE", "ALL"),
-            EmspIdentity = new PartyIdentity("NL", "TNM"),
-            NegotiatedVersion = version,
-            ModuleId = "locations",
-        };
-
     private static DefaultHttpContext CreateHttpContext(
         ILocationsReceiver receiver,
         OcpiVersion version,
         string? body = null
-    )
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Response.Body = new MemoryStream();
-        httpContext.RequestServices = new ServiceCollection().AddSingleton(receiver).BuildServiceProvider();
-        httpContext.SetOcpiContext(CreateContext(version));
-
-        if (body is not null)
-        {
-            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
-            httpContext.Request.ContentType = "application/json";
-        }
-
-        return httpContext;
-    }
-
-    private static string ReadResponseBody(DefaultHttpContext httpContext)
-    {
-        httpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(httpContext.Response.Body);
-        return reader.ReadToEnd();
-    }
+    ) => OcpiEndpointTestHelper.CreateHttpContext(receiver, version, "locations", body);
 
     private const string LocationJsonV221 = """
         {
@@ -134,6 +87,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleLocationPut(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnLocationPutAsync(
@@ -165,6 +119,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleLocationPut(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnLocationPutAsync(
@@ -213,7 +168,7 @@ public class LocationsEndpointsTests
     }
 
     [Fact]
-    public async Task HandleLocationPut_ReceiverFailure_Returns400WithOcpiStatus()
+    public async Task HandleLocationPut_ReceiverClientError_Returns400()
     {
         var receiver = Substitute.For<ILocationsReceiver>();
         receiver
@@ -237,6 +192,30 @@ public class LocationsEndpointsTests
     }
 
     [Fact]
+    public async Task HandleLocationPut_ReceiverServerError_Returns500()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Failure(OcpiStatusCode.GenericServerError, "Internal failure"));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, LocationJsonV221);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPut(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(500);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("3000");
+        body.Should().Contain("Internal failure");
+    }
+
+    [Fact]
     public async Task HandleLocationPatch_PassesJsonElementToReceiver()
     {
         var receiver = Substitute.For<ILocationsReceiver>();
@@ -254,6 +233,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleLocationPatch(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnLocationPatchAsync(
@@ -294,6 +274,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleLocationGet(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
         body.Should().Contain("1000");
         body.Should().Contain("LOC1");
@@ -338,6 +319,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleEvsePut(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnEvsePutAsync(
@@ -369,6 +351,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleEvsePatch(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnEvsePatchAsync(
@@ -402,6 +385,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleConnectorPut(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnConnectorPutAsync(
@@ -436,6 +420,7 @@ public class LocationsEndpointsTests
 
         await LocationsEndpoints.HandleConnectorPatch(httpContext);
 
+        httpContext.Response.StatusCode.Should().Be(200);
         await receiver
             .Received(1)
             .OnConnectorPatchAsync(
