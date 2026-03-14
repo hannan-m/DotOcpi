@@ -15,6 +15,7 @@ public static class DotOcpiAspNetCoreExtensions
     public static DotOcpiBuilder AddAspNetCoreServer(this DotOcpiBuilder builder)
     {
         builder.Services.AddSingleton<OcpiExceptionMiddleware>();
+        builder.Services.AddHostedService<DotOcpiStartupValidator>();
 
         return builder;
     }
