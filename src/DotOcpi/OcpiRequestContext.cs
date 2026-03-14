@@ -1,3 +1,5 @@
+using DotOcpi.Registry;
+
 namespace DotOcpi;
 
 /// <summary>
@@ -5,11 +7,13 @@ namespace DotOcpi;
 /// downstream handlers. Lives in the core package so consumer interfaces can reference it.
 /// </summary>
 /// <remarks>
-/// The <c>Connection</c> property (CpoConnection) is added in Phase 7 when the registry exists.
 /// The <c>HttpContext</c> property is added in Phase 9 when ASP.NET Core integration exists.
 /// </remarks>
 public sealed class OcpiRequestContext
 {
+    /// <summary>The full CPO connection from the registry.</summary>
+    public required CpoConnection Connection { get; init; }
+
     /// <summary>Unique ID for this request (X-Request-ID header).</summary>
     public required string RequestId { get; init; }
 
