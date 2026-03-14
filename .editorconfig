@@ -132,6 +132,10 @@ dotnet_diagnostic.CA5403.severity = error # Do not hard-code certificate
 dotnet_diagnostic.CA5404.severity = error # Do not disable token validation checks
 dotnet_diagnostic.CA5405.severity = error # Do not always skip token validation in delegates
 
+# Version-specific model namespaces (V2_0, V2_1_1, V2_2, V2_2_1) and OCPI enum values use underscores
+[src/DotOcpi/Models/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+
 # Public API analyzers — suppress for test projects
 [tests/**/*.cs]
 # Test method naming convention uses underscores (MethodName_Condition_ExpectedResult)
