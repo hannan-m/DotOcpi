@@ -1,0 +1,450 @@
+using System.Text;
+using System.Text.Json;
+using DotOcpi.AspNetCore.Handlers.Locations;
+using DotOcpi.Modules;
+using DotOcpi.Registry;
+using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
+using Xunit;
+
+namespace DotOcpi.AspNetCore.Tests.Handlers.Locations;
+
+public class LocationsEndpointsTests
+{
+    private static readonly CpoConnection TestConnection = new()
+    {
+        CpoCountryCode = "DE",
+        CpoPartyId = "ALL",
+        EmspCountryCode = "NL",
+        EmspPartyId = "TNM",
+        Version = OcpiVersion.V2_2_1,
+        ModuleEndpoints = new Dictionary<string, string>(),
+        TokenBHash = "hash",
+        Status = ConnectionStatus.Connected,
+        CreatedAt = DateTimeOffset.UtcNow,
+        UpdatedAt = DateTimeOffset.UtcNow,
+    };
+
+    private static OcpiRequestContext CreateContext(OcpiVersion version) =>
+        new()
+        {
+            Connection = TestConnection with { Version = version },
+            RequestId = "req-1",
+            CorrelationId = "corr-1",
+            CpoId = "DE_ALL",
+            CpoIdentity = new PartyIdentity("DE", "ALL"),
+            EmspIdentity = new PartyIdentity("NL", "TNM"),
+            NegotiatedVersion = version,
+            ModuleId = "locations",
+        };
+
+    private static DefaultHttpContext CreateHttpContext(
+        ILocationsReceiver receiver,
+        OcpiVersion version,
+        string? body = null
+    )
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+        httpContext.RequestServices = new ServiceCollection().AddSingleton(receiver).BuildServiceProvider();
+        httpContext.SetOcpiContext(CreateContext(version));
+
+        if (body is not null)
+        {
+            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
+            httpContext.Request.ContentType = "application/json";
+        }
+
+        return httpContext;
+    }
+
+    private static string ReadResponseBody(DefaultHttpContext httpContext)
+    {
+        httpContext.Response.Body.Position = 0;
+        using var reader = new StreamReader(httpContext.Response.Body);
+        return reader.ReadToEnd();
+    }
+
+    private const string LocationJsonV221 = """
+        {
+            "country_code": "DE",
+            "party_id": "ALL",
+            "id": "LOC1",
+            "publish": true,
+            "address": "Hauptstr 1",
+            "city": "Berlin",
+            "country": "DEU",
+            "coordinates": {"latitude": "52.520008", "longitude": "13.404954"},
+            "time_zone": "Europe/Berlin",
+            "last_updated": "2024-01-01T00:00:00Z"
+        }
+        """;
+
+    private const string LocationJsonV20 = """
+        {
+            "id": "LOC1",
+            "address": "Hauptstr 1",
+            "city": "Berlin",
+            "postal_code": "10115",
+            "country": "DEU",
+            "coordinates": {"latitude": "52.520008", "longitude": "13.404954"}
+        }
+        """;
+
+    private const string EvseJson = """
+        {
+            "uid": "EVSE1",
+            "status": "AVAILABLE",
+            "connectors": [],
+            "last_updated": "2024-01-01T00:00:00Z"
+        }
+        """;
+
+    private const string ConnectorJson = """
+        {
+            "id": "1",
+            "standard": "IEC_62196_T2",
+            "format": "SOCKET",
+            "power_type": "AC_3_PHASE",
+            "max_voltage": 230,
+            "max_amperage": 32,
+            "last_updated": "2024-01-01T00:00:00Z"
+        }
+        """;
+
+    private const string PatchJson = """{"name":"Updated Name"}""";
+
+    [Fact]
+    public async Task HandleLocationPut_V221_DeserializesAndCallsReceiver()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, LocationJsonV221);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPut(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                Arg.Is<object>(o => o is Models.V2_2_1.Location),
+                Arg.Any<CancellationToken>()
+            );
+
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+    }
+
+    [Fact]
+    public async Task HandleLocationPut_V20_DeserializesCorrectModelType()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_0, LocationJsonV20);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPut(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                Arg.Is<object>(o => o is Models.V2_0.Location),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleLocationPut_EmptyBody_Returns400()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
+        httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPut(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2001");
+        await receiver
+            .DidNotReceive()
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleLocationPut_InvalidJson_Returns400()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, "not json{{{");
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPut(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("invalid JSON");
+    }
+
+    [Fact]
+    public async Task HandleLocationPut_ReceiverFailure_Returns400WithOcpiStatus()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnLocationPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Bad data"));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, LocationJsonV221);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPut(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2000");
+        body.Should().Contain("Bad data");
+    }
+
+    [Fact]
+    public async Task HandleLocationPatch_PassesJsonElementToReceiver()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnLocationPatchAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<JsonElement>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, PatchJson);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationPatch(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnLocationPatchAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                Arg.Is<JsonElement>(e => e.GetProperty("name").GetString() == "Updated Name"),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleLocationGet_ReturnsDataFromReceiver()
+    {
+        var locationData = new Models.V2_2_1.Location
+        {
+            CountryCode = new CiString("DE"),
+            PartyId = new CiString("ALL"),
+            Id = new CiString("LOC1"),
+            Publish = true,
+            Address = "Hauptstr 1",
+            City = "Berlin",
+            Country = "DEU",
+            Coordinates = new GeoLocation("52.520008", "13.404954"),
+            TimeZone = "Europe/Berlin",
+            LastUpdated = DateTimeOffset.Parse(
+                "2024-01-01T00:00:00Z",
+                System.Globalization.CultureInfo.InvariantCulture
+            ),
+        };
+
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .GetLocationAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<object>.Success(locationData));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+
+        await LocationsEndpoints.HandleLocationGet(httpContext);
+
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("1000");
+        body.Should().Contain("LOC1");
+        body.Should().Contain("Hauptstr 1");
+    }
+
+    [Fact]
+    public async Task HandleLocationGet_ReceiverFailure_Returns400()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .GetLocationAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Location not found"));
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
+        httpContext.Request.RouteValues["locationId"] = "UNKNOWN";
+
+        await LocationsEndpoints.HandleLocationGet(httpContext);
+
+        httpContext.Response.StatusCode.Should().Be(400);
+        var body = ReadResponseBody(httpContext);
+        body.Should().Contain("2003");
+    }
+
+    [Fact]
+    public async Task HandleEvsePut_CallsReceiverWithCorrectIds()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnEvsePutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, EvseJson);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
+
+        await LocationsEndpoints.HandleEvsePut(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnEvsePutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                "EVSE1",
+                Arg.Is<object>(o => o is Models.V2_2_1.Evse),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleEvsePatch_PassesJsonElementToReceiver()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnEvsePatchAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<JsonElement>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, PatchJson);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
+
+        await LocationsEndpoints.HandleEvsePatch(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnEvsePatchAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                "EVSE1",
+                Arg.Any<JsonElement>(),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleConnectorPut_CallsReceiverWithCorrectIds()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnConnectorPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<object>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, ConnectorJson);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
+        httpContext.Request.RouteValues["connectorId"] = "1";
+
+        await LocationsEndpoints.HandleConnectorPut(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnConnectorPutAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                "EVSE1",
+                "1",
+                Arg.Is<object>(o => o is Models.V2_2_1.Connector),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task HandleConnectorPatch_PassesJsonElementToReceiver()
+    {
+        var receiver = Substitute.For<ILocationsReceiver>();
+        receiver
+            .OnConnectorPatchAsync(
+                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<JsonElement>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(OcpiResult.Success());
+
+        var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, PatchJson);
+        httpContext.Request.RouteValues["locationId"] = "LOC1";
+        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
+        httpContext.Request.RouteValues["connectorId"] = "1";
+
+        await LocationsEndpoints.HandleConnectorPatch(httpContext);
+
+        await receiver
+            .Received(1)
+            .OnConnectorPatchAsync(
+                Arg.Any<OcpiRequestContext>(),
+                "LOC1",
+                "EVSE1",
+                "1",
+                Arg.Any<JsonElement>(),
+                Arg.Any<CancellationToken>()
+            );
+    }
+}

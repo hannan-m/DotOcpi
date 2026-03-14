@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using DotOcpi.Serialization;
 using Microsoft.AspNetCore.Http;
@@ -37,6 +38,43 @@ public static class OcpiResponseWriter
     }
 
     /// <summary>
+    /// Writes a successful OCPI response where the data type is known only at runtime.
+    /// Uses <see cref="JsonSerializer.Serialize(Utf8JsonWriter, object?, Type, JsonSerializerOptions?)"/>
+    /// with the actual runtime type to ensure correct serialization of version-specific models.
+    /// </summary>
+    public static async Task WriteSuccessObjectAsync(
+        HttpContext httpContext,
+        object? data,
+        OcpiVersion version,
+        int statusCode = 1000,
+        string? statusMessage = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        httpContext.Response.ContentType = "application/json";
+        var options = OcpiJsonOptions.GetOptions(version);
+
+        var buffer = new ArrayBufferWriter<byte>(512);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("status_code"u8, statusCode);
+            if (statusMessage is not null)
+                writer.WriteString("status_message"u8, statusMessage);
+            writer.WritePropertyName("timestamp"u8);
+            JsonSerializer.Serialize(writer, DateTimeOffset.UtcNow, options);
+            if (data is not null)
+            {
+                writer.WritePropertyName("data"u8);
+                JsonSerializer.Serialize(writer, data, data.GetType(), options);
+            }
+            writer.WriteEndObject();
+        }
+
+        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Writes an OCPI error response (no data payload).
     /// </summary>
     public static Task WriteErrorAsync(
@@ -60,5 +98,61 @@ public static class OcpiResponseWriter
         );
 
         return httpContext.Response.WriteAsync(body, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes an <see cref="OcpiResult"/> as an OCPI response (no data payload).
+    /// </summary>
+    internal static Task WriteResultAsync(
+        HttpContext httpContext,
+        OcpiResult result,
+        OcpiVersion version,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (result.IsSuccess)
+            return WriteSuccessAsync<object?>(
+                httpContext,
+                null,
+                version,
+                result.StatusCode.Value,
+                result.StatusMessage,
+                cancellationToken
+            );
+        return WriteErrorAsync(
+            httpContext,
+            400,
+            result.StatusCode.Value,
+            result.StatusMessage ?? "Operation failed.",
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Writes an <see cref="OcpiResult{T}"/> with object data as an OCPI response.
+    /// </summary>
+    internal static Task WriteResultObjectAsync(
+        HttpContext httpContext,
+        OcpiResult<object> result,
+        OcpiVersion version,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (result.IsSuccess)
+            return WriteSuccessObjectAsync(
+                httpContext,
+                result.Data,
+                version,
+                result.StatusCode.Value,
+                result.StatusMessage,
+                cancellationToken
+            );
+        return WriteErrorAsync(
+            httpContext,
+            400,
+            result.StatusCode.Value,
+            result.StatusMessage ?? "Operation failed.",
+            cancellationToken
+        );
     }
 }
