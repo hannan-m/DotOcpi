@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -51,7 +52,7 @@ public sealed class OcpiTestCpoServer : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(options =>
         {
-            options.ListenLocalhost(0);
+            options.Listen(IPAddress.Loopback, 0);
         });
 
         var app = builder.Build();
