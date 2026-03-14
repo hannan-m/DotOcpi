@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>In-memory OCPI-compliant test CPO server for consumer integration tests</Description>
+    <PackageTags>ocpi;emsp;testing;integration</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DotOcpi\DotOcpi.csproj" />
+    <ProjectReference Include="..\DotOcpi.AspNetCore\DotOcpi.AspNetCore.csproj" />
+  </ItemGroup>
+</Project>

@@ -7,13 +7,14 @@ How the library itself is tested, and how consumers test their integrations.
 - [1. Testing Principles](#1-testing-principles)
 - [2. Test Project Structure](#2-test-project-structure)
 - [3. Unit Testing Strategy](#3-unit-testing-strategy)
-- [4. Integration Testing Strategy](#4-integration-testing-strategy)
-- [5. Multi-Version Test Matrix](#5-multi-version-test-matrix)
-- [6. Test Data Strategy](#6-test-data-strategy)
-- [7. Security Testing](#7-security-testing)
-- [8. Serialization Testing](#8-serialization-testing)
-- [9. Consumer Testing (DotOcpi.Testing)](#9-consumer-testing-dotocpitesting)
-- [10. CI/CD Pipeline](#10-cicd-pipeline)
+- [4. Handler Endpoint Testing](#4-handler-endpoint-testing)
+- [5. Integration Testing Strategy](#5-integration-testing-strategy)
+- [6. Multi-Version Test Matrix](#6-multi-version-test-matrix)
+- [7. Test Data Strategy](#7-test-data-strategy)
+- [8. Security Testing](#8-security-testing)
+- [9. Serialization Testing](#9-serialization-testing)
+- [10. Consumer Testing (DotOcpi.Testing)](#10-consumer-testing-dotocpitesting)
+- [11. CI/CD Pipeline](#11-cicd-pipeline)
 
 ---
 
@@ -126,11 +127,16 @@ tests/
 │   │   ├── OcpiAuthFilterTests.cs
 │   │   ├── OcpiRequestIdFilterTests.cs
 │   │   └── OcpiExceptionMiddlewareTests.cs
-│   ├── Endpoints/
-│   │   ├── VersionsEndpointsTests.cs
-│   │   ├── CredentialsEndpointsTests.cs
-│   │   ├── LocationsEndpointsTests.cs
-│   │   └── ...
+│   ├── Handlers/
+│   │   ├── OcpiEndpointTestHelper.cs   # Shared test infrastructure
+│   │   ├── Locations/LocationsEndpointsTests.cs
+│   │   ├── Sessions/SessionsEndpointsTests.cs
+│   │   ├── Cdrs/CdrsEndpointsTests.cs
+│   │   ├── Tariffs/TariffsEndpointsTests.cs
+│   │   ├── Tokens/TokensEndpointsTests.cs
+│   │   ├── Commands/CommandsEndpointsTests.cs
+│   │   ├── ChargingProfiles/ChargingProfilesEndpointsTests.cs
+│   │   └── Credentials/CredentialsEndpointsTests.cs
 │   └── Routing/
 │       └── OcpiVersionRouterTests.cs
 │
@@ -189,7 +195,7 @@ graph TD
 | **OcpiPatchHelper** | Merge semantics: add, update, remove (null), nested objects | Nothing |
 | **IOcpiValidator<T>** | Valid models pass, invalid models fail with correct error | Nothing |
 | **Registration orchestrator** | Happy path, version mismatch, CPO rejection, timeout | `ICredentialsClient`, `IVersionDiscovery`, `ITokenStore`, `ICpoRegistry` |
-| **Module handlers** | Deserialize → validate → invoke consumer → return result | `ILocationsReceiver`, etc. |
+| **Module handlers** | Deserialize → invoke consumer → return correct HTTP + OCPI response | `ILocationsReceiver`, etc. (see [Handler Endpoint Testing](#4-handler-endpoint-testing)) |
 | **PaginationHandler** | Follow Link headers, accumulate results, handle missing headers | `HttpMessageHandler` |
 | **OcpiResponseParser** | Parse OCPI envelope, extract data, map status codes | Nothing |
 
@@ -234,7 +240,97 @@ graph TD
 
 ---
 
-## 4. Integration Testing Strategy
+## 4. Handler Endpoint Testing
+
+Handler endpoint tests verify the server-side module handlers in isolation — no HTTP pipeline, no auth, no routing. They use `DefaultHttpContext` directly against the static handler methods, with `NSubstitute` mocks for consumer interfaces.
+
+### Test Infrastructure
+
+All handler endpoint tests share infrastructure via `OcpiEndpointTestHelper`:
+
+```csharp
+internal static class OcpiEndpointTestHelper
+{
+    // Shared CpoConnection used across all handler tests
+    internal static readonly CpoConnection TestConnection = new() { ... };
+
+    // Creates an OcpiRequestContext for a given version and module
+    internal static OcpiRequestContext CreateContext(OcpiVersion version, string moduleId);
+
+    // Creates a DefaultHttpContext with DI, OCPI context, and optional JSON body
+    internal static DefaultHttpContext CreateHttpContext<TService>(
+        TService service, OcpiVersion version, string moduleId, string? body = null);
+
+    // Reads the response body as a string for assertion
+    internal static string ReadResponseBody(DefaultHttpContext httpContext);
+}
+```
+
+Each module test file creates a thin wrapper that fills in the module-specific parameters:
+
+```csharp
+private static DefaultHttpContext CreateHttpContext(
+    ILocationsReceiver receiver, OcpiVersion version, string? body = null)
+    => OcpiEndpointTestHelper.CreateHttpContext(receiver, version, "locations", body);
+```
+
+### What Each Handler Test Must Verify
+
+Every handler endpoint test must check **both sides** of the handler — the delegation to the consumer interface **and** the HTTP response sent back to the CPO:
+
+| Aspect | Assertion | Why |
+|---|---|---|
+| **HTTP status code** | `httpContext.Response.StatusCode.Should().Be(200)` | Proves the handler sets the correct HTTP status |
+| **OCPI status code in body** | `body.Should().Contain("1000")` | Proves the OCPI envelope is correct |
+| **Consumer invoked** | `receiver.Received(1).OnXxxAsync(...)` | Proves the handler delegates correctly |
+| **Correct model type** | `Arg.Is<object>(o => o is Models.V2_2_1.Location)` | Proves version-specific deserialization works |
+| **Route values passed** | `"LOC1"` in `Received()` matcher | Proves route parameter extraction works |
+
+Tests that only check `.Received(1)` without response assertions are incomplete — they verify plumbing but not behavior.
+
+### Required Test Categories Per Module
+
+| Category | What It Tests | Example |
+|---|---|---|
+| **Happy path (per version)** | Version dispatch: correct model type deserialized | `HandleLocationPut_V221_DeserializesAndCallsReceiver` |
+| **Empty body** | Missing request body returns HTTP 400 | `HandleLocationPut_EmptyBody_Returns400` |
+| **Invalid JSON** | Malformed JSON returns HTTP 400 with "invalid JSON" message | `HandleLocationPut_InvalidJson_Returns400` |
+| **Consumer client error** | 2xxx OCPI status → HTTP 400 | `HandleLocationPut_ReceiverClientError_Returns400` |
+| **Consumer server error** | 3xxx OCPI status → HTTP 500 | `HandleLocationPut_ReceiverServerError_Returns500` |
+| **GET with data** | Successful GET returns data in response body | `HandleLocationGet_ReturnsDataFromReceiver` |
+| **GET not found** | Consumer returns failure → HTTP 400 with OCPI error | `HandleLocationGet_ReceiverFailure_Returns400` |
+| **PATCH content** | `JsonElement` contains correct properties | `HandleLocationPatch_PassesJsonElementToReceiver` |
+| **PATCH non-object body** | Array body returns HTTP 400 | `HandleSessionPatch_ArrayBody_Returns400` |
+
+### Module-Specific Tests
+
+Some modules have unique behaviors that require dedicated tests:
+
+**CDRs** — POST idempotency: new CDR returns 201 + Location header, duplicate returns 200. Location header format differs by version (party-prefixed in 2.2+, flat in 2.0/2.1.1).
+
+**Tariffs** — PATCH version restriction: 2.2+ returns 405 Method Not Allowed, 2.0/2.1.1 supports PATCH with JsonElement.
+
+**Tokens** — Pagination: GET returns X-Total-Count, X-Limit, and Link headers. Link header preserves date_from/date_to query parameters. Negative offset is clamped to zero. Limit is clamped to the maximum (1000).
+
+**Tokens (authorize)** — Optional body: POST authorize works with or without a LocationReferences body. Invalid JSON in body returns 400 without invoking the authorizer.
+
+**ChargingProfiles** — Only available for 2.2+ versions (skipped for 2.0/2.1.1 in routing).
+
+### Error Mapping
+
+The response writer maps OCPI status codes to HTTP status codes:
+
+| OCPI Status Range | HTTP Status | Example |
+|---|---|---|
+| 1xxx (success) | 200 OK | `OcpiResult.Success()` |
+| 2xxx (client error) | 400 Bad Request | `OcpiStatusCode.GenericClientError` |
+| 3xxx (server error) | 500 Internal Server Error | `OcpiStatusCode.GenericServerError` |
+
+This mapping must be tested — it was a post-audit addition and is critical for correct CPO behavior.
+
+---
+
+## 5. Integration Testing Strategy
 
 Integration tests verify the full pipeline — from HTTP request to consumer handler invocation and back. They use `WebApplicationFactory` with the in-memory test server.
 
@@ -399,7 +495,7 @@ public class LocationPushFlowTests : IntegrationTestBase
 
 ---
 
-## 5. Multi-Version Test Matrix
+## 6. Multi-Version Test Matrix
 
 Every version-dependent behavior must be tested across all supported versions. Use xUnit `[Theory]` with `[MemberData]` to parameterize.
 
@@ -489,7 +585,7 @@ public class MultiVersionFlowTests : IAsyncLifetime
 
 ---
 
-## 6. Test Data Strategy
+## 7. Test Data Strategy
 
 ### Test Data Factories
 
@@ -608,7 +704,7 @@ public static class EdgeCaseData
 
 ---
 
-## 7. Security Testing
+## 8. Security Testing
 
 Security tests are **mandatory** for every crypto/auth code path. They live alongside the component they test but are tagged with `[Trait("Category", "Security")]`.
 
@@ -691,7 +787,7 @@ public class HttpsEnforcementTests
 
 ---
 
-## 8. Serialization Testing
+## 9. Serialization Testing
 
 Serialization is tested per OCPI version with round-trip and fixture-based tests.
 
@@ -810,7 +906,7 @@ public class CiStringTests
 
 ---
 
-## 9. Consumer Testing (DotOcpi.Testing)
+## 10. Consumer Testing (DotOcpi.Testing)
 
 The `DotOcpi.Testing` package enables consumers to test their own integrations. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API.
 
@@ -826,7 +922,7 @@ The `DotOcpi.Testing.Tests` project verifies:
 
 ---
 
-## 10. CI/CD Pipeline
+## 11. CI/CD Pipeline
 
 ### Test Execution Order
 

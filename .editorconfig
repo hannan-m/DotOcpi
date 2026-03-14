@@ -1,0 +1,161 @@
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{csproj,props,targets,xml}]
+indent_size = 2
+
+[*.json]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Public API analyzers — disable during initial development, populate before first release
+dotnet_diagnostic.RS0016.severity = none
+dotnet_diagnostic.RS0017.severity = none
+
+# Naming conventions
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+dotnet_naming_style.camel_case_underscore_style.capitalization = camel_case
+dotnet_naming_style.camel_case_underscore_style.required_prefix = _
+dotnet_naming_style.camel_case_style.capitalization = camel_case
+
+dotnet_naming_rule.private_fields_must_be_camel_case_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_must_be_camel_case_underscore.style = camel_case_underscore_style
+dotnet_naming_rule.private_fields_must_be_camel_case_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_rule.public_members_must_be_pascal_case.symbols = public_members
+dotnet_naming_rule.public_members_must_be_pascal_case.style = pascal_case_style
+dotnet_naming_rule.public_members_must_be_pascal_case.severity = warning
+dotnet_naming_symbols.public_members.applicable_kinds = property, method, event, class, struct, interface, enum, delegate
+dotnet_naming_symbols.public_members.applicable_accessibilities = public, internal, protected, protected_internal
+
+# Security analyzers at error severity
+dotnet_diagnostic.CA2100.severity = error # SQL injection
+dotnet_diagnostic.CA2109.severity = error # Review visible event handlers
+dotnet_diagnostic.CA2119.severity = error # Seal methods that satisfy private interfaces
+dotnet_diagnostic.CA2153.severity = error # Corrupted state exceptions
+dotnet_diagnostic.CA2300.severity = error # Do not use insecure deserializer BinaryFormatter
+dotnet_diagnostic.CA2301.severity = error # BinaryFormatter.Deserialize without binder
+dotnet_diagnostic.CA2302.severity = error # BinaryFormatter binder not set before Deserialize
+dotnet_diagnostic.CA2305.severity = error # Do not use insecure deserializer LosFormatter
+dotnet_diagnostic.CA2310.severity = error # Do not use insecure deserializer NetDataContractSerializer
+dotnet_diagnostic.CA2311.severity = error # NetDataContractSerializer.Deserialize without binder
+dotnet_diagnostic.CA2312.severity = error # NetDataContractSerializer binder not set before Deserialize
+dotnet_diagnostic.CA2315.severity = error # Do not use insecure deserializer ObjectStateFormatter
+dotnet_diagnostic.CA2321.severity = error # Do not deserialize with JavaScriptSerializer using SimpleTypeResolver
+dotnet_diagnostic.CA2322.severity = error # JavaScriptSerializer initialized with SimpleTypeResolver before Deserialize
+dotnet_diagnostic.CA2326.severity = error # Do not use TypeNameHandling values other than None
+dotnet_diagnostic.CA2327.severity = error # Do not use insecure JsonSerializerSettings
+dotnet_diagnostic.CA2328.severity = error # Ensure JsonSerializerSettings are secure
+dotnet_diagnostic.CA2329.severity = error # Do not deserialize with JsonSerializer using insecure config
+dotnet_diagnostic.CA2330.severity = error # Ensure JsonSerializer has secure configuration when deserializing
+dotnet_diagnostic.CA2350.severity = error # Do not use DataTable.ReadXml() with untrusted data
+dotnet_diagnostic.CA2351.severity = error # Do not use DataSet.ReadXml() with untrusted data
+dotnet_diagnostic.CA2361.severity = error # Ensure auto-generated class containing DataSet.ReadXml() not used with untrusted data
+dotnet_diagnostic.CA2362.severity = error # Unsafe DataSet or DataTable in auto-generated serializable type
+dotnet_diagnostic.CA3001.severity = error # Review code for SQL injection
+dotnet_diagnostic.CA3002.severity = error # Review code for XSS
+dotnet_diagnostic.CA3003.severity = error # Review code for file path injection
+dotnet_diagnostic.CA3004.severity = error # Review code for information disclosure
+dotnet_diagnostic.CA3005.severity = error # Review code for LDAP injection
+dotnet_diagnostic.CA3006.severity = error # Review code for process command injection
+dotnet_diagnostic.CA3007.severity = error # Review code for open redirect
+dotnet_diagnostic.CA3008.severity = error # Review code for XPath injection
+dotnet_diagnostic.CA3009.severity = error # Review code for XML injection
+dotnet_diagnostic.CA3010.severity = error # Review code for XAML injection
+dotnet_diagnostic.CA3011.severity = error # Review code for DLL injection
+dotnet_diagnostic.CA3012.severity = error # Review code for regex injection
+dotnet_diagnostic.CA3061.severity = error # Do not add schema by URL
+dotnet_diagnostic.CA3075.severity = error # Insecure DTD processing
+dotnet_diagnostic.CA3076.severity = error # Insecure XSLT script processing
+dotnet_diagnostic.CA3077.severity = error # Insecure processing in API design, XmlDocument, XmlTextReader
+dotnet_diagnostic.CA3147.severity = error # Mark verb handlers with ValidateAntiForgeryToken
+dotnet_diagnostic.CA5350.severity = error # Do not use weak cryptographic algorithms
+dotnet_diagnostic.CA5351.severity = error # Do not use broken cryptographic algorithms
+dotnet_diagnostic.CA5358.severity = error # Do not use unsafe cipher modes
+dotnet_diagnostic.CA5359.severity = error # Do not disable certificate validation
+dotnet_diagnostic.CA5360.severity = error # Do not call dangerous methods in deserialization
+dotnet_diagnostic.CA5361.severity = error # Do not disable SChannel use of strong crypto
+dotnet_diagnostic.CA5362.severity = error # Potential reference cycle in deserialized object graph
+dotnet_diagnostic.CA5363.severity = error # Do not disable request validation
+dotnet_diagnostic.CA5364.severity = error # Do not use deprecated security protocols
+dotnet_diagnostic.CA5365.severity = error # Do not disable HTTP header checking
+dotnet_diagnostic.CA5366.severity = error # Use XmlReader for DataSet Read XML
+dotnet_diagnostic.CA5367.severity = error # Do not serialize types with pointer fields
+dotnet_diagnostic.CA5368.severity = error # Set ViewStateUserKey for classes derived from Page
+dotnet_diagnostic.CA5369.severity = error # Use XmlReader for Deserialize
+dotnet_diagnostic.CA5370.severity = error # Use XmlReader for validating reader
+dotnet_diagnostic.CA5371.severity = error # Use XmlReader for schema read
+dotnet_diagnostic.CA5372.severity = error # Use XmlReader for XPathDocument
+dotnet_diagnostic.CA5373.severity = error # Do not use obsolete key derivation function
+dotnet_diagnostic.CA5374.severity = error # Do not use XslTransform
+dotnet_diagnostic.CA5375.severity = error # Do not use account shared access signature
+dotnet_diagnostic.CA5376.severity = error # Use SharedAccessProtocol HttpsOnly
+dotnet_diagnostic.CA5377.severity = error # Use container level access policy
+dotnet_diagnostic.CA5378.severity = error # Do not disable ServicePointManagerSecurityProtocols
+dotnet_diagnostic.CA5379.severity = error # Ensure key derivation function algorithm is sufficiently strong
+dotnet_diagnostic.CA5380.severity = error # Do not add certificates to root store
+dotnet_diagnostic.CA5381.severity = error # Ensure certificates are not added to root store
+dotnet_diagnostic.CA5382.severity = error # Use secure cookies in ASP.NET Core
+dotnet_diagnostic.CA5383.severity = error # Ensure use of secure cookies in ASP.NET Core
+dotnet_diagnostic.CA5384.severity = error # Do not use digital signature algorithm (DSA)
+dotnet_diagnostic.CA5385.severity = error # Use Rivest-Shamir-Adleman (RSA) algorithm with sufficient key size
+dotnet_diagnostic.CA5386.severity = error # Avoid hardcoding SecurityProtocolType value
+dotnet_diagnostic.CA5387.severity = error # Do not use weak key derivation function with insufficient iteration count
+dotnet_diagnostic.CA5388.severity = error # Ensure sufficient iteration count when using weak key derivation function
+dotnet_diagnostic.CA5389.severity = error # Do not add archive item's path to the target file system path
+dotnet_diagnostic.CA5390.severity = error # Do not hard-code encryption key
+dotnet_diagnostic.CA5391.severity = error # Use antiforgery tokens in ASP.NET Core MVC controllers
+dotnet_diagnostic.CA5392.severity = error # Use DefaultDllImportSearchPaths attribute for P/Invokes
+dotnet_diagnostic.CA5393.severity = error # Do not use unsafe DllImportSearchPath value
+dotnet_diagnostic.CA5394.severity = error # Do not use insecure randomness
+dotnet_diagnostic.CA5395.severity = error # Miss HttpVerb attribute for action methods
+dotnet_diagnostic.CA5396.severity = error # Set HttpOnly to true for HttpCookie
+dotnet_diagnostic.CA5397.severity = error # Do not use deprecated SslProtocols values
+dotnet_diagnostic.CA5398.severity = error # Avoid hardcoded SslProtocols values
+dotnet_diagnostic.CA5399.severity = error # Enable HttpClient certificate revocation list check
+dotnet_diagnostic.CA5400.severity = error # Ensure HttpClient certificate revocation list check is not disabled
+dotnet_diagnostic.CA5401.severity = error # Do not use CreateEncryptor with non-default IV
+dotnet_diagnostic.CA5402.severity = error # Use CreateEncryptor with the default IV
+dotnet_diagnostic.CA5403.severity = error # Do not hard-code certificate
+dotnet_diagnostic.CA5404.severity = error # Do not disable token validation checks
+dotnet_diagnostic.CA5405.severity = error # Do not always skip token validation in delegates
+
+# Version-specific namespaces, enum values, and serialization contexts use underscores for OCPI version numbers
+[src/DotOcpi/Models/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+
+[src/DotOcpi/Serialization/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+
+# Public API analyzers — suppress for test projects
+[tests/**/*.cs]
+# Test method naming convention uses underscores (MethodName_Condition_ExpectedResult)
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.RS0016.severity = none
+dotnet_diagnostic.RS0017.severity = none
+dotnet_diagnostic.RS0022.severity = none
+dotnet_diagnostic.RS0024.severity = none
+dotnet_diagnostic.RS0025.severity = none
+dotnet_diagnostic.RS0026.severity = none
+dotnet_diagnostic.RS0027.severity = none
+
+[benchmarks/**/*.cs]
+dotnet_diagnostic.RS0016.severity = none
+dotnet_diagnostic.RS0017.severity = none
+dotnet_diagnostic.RS0022.severity = none
+dotnet_diagnostic.RS0024.severity = none
+dotnet_diagnostic.RS0025.severity = none
+dotnet_diagnostic.RS0026.severity = none
+dotnet_diagnostic.RS0027.severity = none
