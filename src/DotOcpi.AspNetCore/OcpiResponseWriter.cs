@@ -75,6 +75,39 @@ public static class OcpiResponseWriter
     }
 
     /// <summary>
+    /// Writes a successful OCPI response with a list of runtime-typed items.
+    /// Each item is serialized using its actual runtime type.
+    /// </summary>
+    public static async Task WriteSuccessListAsync(
+        HttpContext httpContext,
+        IReadOnlyList<object> items,
+        OcpiVersion version,
+        CancellationToken cancellationToken = default
+    )
+    {
+        httpContext.Response.ContentType = "application/json";
+        var options = OcpiJsonOptions.GetOptions(version);
+
+        var buffer = new ArrayBufferWriter<byte>(1024);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("status_code"u8, OcpiStatusCode.Success.Value);
+            writer.WritePropertyName("timestamp"u8);
+            JsonSerializer.Serialize(writer, DateTimeOffset.UtcNow, options);
+            writer.WriteStartArray("data"u8);
+            foreach (var item in items)
+            {
+                JsonSerializer.Serialize(writer, item, item.GetType(), options);
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Writes an OCPI error response (no data payload).
     /// </summary>
     public static Task WriteErrorAsync(
