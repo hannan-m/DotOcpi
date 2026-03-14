@@ -18,4 +18,8 @@
     <ProjectReference Include="..\..\src\DotOcpi\DotOcpi.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Fixtures\Json\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
