@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -21,5 +20,4 @@
     <ProjectReference Include="..\..\src\DotOcpi.Client\DotOcpi.Client.csproj" />
     <ProjectReference Include="..\..\src\DotOcpi.Testing\DotOcpi.Testing.csproj" />
   </ItemGroup>
-
 </Project>
