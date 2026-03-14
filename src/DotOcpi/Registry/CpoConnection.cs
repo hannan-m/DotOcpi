@@ -36,6 +36,12 @@ public sealed record CpoConnection
     /// <summary>When this connection was last updated (UTC).</summary>
     public required DateTimeOffset UpdatedAt { get; init; }
 
+    /// <summary>The CPO's versions endpoint URL, used for re-discovery during credential rotation.</summary>
+    public string? CpoVersionsUrl { get; init; }
+
+    /// <summary>The eMSP's versions endpoint URL, sent in credentials to this CPO.</summary>
+    public string? EmspVersionsUrl { get; init; }
+
     /// <summary>When the last health check succeeded (UTC), or null if never.</summary>
     public DateTimeOffset? LastHealthCheckAt { get; init; }
 
