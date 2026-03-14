@@ -101,6 +101,17 @@ internal static class ModuleHandlerFactory
             _ => throw new ArgumentOutOfRangeException(nameof(version)),
         };
 
+    /// <summary>Creates a handler for Credentials deserialization.</summary>
+    internal static IModuleHandler Credentials(OcpiVersion version) =>
+        version switch
+        {
+            OcpiVersion.V2_0 => new ModuleHandler<V2_0.Credentials>(OcpiJsonOptions.V2_0),
+            OcpiVersion.V2_1_1 => new ModuleHandler<V2_1_1.Credentials>(OcpiJsonOptions.V2_1_1),
+            OcpiVersion.V2_2 => new ModuleHandler<V2_2.Credentials>(OcpiJsonOptions.V2_2),
+            OcpiVersion.V2_2_1 => new ModuleHandler<V2_2_1.Credentials>(OcpiJsonOptions.V2_2_1),
+            _ => throw new ArgumentOutOfRangeException(nameof(version)),
+        };
+
     /// <summary>
     /// Creates a handler for command result deserialization.
     /// Uses CommandResponse for 2.0/2.1.1 and CommandResult for 2.2+.
