@@ -1,0 +1,30 @@
+# IDE
+.idea/
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# .NET build output
+bin/
+obj/
+*.nupkg
+*.snupkg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI agent / local project rules
+.claude/
+CLAUDE.md
+CLAUDE.template.md
+
+# Secrets
+*.pfx
+appsettings.*.local.json
+
+# Coverage / test results
+coverage/
+TestResults/
+*.trx
