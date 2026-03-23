@@ -42,9 +42,9 @@ classDiagram
         <<enumeration>>
         Pending
         Connected
-        Suspended
         Offline
         Unregistered
+        Suspended
     }
 
     class OcpiVersion {
@@ -189,18 +189,18 @@ public interface ICpoRegistry
 
 ### Persistence
 
-The `InMemoryCpoRegistry` is volatile. For persistence across restarts, consumers implement `ICpoRegistryStore`:
+The `InMemoryCpoRegistry` is standalone — it does **not** load from or write to `ICpoRegistryStore`. It is a pure in-memory implementation backed by `ConcurrentDictionary`. All data is lost on restart.
+
+The `ICpoRegistryStore` interface exists for consumers who need persistence across restarts. Consumers implement this interface to bridge their backing store (database, Redis, etc.) with a registry implementation of their choosing:
 
 ```csharp
 public interface ICpoRegistryStore
 {
     Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct);
     Task SaveAsync(CpoConnection connection, CancellationToken ct);
-    Task RemoveAsync(string cpoId, CancellationToken ct);
+    Task RemoveAsync(string connectionKey, CancellationToken ct);
 }
 ```
-
-On startup, the registry loads all connections from the store. On changes, it writes through to the store.
 
 ---
 
@@ -313,48 +313,42 @@ sequenceDiagram
 | Status updates | Eventual | Local cache + TTL |
 | Health check tracking | Eventual | Write-through to store, fire-and-forget |
 
+> **Note:** The library defines `IDistributedLockProvider` and `ICacheInvalidationNotifier` interfaces as extension points, but they are not yet integrated into any built-in component. No built-in implementation uses them. They are available for consumers who need distributed coordination in multi-instance deployments.
+
 ---
 
 ## 6. Connection Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: Admin initiates registration<br/>(Token A configured)
-
-    PENDING --> CONNECTED: Handshake completes<br/>(Token B/C exchanged)
-
-    PENDING --> [*]: Handshake fails<br/>(timeout, rejection)
+    [*] --> CONNECTED: RegisterAsync completes<br/>(Token B exchanged)
 
     CONNECTED --> CONNECTED: Token rotation<br/>(PUT /credentials)
 
-    CONNECTED --> SUSPENDED: Admin suspends<br/>(stops accepting requests)
+    CONNECTED --> OFFLINE: Health probe fails<br/>(consecutive failures exceed threshold)
 
-    CONNECTED --> OFFLINE: Health probe fails<br/>(versions endpoint unreachable)
+    OFFLINE --> CONNECTED: Health probe succeeds
 
-    SUSPENDED --> CONNECTED: Admin resumes
+    CONNECTED --> [*]: UnregisterAsync<br/>(DELETE /credentials, entry removed)
 
-    OFFLINE --> CONNECTED: Health probe succeeds<br/>or CPO pushes data
-
-    CONNECTED --> [*]: Unregistered<br/>(DELETE /credentials)
-
-    SUSPENDED --> [*]: Admin removes
-
-    OFFLINE --> [*]: Admin removes
+    OFFLINE --> [*]: UnregisterAsync or admin removal
 ```
 
 ### Status Transitions
 
 | From | To | Trigger |
 |---|---|---|
-| - | PENDING | `RegistrationOrchestrator.InitiateAsync()` |
-| PENDING | CONNECTED | Successful handshake |
-| PENDING | (removed) | Handshake failure |
+| - | CONNECTED | `RegistrationOrchestrator.RegisterAsync()` completes successfully |
 | CONNECTED | CONNECTED | Token rotation via PUT /credentials |
-| CONNECTED | SUSPENDED | Admin action |
-| CONNECTED | OFFLINE | Health probe failure |
-| SUSPENDED | CONNECTED | Admin action |
-| OFFLINE | CONNECTED | Successful communication |
-| Any | (removed) | DELETE /credentials or admin removal |
+| CONNECTED | OFFLINE | Health probe consecutive failures exceed threshold (default 3) |
+| OFFLINE | CONNECTED | Health probe succeeds |
+| Any | (removed) | `UnregisterAsync` (DELETE /credentials) removes the entry from the registry |
+
+> **Enum values with no built-in assignment path:**
+>
+> - **Pending**: The enum value exists, but `RegistrationOrchestrator.RegisterAsync` creates connections with `Status = Connected` directly. There is no intermediate Pending state persisted in the registry during the handshake. Consumers may use this value in custom registration flows.
+> - **Unregistered**: The enum value exists, but `UnregisterAsync` removes entries from the registry entirely rather than marking them as Unregistered. Consumers may use this value if they prefer soft-delete semantics.
+> - **Suspended**: The enum value exists as an extension point for consumer-driven admin suspension. No built-in component transitions connections to this state.
 
 ---
 
@@ -422,7 +416,7 @@ If a CPO updates their credentials via PUT and their `party_id` or `country_code
 
 1. Clean up old secondary indexes (by-party, by-token)
 2. Update the connection with new identity
-3. The `Id` changes since it's derived from party identity
+3. The `ConnectionKey` changes since it's derived from party identity
 4. Create new entry, remove old entry (atomic if possible)
 5. Log the change for audit
 
@@ -439,40 +433,24 @@ Every successful health probe updates `LastHealthCheckAt`:
 
 ### Health Probing
 
-A background service periodically checks stale connections:
+A background service (`CpoHealthMonitor`) periodically checks all eligible connections:
 
 ```mermaid
 graph TD
-    Timer["Every 5 minutes"] --> GetAll["Get all CONNECTED entries"]
-    GetAll --> Filter["Filter: LastHealthCheckAt > 24 hours ago"]
-    Filter --> Probe["For each stale CPO:<br/>GET /ocpi/versions<br/>with Token C"]
+    Timer["Every 5 minutes (configurable)"] --> GetAll["Get ALL connections"]
+    GetAll --> Filter["Skip: Unregistered and Pending"]
+    Filter --> Probe["For each eligible CPO:<br/>GET CpoVersionsUrl"]
     Probe --> Success{Success?}
-    Success -->|Yes| Update["Update LastHealthCheckAt"]
-    Success -->|No| MarkOffline["Update Status → OFFLINE"]
+    Success -->|Yes| Reset["Reset failure counter<br/>Update LastHealthCheckAt<br/>If Offline → restore to Connected"]
+    Success -->|No| Increment["Increment failure counter"]
+    Increment --> Threshold{"Failures >= threshold?<br/>(default: 3 consecutive)"}
+    Threshold -->|Yes| MarkOffline["Mark Status → OFFLINE"]
+    Threshold -->|No| Wait["Wait for next cycle"]
 ```
 
-**Leader election**: In multi-instance deployments, only one instance should run the health monitor. Use a distributed lock with auto-renewal:
+There is no staleness filter — all connections that are not Unregistered or Pending are checked on every cycle. The failure threshold (default 3 consecutive failures) is configurable.
 
-```mermaid
-sequenceDiagram
-    participant I1 as Instance 1
-    participant Lock as Distributed Lock
-    participant I2 as Instance 2
-
-    I1->>Lock: AcquireLock("health-monitor", ttl: 6min)
-    Lock-->>I1: Acquired
-    Note over I1: Run health checks every 5 min
-
-    I2->>Lock: AcquireLock("health-monitor", ttl: 6min)
-    Lock-->>I2: Denied
-    Note over I2: Skip — another instance is leader
-
-    Note over I1: If Instance 1 crashes...
-    Note over Lock: Lock expires after 6 min
-    I2->>Lock: AcquireLock("health-monitor", ttl: 6min)
-    Lock-->>I2: Acquired
-    Note over I2: Take over as leader
-```
+> **Note:** The health monitor does not use distributed locking or leader election. Each instance runs its health checks independently. In multi-instance deployments, this means multiple instances may probe the same CPO concurrently, which is safe but redundant. Consumers who need single-leader health checking can implement coordination using `IDistributedLockProvider`.
 
 ### Consumer Health Check
 
