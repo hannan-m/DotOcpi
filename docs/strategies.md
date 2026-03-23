@@ -85,7 +85,7 @@ OCPI models use DataAnnotations for protocol-level validation:
 
 ```csharp
 // Example: V2_2_1/Location.cs
-public sealed class Location
+public sealed record Location
 {
     [Required]
     [StringLength(2, MinimumLength = 2)]
@@ -121,11 +121,13 @@ public sealed class Location
 For protocol rules that DataAnnotations cannot express:
 
 ```csharp
-public interface IOcpiValidator<T>
+public interface IOcpiValidator<in T> : IOcpiValidator
 {
-    OcpiValidationResult Validate(T model, OcpiVersion version);
+    OcpiValidationResult Validate(T model);
 }
 ```
+
+Version is implicit in the model type (e.g., `IOcpiValidator<Models.V2_2_1.Location>`).
 
 Built-in validators handle:
 - Enum values valid for the negotiated version (e.g., EMAID only in 2.2.1)
@@ -139,19 +141,7 @@ Built-in validators handle:
 
 ### Consumer Validation Extension Point
 
-Consumers can register custom validators via an endpoint filter:
-
-```csharp
-services.AddDotOcpi()
-    .AddValidation(v =>
-    {
-        v.AddValidator<ILocationValidator, MyLocationValidator>();
-    });
-```
-
-### .NET 10 Compatibility
-
-On .NET 10, the library's DataAnnotations validators integrate with the built-in `AddValidation()` source generator for Minimal APIs. On .NET 8/9, the library provides its own `OcpiValidationFilter` endpoint filter that invokes DataAnnotations manually.
+Custom validators implementing `IOcpiValidator<T>` are registered in DI and automatically resolved by `AddAspNetCoreServer()`. Validation is handler-driven: `EndpointHelper.DeserializeOrRejectAsync` deserializes and validates the model inline within each endpoint handler, rather than running as an automatic endpoint filter.
 
 ---
 
@@ -171,8 +161,8 @@ On .NET 10, the library's DataAnnotations validators integrate with the built-in
 ### Conditional Compilation
 
 ```csharp
-#if NET10_0_OR_GREATER
-    // Use net10.0-specific APIs when available
+#if NET9_0_OR_GREATER
+    // Use net9.0+ APIs when available (e.g., Base64Url, Convert.ToHexStringLower)
 #else
     // net8.0 baseline implementation
 #endif
@@ -201,23 +191,25 @@ On .NET 10, the library's DataAnnotations validators integrate with the built-in
 <!-- Directory.Build.props -->
 <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Source Link -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <DebugType>embedded</DebugType>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Deterministic builds -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- NuGet packaging -->
+    <Authors>Muhammad Hannan</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/hannan-m/DotOcpi</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/hannan-m/DotOcpi</PackageProjectUrl>
 </PropertyGroup>
-
-<ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="All" />
-</ItemGroup>
 ```
 
 ---
@@ -229,61 +221,50 @@ On .NET 10, the library's DataAnnotations validators integrate with the built-in
 The library uses `MapGroup()` and Minimal API route handlers. No MVC controllers.
 
 ```csharp
-// Consumer usage
+// Consumer usage — map all modules in one call
 var app = builder.Build();
-app.MapOcpiEndpoints();  // Registers all OCPI endpoints
+app.MapAllOcpiEndpoints();
+app.Run();
+
+// Or selectively map modules
+var group = app.MapOcpiEndpoints();
+group.MapLocationsEndpoints();
+group.MapCredentialsEndpoints();
 app.Run();
 ```
 
 ### Internal Implementation
 
+`MapOcpiEndpoints()` returns a `RouteGroupBuilder` for selective module registration. `MapAllOcpiEndpoints()` calls `MapOcpiEndpoints()` and then maps all modules in one call.
+
 ```csharp
-public static class EndpointRouteBuilderExtensions
-{
-    public static IEndpointRouteBuilder MapOcpiEndpoints(
-        this IEndpointRouteBuilder endpoints)
-    {
-        // OcpiRequestIdMiddleware runs before routing, covering all requests
-        var ocpi = endpoints.MapGroup("/ocpi");
-
-        // Version endpoints (no auth required for discovery)
-        ocpi.MapGet("/versions", VersionsEndpoints.GetVersions);
-        ocpi.MapGet("/versions/{versionId}", VersionsEndpoints.GetVersionDetail);
-
-        // Per-version endpoint groups
-        foreach (var version in supportedVersions)
-        {
-            var versionGroup = ocpi.MapGroup($"/emsp/{version.ToUrlSegment()}")
-                .AddEndpointFilter<OcpiAuthFilter>()
-                .AddEndpointFilter<OcpiValidationFilter>();
-
-            // Credentials (no version-specific routing needed)
-            MapCredentialsEndpoints(versionGroup);
-
-            // Module endpoints
-            MapLocationsEndpoints(versionGroup, version);
-            MapSessionsEndpoints(versionGroup, version);
-            MapCdrsEndpoints(versionGroup, version);
-            MapTariffsEndpoints(versionGroup, version);
-            MapTokensEndpoints(versionGroup, version);
-            MapCommandsEndpoints(versionGroup, version);
-
-            if (version >= OcpiVersion.V2_2)
-                MapChargingProfilesEndpoints(versionGroup, version);
-        }
-
-        return endpoints;
-    }
-}
+// Two-step: get group, then map individual modules
+var group = app.MapOcpiEndpoints(basePath: "/ocpi", rateLimitOptions: myLimits);
+group.MapLocationsEndpoints();
+group.MapSessionsEndpoints();
+group.MapCredentialsEndpoints();
+// ... or map everything at once:
+app.MapAllOcpiEndpoints();
 ```
+
+The middleware pipeline is registered by `MapOcpiEndpoints()`:
+1. `OcpiRequestIdMiddleware` — ensures X-Request-ID / X-Correlation-ID on every response
+2. `OcpiSecurityHeadersMiddleware` — X-Content-Type-Options, Cache-Control, X-Frame-Options
+3. `OcpiExceptionMiddleware` — catches unhandled exceptions, returns OCPI 3000
+
+Endpoint filters are added to the returned route group:
+1. `OcpiAuthFilter` — validates token, stores CpoConnection in HttpContext.Items
+2. `OcpiRateLimitFilter` — (optional, if `rateLimitOptions` provided) buckets by CPO
+3. `OcpiMetricsFilter` — records request count and duration
 
 ### Endpoint Filters vs Middleware
 
 | Concern | Implementation | Why |
 |---|---|---|
 | X-Request-ID / X-Correlation-ID | `OcpiRequestIdMiddleware` (middleware) | Runs before routing so it covers all requests, including 404s and auth rejections |
+| Security headers | `OcpiSecurityHeadersMiddleware` (middleware) | Runs before routing so all OCPI responses include security headers |
 | Authentication | `OcpiAuthFilter` (endpoint filter) | Needs access to route parameters for version detection |
-| Validation | `OcpiValidationFilter` (endpoint filter) | Version-aware, operates on deserialized models |
+| Validation | Handler-driven via `EndpointHelper` | Version-aware, operates on deserialized models within each handler |
 | Exception handling | `OcpiExceptionMiddleware` (middleware) | Global catch-all, wraps in OCPI response envelope |
 
 ### OpenAPI Integration
@@ -352,22 +333,23 @@ sequenceDiagram
 public interface IOcpiSyncService
 {
     /// <summary>
-    /// Pull all changes from a CPO since the given timestamp.
-    /// The library handles pagination automatically.
+    /// Synchronizes all configured modules from a specific CPO.
+    /// Uses the last-sync timestamp from ISyncStateStore for incremental pulls.
     /// </summary>
-    Task<OcpiResult> SyncFromCpoAsync(
+    Task SyncFromCpoAsync(
         string cpoId,
-        DateTimeOffset? since,
-        CancellationToken ct);
+        DateTimeOffset? since = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Pull changes for a specific module.
+    /// Synchronizes a specific module from a specific CPO.
+    /// Returns a SyncResult describing the outcome.
     /// </summary>
-    Task<OcpiResult> SyncModuleFromCpoAsync(
+    Task<SyncResult> SyncModuleFromCpoAsync(
         string cpoId,
         string moduleId,
-        DateTimeOffset? since,
-        CancellationToken ct);
+        DateTimeOffset? since = null,
+        CancellationToken cancellationToken = default);
 }
 ```
 
@@ -377,26 +359,17 @@ public interface IOcpiSyncService
 
 ### Inbound Rate Limiting (CPO → eMSP)
 
-Per-CPO rate limits to prevent a single CPO from overwhelming the eMSP:
+Per-CPO rate limits to prevent a single CPO from overwhelming the eMSP. Rate limiting is configured by passing `OcpiRateLimitOptions` to `MapOcpiEndpoints()`:
 
 ```csharp
-services.AddDotOcpi()
-    .AddRateLimiting(options =>
-    {
-        options.DefaultPolicy = new OcpiRateLimitPolicy
-        {
-            PermitLimit = 100,
-            Window = TimeSpan.FromMinutes(1)
-        };
-
-        // Per-CPO override
-        options.AddCpoPolicy("DE_ABC", new OcpiRateLimitPolicy
-        {
-            PermitLimit = 500,
-            Window = TimeSpan.FromMinutes(1)
-        });
-    });
+app.MapAllOcpiEndpoints(rateLimitOptions: new OcpiRateLimitOptions
+{
+    MaxRequestsPerWindow = 100,
+    Window = TimeSpan.FromMinutes(1)
+});
 ```
+
+`OcpiRateLimitOptions` has two properties: `MaxRequestsPerWindow` (default 100) and `Window` (default 1 minute). The rate limit is partitioned per CPO using a sliding window.
 
 Implementation uses ASP.NET Core's built-in `AddRateLimiter()` with partitioning by CPO identity:
 
@@ -468,9 +441,8 @@ graph TD
 ```
 
 **Key configuration:**
-- Retries disabled for unsafe methods (POST, PUT, DELETE, PATCH) per OCPI spec — do not retry mutations
-- Circuit breaker partitioned by URL authority — each CPO gets its own breaker
-- Consumers can customize via `AddClient(client => client.AddStandardResilienceHandler(...))`
+- The library uses `AddStandardResilienceHandler()` with its defaults — no custom resilience configuration
+- Consumers who need custom resilience policies can configure the named `HttpClient` via `IHttpClientBuilder`
 
 ### Per-CPO Circuit Breaker State
 
@@ -653,7 +625,7 @@ services.AddDotOcpi(configuration.GetSection("DotOcpi"));
 
 ### Dynamic Configuration
 
-Use `IOptionsMonitor<DotOcpiOptions>` for configuration that can change at runtime (e.g., adding a new supported version). The library internally uses `IOptionsMonitor`, not `IOptions`, so configuration reloads are picked up automatically.
+The library uses the standard `services.Configure<DotOcpiOptions>()` pattern. Consumers inject `IOptions<DotOcpiOptions>` or `IOptionsMonitor<DotOcpiOptions>` as needed in their own code.
 
 ---
 
@@ -1032,12 +1004,13 @@ OCPI defines `CiString` as a string type where comparisons must be case-insensit
 **Library approach:** `CiString` is represented as a `readonly record struct`:
 
 ```csharp
-[JsonConverter(typeof(CiStringJsonConverter))]
-public readonly record struct CiString : IEquatable<CiString>, IComparable<CiString>
+public readonly record struct CiString : IEquatable<CiString>
 {
-    public string Value { get; }
+    private readonly string? _value;
 
-    public CiString(string value) => Value = value;
+    public string Value => _value ?? "";
+
+    public CiString(string value) => _value = value ?? throw new ArgumentNullException(nameof(value));
 
     // Equality is case-insensitive
     public bool Equals(CiString other) =>
@@ -1055,11 +1028,13 @@ public readonly record struct CiString : IEquatable<CiString>, IComparable<CiStr
 }
 ```
 
+The `CiStringConverter` is registered via `OcpiJsonOptions.CreateOptions()` (not as an attribute on the struct), alongside other OCPI-specific converters.
+
 **Usage in models:**
 
 ```csharp
 // V2_2_1/Location.cs
-public sealed class Location
+public sealed record Location
 {
     public required CiString CountryCode { get; init; }  // CiString(2)
     public required CiString PartyId { get; init; }      // CiString(3)
@@ -1089,7 +1064,7 @@ public static class OcpiSentinel
 ```
 
 - **Validation:** The library accepts `"#NA"` on required string fields without rejecting for empty/missing.
-- **Consumer awareness:** The `OcpiRequestContext` includes a helper `context.IsFieldNotAvailable(fieldValue)` so consumers can detect and handle `#NA` in their business logic.
+- **Consumer awareness:** `OcpiRequestContext` exposes a static helper `OcpiRequestContext.IsFieldNotAvailable(fieldValue)` so consumers can detect and handle `#NA` in their business logic.
 - **Serialization:** `"#NA"` is serialized/deserialized as a normal string. No special JSON handling.
 
 ---
@@ -1123,32 +1098,40 @@ graph TD
 /// <summary>Base exception for all DotOcpi infrastructure failures.</summary>
 public abstract class OcpiException : Exception
 {
-    public string? CpoId { get; init; }
-    public OcpiVersion? Version { get; init; }
+    protected OcpiException(string message) : base(message) { }
+    protected OcpiException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>Network or HTTP-level failure when communicating with a CPO.</summary>
 public class OcpiTransportException : OcpiException
 {
-    public HttpStatusCode? StatusCode { get; init; }
-    public string? RequestId { get; init; }
+    public OcpiTransportException(string message) : base(message) { }
+    public OcpiTransportException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>Handshake or credential exchange failure.</summary>
 public class OcpiRegistrationException : OcpiException
 {
-    public RegistrationFailureReason Reason { get; init; }
+    public OcpiRegistrationException(string message) : base(message) { }
+    public OcpiRegistrationException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>Invalid library configuration detected at startup or runtime.</summary>
-public class OcpiConfigurationException : OcpiException { }
+public class OcpiConfigurationException : OcpiException
+{
+    public OcpiConfigurationException(string message) : base(message) { }
+    public OcpiConfigurationException(string message, Exception innerException) : base(message, innerException) { }
+}
 
 /// <summary>JSON serialization or deserialization failure for OCPI models.</summary>
 public class OcpiSerializationException : OcpiException
 {
-    public string? ModuleId { get; init; }
+    public OcpiSerializationException(string message) : base(message) { }
+    public OcpiSerializationException(string message, Exception innerException) : base(message, innerException) { }
 }
 ```
+
+All exception types carry context in their `Message` string. No additional typed properties — the exception hierarchy is intentionally minimal.
 
 ### When Each Exception Is Thrown
 
@@ -1189,21 +1172,24 @@ catch (Exception ex)
 ```csharp
 public sealed class OcpiCpoSimulator : IAsyncDisposable
 {
-    /// <summary>Create a test CPO with configurable behavior.</summary>
-    public static OcpiCpoSimulator Create(Action<CpoSimulatorConfiguration>? configure = null);
+    /// <summary>Creates and starts a new test CPO server.</summary>
+    public static async Task<OcpiCpoSimulator> CreateAsync(
+        Action<CpoSimulatorConfiguration>? configure = null);
 
-    /// <summary>The base URL of the test CPO (in-memory, no real HTTP).</summary>
+    /// <summary>The base URL of the test CPO.</summary>
     public Uri BaseUrl { get; }
 
     /// <summary>Token A for initiating registration.</summary>
     public string TokenA { get; }
 
-    /// <summary>Configure module responses.</summary>
-    public CpoSimulatorConfiguration Configuration { get; }
+    /// <summary>The server configuration.</summary>
+    public CpoSimulatorConfiguration Config { get; }
 }
 ```
 
 ### Configuration
+
+Failure injection is configured via flat properties on `CpoSimulatorConfiguration` (not a separate `FailureInjection` object):
 
 ```csharp
 public sealed class CpoSimulatorConfiguration
@@ -1214,21 +1200,33 @@ public sealed class CpoSimulatorConfiguration
     /// <summary>CPO identity.</summary>
     public PartyIdentity CpoIdentity { get; set; } = new("DE", "CPO");
 
-    /// <summary>Pre-configured locations returned by GET.</summary>
+    /// <summary>Pre-configured locations returned by GET (legacy anonymous object mode).</summary>
     public List<object> Locations { get; set; } = [];
 
-    /// <summary>Pre-configured tariffs.</summary>
+    /// <summary>Pre-configured tariffs (legacy anonymous object mode).</summary>
     public List<object> Tariffs { get; set; } = [];
 
-    /// <summary>Behavior for POST /commands.</summary>
-    public CommandBehavior CommandBehavior { get; set; } = CommandBehavior.AcceptAll;
+    // ── Failure injection (flat properties) ──────────────────
+    /// <summary>When true, POST /credentials returns OCPI 3001.</summary>
+    public bool RejectRegistration { get; set; }
 
-    /// <summary>Simulate failures.</summary>
-    public FailureInjection? FailureInjection { get; set; }
+    /// <summary>When set, all responses use this OCPI status code instead of 1000.</summary>
+    public OcpiStatusCode? ForceStatusCode { get; set; }
+
+    /// <summary>When set, each response is delayed by this duration.</summary>
+    public TimeSpan? ResponseDelay { get; set; }
+
+    /// <summary>When true, all requests throw a TaskCanceledException (timeout simulation).</summary>
+    public bool SimulateTimeout { get; set; }
+
+    /// <summary>Per-endpoint failure overrides.</summary>
+    public Dictionary<string, EndpointFailureConfig> EndpointOverrides { get; set; } = new();
 }
 ```
 
 ### Consumer Usage
+
+`AddTestCpoServer()` takes an `Action<CpoSimulatorConfiguration>`, not a pre-created instance:
 
 ```csharp
 public class MyLocationsHandlerTests : IAsyncLifetime
@@ -1238,7 +1236,7 @@ public class MyLocationsHandlerTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _testCpo = OcpiCpoSimulator.Create(config =>
+        _testCpo = await OcpiCpoSimulator.CreateAsync(config =>
         {
             config.SupportedVersions = [OcpiVersion.V2_2_1];
             config.Locations.Add(TestData.CreateLocation());
@@ -1249,11 +1247,10 @@ public class MyLocationsHandlerTests : IAsyncLifetime
             {
                 builder.ConfigureServices(services =>
                 {
-                    services.AddDotOcpi(options =>
+                    services.AddTestCpoServer(config =>
                     {
-                        options.SupportedVersions = [OcpiVersion.V2_2_1];
-                    })
-                    .AddTestCpoServer(_testCpo);
+                        config.SupportedVersions = [OcpiVersion.V2_2_1];
+                    });
                 });
             });
     }
@@ -1281,16 +1278,12 @@ public class MyLocationsHandlerTests : IAsyncLifetime
 ### Failure Injection
 
 ```csharp
-_testCpo = OcpiCpoSimulator.Create(config =>
+_testCpo = await OcpiCpoSimulator.CreateAsync(config =>
 {
-    // Simulate CPO returning errors
-    config.FailureInjection = new FailureInjection
-    {
-        FailRegistration = false,
-        LocationsGetStatusCode = 3000,      // OCPI server error
-        CommandsResponseDelay = TimeSpan.FromSeconds(35), // Timeout
-        HttpFailureRate = 0.1,              // 10% of requests return 503
-    };
+    config.RejectRegistration = true;                     // Reject credentials POST
+    config.ForceStatusCode = new OcpiStatusCode(3000);    // All responses return OCPI 3000
+    config.ResponseDelay = TimeSpan.FromSeconds(5);       // Slow response
+    config.SimulateTimeout = true;                        // TaskCanceledException on all requests
 });
 ```
 
@@ -1304,70 +1297,32 @@ Implementation details for the security rules defined in CLAUDE.md. Each subsect
 
 **Rules 8, 11.** CPOs provide endpoint URLs during version discovery and `response_url` in Commands/ChargingProfiles. The library makes outbound HTTP requests to these URLs — without validation, a malicious CPO could target internal services.
 
+The SSRF protection is implemented by `SsrfGuard` (in `DotOcpi.Client.Internal` and `DotOcpi.Simulator.Infrastructure`). It validates resolved IP addresses against private, loopback, link-local, and metadata address ranges:
+
 ```csharp
-internal static class OcpiUrlValidator
+internal static class SsrfGuard
 {
-    private static readonly IPNetwork[] s_blockedNetworks =
-    [
-        IPNetwork.Parse("127.0.0.0/8"),       // Loopback
-        IPNetwork.Parse("10.0.0.0/8"),        // RFC 1918 private
-        IPNetwork.Parse("172.16.0.0/12"),     // RFC 1918 private
-        IPNetwork.Parse("192.168.0.0/16"),    // RFC 1918 private
-        IPNetwork.Parse("169.254.0.0/16"),    // Link-local / cloud metadata
-        IPNetwork.Parse("::1/128"),           // IPv6 loopback
-        IPNetwork.Parse("fc00::/7"),          // IPv6 ULA (RFC 4193)
-        IPNetwork.Parse("fe80::/10"),         // IPv6 link-local
-    ];
-
-    public static async ValueTask<UrlValidationResult> ValidateAsync(
-        Uri url, DotOcpiSecurityOptions options, CancellationToken ct)
-    {
-        // Scheme: HTTPS only
-        if (url.Scheme != Uri.UriSchemeHttps)
-            return UrlValidationResult.Fail("URL must use HTTPS scheme");
-
-        // Port: 443 unless explicitly allowed
-        int port = url.IsDefaultPort ? 443 : url.Port;
-        if (port != 443 && !options.AllowedPorts.Contains(port))
-            return UrlValidationResult.Fail($"Port {port} is not allowed");
-
-        // DNS resolution — validate all resolved IPs are non-private
-        var addresses = await Dns.GetHostAddressesAsync(url.Host, ct);
-
-        foreach (var address in addresses)
-        {
-            if (IPAddress.IsLoopback(address))
-                return UrlValidationResult.Fail("Loopback addresses are blocked");
-
-            foreach (var network in s_blockedNetworks)
-            {
-                if (network.Contains(address))
-                    return UrlValidationResult.Fail(
-                        $"Address {address} falls within blocked range {network}");
-            }
-        }
-
-        return UrlValidationResult.Ok;
-    }
+    /// <summary>
+    /// Returns true if the address is in a blocked range (private, loopback,
+    /// link-local, or the cloud metadata endpoint).
+    /// </summary>
+    public static bool IsBlocked(IPAddress address);
 }
 ```
+
+Blocked ranges: `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16` (including cloud metadata `169.254.169.254`), `fc00::/7`, `fe80::/10`.
 
 Applied at: version discovery response parsing, credentials POST/PUT endpoint URLs, `response_url` in `StartSession`/`StopSession`/`ReserveNow`/`UnlockConnector`, `response_url` in `SetChargingProfile`.
 
 ### 18.2 Request Body Size Limits
 
-**Rule 10.** Per-endpoint limits prevent OOM from oversized payloads. See [performance.md — Section 9](performance.md#9-request--response-size-limits) for the endpoint filter implementation.
+**Rule 10.** `OcpiBodySizeLimitFilter` is an endpoint filter that rejects request bodies exceeding a configured size. The default limit is **10 MB** (applied uniformly). Consumers can specify a different limit when constructing the filter:
 
-| Endpoint Category | Max Body Size | Rationale |
-|---|---|---|
-| PUT Location/Session/Token/Tariff | 256 KB | Single object; largest is Location with many EVSEs |
-| POST CDR | 1 MB | CDR with detailed charging periods and signed data |
-| PATCH (any) | 64 KB | Partial update — should be small |
-| POST /credentials | 16 KB | Credentials object is small |
-| POST /authorize | 8 KB | Token UID + LocationReferences |
-| POST command callback | 16 KB | CommandResult is small |
+```csharp
+new OcpiBodySizeLimitFilter(maxBodySizeBytes: 10 * 1024 * 1024)  // default
+```
 
-Limits are configurable via `DotOcpiOptions.BodySizeLimits` for consumers who need to adjust.
+The filter enforces limits both via `Content-Length` header checks and Kestrel's per-request body size feature to prevent bypass via chunked transfer encoding.
 
 ### 18.3 JSON Deserialization Safety
 
@@ -1378,11 +1333,14 @@ private static JsonSerializerOptions CreateOptions(JsonSerializerContext context
 {
     var options = new JsonSerializerOptions
     {
-        TypeInfoResolver = context,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        MaxDepth = 32  // OCPI models nest ~5-6 levels; 32 blocks pathological input
+        MaxDepth = 32,  // OCPI models nest ~5-6 levels; 32 blocks pathological input
     };
+    options.TypeInfoResolverChain.Add(context);
+    options.Converters.Add(new OcpiDateTimeConverter());
+    options.Converters.Add(new CiStringConverter());
+    options.Converters.Add(new GeoLocationConverter());
     options.MakeReadOnly();
     return options;
 }
@@ -1395,21 +1353,22 @@ Additional safety properties enforced by `System.Text.Json` defaults:
 
 ### 18.4 Security Response Headers
 
-**Rule 12.** Applied as an endpoint filter to all OCPI endpoint groups.
+**Rule 12.** Applied as middleware (`OcpiSecurityHeadersMiddleware`) so headers are set on every response, including 404s and error responses.
 
 ```csharp
-internal sealed class OcpiSecurityHeadersFilter : IEndpointFilter
+public sealed class OcpiSecurityHeadersMiddleware
 {
-    public async ValueTask<object?> InvokeAsync(
-        EndpointFilterInvocationContext context,
-        EndpointFilterDelegate next)
-    {
-        var response = context.HttpContext.Response;
-        response.Headers["X-Content-Type-Options"] = "nosniff";
-        response.Headers["Cache-Control"] = "no-store";
-        response.Headers["X-Frame-Options"] = "DENY";
+    private readonly RequestDelegate _next;
 
-        return await next(context);
+    public OcpiSecurityHeadersMiddleware(RequestDelegate next) => _next = next;
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        context.Response.Headers["Cache-Control"] = "no-store";
+        context.Response.Headers["X-Frame-Options"] = "DENY";
+
+        await _next(context);
     }
 }
 ```
@@ -1425,58 +1384,58 @@ Headers rationale:
 **Rule 13.** OCPI error responses must never leak internal details. The library wraps unhandled exceptions in a generic OCPI 3000 response.
 
 ```csharp
-internal sealed class OcpiExceptionMiddleware(
-    RequestDelegate next,
-    ILogger<OcpiExceptionMiddleware> logger,
-    IHostEnvironment environment,
-    IOptions<DotOcpiOptions> options)
+public sealed partial class OcpiExceptionMiddleware
 {
+    private readonly RequestDelegate _next;
+    private readonly ILogger<OcpiExceptionMiddleware> _logger;
+
+    public OcpiExceptionMiddleware(RequestDelegate next, ILogger<OcpiExceptionMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
     public async Task InvokeAsync(HttpContext httpContext)
     {
         try
         {
-            await next(httpContext);
+            await _next(httpContext).ConfigureAwait(false);
         }
-        catch (Exception ex) when (httpContext.GetEndpoint()?.Metadata
-            .GetMetadata<OcpiEndpointMetadata>() is not null)
+        catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
         {
-            // Log full details server-side (source-generated, zero-alloc when disabled)
-            Log.UnhandledOcpiException(logger, ex);
+            LogRequestCancelled(httpContext.Request.Path);
+        }
+        catch (Exception ex)
+        {
+            LogUnhandledException(ex, httpContext.Request.Path);
 
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            httpContext.Response.ContentType = "application/json";
-
-            var message = "Internal processing error";
-            if (environment.IsDevelopment()
-                && options.Value.IncludeExceptionTypeInDevelopment)
+            if (!httpContext.Response.HasStarted)
             {
-                // Dev only: exception type name (never message or stack trace)
-                message = $"Internal processing error ({ex.GetType().Name})";
+                await OcpiResponseWriter.WriteErrorAsync(
+                    httpContext,
+                    StatusCodes.Status500InternalServerError,
+                    3000,
+                    "Internal server error."
+                ).ConfigureAwait(false);
             }
-
-            await OcpiResponseWriter.WriteErrorAsync(
-                httpContext.Response,
-                new OcpiStatusCode(3000),
-                message,
-                httpContext.RequestAborted);
         }
     }
 
-    private static partial class Log
-    {
-        [LoggerMessage(EventId = 4005, Level = LogLevel.Error,
-            Message = "Unhandled exception in OCPI endpoint")]
-        public static partial void UnhandledOcpiException(
-            ILogger logger, Exception exception);
-    }
+    [LoggerMessage(Level = LogLevel.Warning, Message = "OCPI request cancelled by client: {Path}")]
+    private partial void LogRequestCancelled(string path);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled exception processing OCPI request: {Path}")]
+    private partial void LogUnhandledException(Exception exception, string path);
 }
 ```
+
+The middleware takes only `RequestDelegate` and `ILogger` — no `IHostEnvironment` or development-mode exception type disclosure.
 
 What is never included in OCPI error responses:
 - Exception messages (may contain SQL, file paths, connection strings)
 - Stack traces
 - Internal hostnames or IP addresses
-- Assembly/namespace names (except exception type name in dev mode, opt-in)
+- Assembly/namespace names
 - Database schema or query details
 
 ### 18.6 Token Rotation Atomicity
@@ -1553,63 +1512,17 @@ Update dependencies when vulnerabilities are found. Pin to fixed versions in `Di
 
 **Rule 16.** Token A is a pre-shared secret — it must never appear in committed configuration files.
 
-```csharp
-internal sealed class DotOcpiOptionsValidator : IValidateOptions<DotOcpiOptions>
-{
-    private readonly IConfiguration _configuration;
+`DotOcpiOptions` does not have a `CpoConnections` property. CPO connections are managed via the `ICpoRegistry` at runtime, not through static configuration. Token A values are provided at registration time (e.g., via `RegisterAsync(versionsUrl, tokenA)`).
 
-    public DotOcpiOptionsValidator(IConfiguration configuration)
-        => _configuration = configuration;
-
-    public ValidateOptionsResult Validate(string? name, DotOcpiOptions options)
-    {
-        if (_configuration is not IConfigurationRoot root)
-            return ValidateOptionsResult.Success;
-
-        foreach (var cpo in options.CpoConnections)
-        {
-            if (string.IsNullOrEmpty(cpo.TokenA)) continue;
-
-            var configPath = $"DotOcpi:CpoConnections:{cpo.CpoId}:TokenA";
-
-            // Only flag committed config files (appsettings.json, etc.)
-            // user-secrets, environment variables, and Key Vault are acceptable
-            foreach (var provider in root.Providers)
-            {
-                if (provider is FileConfigurationProvider fileProvider
-                    && fileProvider.TryGet(configPath, out _)
-                    && fileProvider.Source is FileConfigurationSource source
-                    && !source.Path.Contains("secrets.json", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ValidateOptionsResult.Fail(
-                        $"""
-                        TokenA for CPO '{cpo.CpoId}' found in a file-based configuration source ({source.Path}).
-                        Use a secrets provider instead (dotnet user-secrets, Azure Key Vault, environment variables).
-                        """);
-                }
-            }
-        }
-
-        return ValidateOptionsResult.Success;
-    }
-}
-```
-
-Recommended consumer configuration pattern:
+The `DotOcpiOptionsValidator` validates structural options (supported versions, base URL, intervals). Token A security is the consumer's responsibility — it must come from a secrets provider, not from `appsettings.json`:
 
 ```csharp
-// Program.cs
+// Program.cs — recommended pattern
 builder.Configuration.AddUserSecrets<Program>();          // Development
 builder.Configuration.AddAzureKeyVault(vaultUri, credential);  // Production
 
-builder.Services.AddDotOcpi(options =>
-{
-    // Token A comes from secrets provider, not appsettings.json
-    options.CpoConnections.Add(new CpoConnectionOptions
-    {
-        CpoId = "CPO-001",
-        TokenA = builder.Configuration["Ocpi:Cpo001:TokenA"]!,
-        VersionsUrl = new Uri("https://cpo.example.com/ocpi/versions")
-    });
-});
+// Token A is passed at registration time, not in options
+var tokenA = builder.Configuration["Ocpi:Cpo001:TokenA"]!;
+await client.Registration.RegisterAsync(
+    new Uri("https://cpo.example.com/ocpi/versions"), tokenA);
 ```
