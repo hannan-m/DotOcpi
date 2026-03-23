@@ -1,4 +1,5 @@
 using DotOcpi.Client.Sync;
+using DotOcpi.Client.Tests.Fixtures;
 using DotOcpi.Registry;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -312,10 +313,5 @@ public class OcpiPullSyncBackgroundServiceTests
 
         jitter.Should().BeGreaterOrEqualTo(TimeSpan.Zero);
         jitter.Should().BeLessThanOrEqualTo(maxJitter);
-    }
-
-    private sealed class FakeTimeProvider(DateTimeOffset startTime) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => startTime;
     }
 }
