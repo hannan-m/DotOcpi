@@ -15,7 +15,14 @@ public sealed class SessionValidator
     public OcpiValidationResult Validate(Models.V2_0.Session model)
     {
         var errors = new List<OcpiValidationError>();
-        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        ValidateCore(
+            model.Kwh,
+            model.StartDateTime,
+            model.EndDateTime,
+            model.Currency,
+            model.Status == Models.V2_0.SessionStatus.COMPLETED,
+            errors
+        );
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
@@ -23,7 +30,14 @@ public sealed class SessionValidator
     public OcpiValidationResult Validate(Models.V2_1_1.Session model)
     {
         var errors = new List<OcpiValidationError>();
-        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        ValidateCore(
+            model.Kwh,
+            model.StartDateTime,
+            model.EndDateTime,
+            model.Currency,
+            model.Status == Models.V2_1_1.SessionStatus.COMPLETED,
+            errors
+        );
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
@@ -31,7 +45,14 @@ public sealed class SessionValidator
     public OcpiValidationResult Validate(Models.V2_2.Session model)
     {
         var errors = new List<OcpiValidationError>();
-        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        ValidateCore(
+            model.Kwh,
+            model.StartDateTime,
+            model.EndDateTime,
+            model.Currency,
+            model.Status == Models.V2_2.SessionStatus.COMPLETED,
+            errors
+        );
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
@@ -39,7 +60,14 @@ public sealed class SessionValidator
     public OcpiValidationResult Validate(Models.V2_2_1.Session model)
     {
         var errors = new List<OcpiValidationError>();
-        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        ValidateCore(
+            model.Kwh,
+            model.StartDateTime,
+            model.EndDateTime,
+            model.Currency,
+            model.Status == Models.V2_2_1.SessionStatus.COMPLETED,
+            errors
+        );
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
@@ -53,14 +81,12 @@ public sealed class SessionValidator
             _ => throw new ArgumentException($"Unsupported Session type: {model.GetType().Name}", nameof(model)),
         };
 
-    // SessionStatus values are identical across versions (ACTIVE, COMPLETED, etc.)
-    // but they're separate enum types per namespace, so we accept int to unify.
     private static void ValidateCore(
         decimal kwh,
         DateTimeOffset startDateTime,
         DateTimeOffset? endDateTime,
         string currency,
-        object status,
+        bool isCompleted,
         List<OcpiValidationError> errors
     )
     {
@@ -94,8 +120,7 @@ public sealed class SessionValidator
 
         ValidationHelpers.ValidateCurrency(currency, "SESSION_INVALID_CURRENCY", errors);
 
-        // COMPLETED status check — compare by string name to avoid coupling to version-specific enums
-        if (status.ToString() == "COMPLETED" && endDateTime is null)
+        if (isCompleted && endDateTime is null)
         {
             errors.Add(
                 new OcpiValidationError(

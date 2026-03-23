@@ -86,7 +86,7 @@ public class SecurityFlowTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task TokenGenerator_ProducesUniqueTokens()
+    public void TokenGenerator_ProducesUniqueTokens()
     {
         var tokens = Enumerable.Range(0, 100).Select(_ => TokenGenerator.Generate()).ToList();
 
@@ -95,7 +95,7 @@ public class SecurityFlowTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Security")]
-    public async Task TokenGenerator_ProducesSufficientLength()
+    public void TokenGenerator_ProducesSufficientLength()
     {
         var token = TokenGenerator.Generate();
 
@@ -105,7 +105,7 @@ public class SecurityFlowTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Security")]
-    public async Task TokenHasher_DifferentTokens_ProduceDifferentHashes()
+    public void TokenHasher_DifferentTokens_ProduceDifferentHashes()
     {
         var token1 = TokenGenerator.Generate();
         var token2 = TokenGenerator.Generate();
@@ -118,7 +118,7 @@ public class SecurityFlowTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Security")]
-    public async Task TokenHasher_SameToken_ProducesSameHash()
+    public void TokenHasher_SameToken_ProducesSameHash()
     {
         var token = TokenGenerator.Generate();
 

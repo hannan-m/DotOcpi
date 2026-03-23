@@ -38,6 +38,11 @@ public static class OcpiHttpClientConfiguration
                 }
             );
 
+        // Disable handler rotation — the singleton HttpClient in DotOcpiClientExtensions
+        // captures the handler chain once. SocketsHttpHandler.PooledConnectionLifetime
+        // handles DNS rotation, so factory-level rotation would only orphan the resilience state.
+        builder.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+
         builder.AddStandardResilienceHandler();
 
         return builder;

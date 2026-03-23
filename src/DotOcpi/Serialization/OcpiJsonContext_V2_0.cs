@@ -44,4 +44,4 @@ namespace DotOcpi.Serialization;
 [JsonSerializable(typeof(IReadOnlyList<Tariff>))]
 [JsonSerializable(typeof(IReadOnlyList<Token>))]
 [JsonSerializable(typeof(JsonElement))]
-public partial class OcpiJsonContext_V2_0 : JsonSerializerContext;
+public sealed partial class OcpiJsonContext_V2_0 : JsonSerializerContext;
