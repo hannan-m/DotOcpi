@@ -18,6 +18,6 @@
     <ProjectReference Include="..\..\src\DotOcpi\DotOcpi.csproj" />
     <ProjectReference Include="..\..\src\DotOcpi.AspNetCore\DotOcpi.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\DotOcpi.Client\DotOcpi.Client.csproj" />
-    <ProjectReference Include="..\..\src\DotOcpi.Testing\DotOcpi.Testing.csproj" />
+    <ProjectReference Include="..\..\src\DotOcpi.Simulator\DotOcpi.Simulator.csproj" />
   </ItemGroup>
 </Project>

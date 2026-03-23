@@ -18,5 +18,6 @@ public interface ITokensAuthorizer
         OcpiRequestContext context,
         string tokenUid,
         object? locationReferences,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 }

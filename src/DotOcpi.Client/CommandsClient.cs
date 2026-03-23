@@ -9,18 +9,12 @@ namespace DotOcpi.Client;
 internal sealed class CommandsClient : ICommandsClient
 {
     private readonly HttpClient _httpClient;
-    private readonly OcpiHttpRequestBuilder _requestBuilder;
-    private readonly IOutboundTokenProvider _tokenProvider;
+    private readonly ICpoConnectionContextProvider _contextProvider;
 
-    internal CommandsClient(
-        HttpClient httpClient,
-        OcpiHttpRequestBuilder requestBuilder,
-        IOutboundTokenProvider tokenProvider
-    )
+    internal CommandsClient(HttpClient httpClient, ICpoConnectionContextProvider contextProvider)
     {
         _httpClient = httpClient;
-        _requestBuilder = requestBuilder;
-        _tokenProvider = tokenProvider;
+        _contextProvider = contextProvider;
     }
 
     public Task<OcpiResult<object>> SendStartSessionAsync(
@@ -60,18 +54,16 @@ internal sealed class CommandsClient : ICommandsClient
         CancellationToken cancellationToken
     )
     {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        var cpoToken = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-
-        var request = _requestBuilder.Build(HttpMethod.Post, cpoId, "commands", commandType, cpoToken, command);
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        var request = OcpiHttpRequestBuilder.Build(HttpMethod.Post, context, "commands", commandType, command);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         return await OcpiResponseParser
             .ParseVersionedObjectAsync(
                 response,
-                connection.Version,
-                OcpiModelTypeMap.GetCommandResponseType(connection.Version),
+                context.Connection.Version,
+                OcpiModelTypeMap.GetCommandResponseType(context.Connection.Version),
                 cancellationToken
             )
             .ConfigureAwait(false);

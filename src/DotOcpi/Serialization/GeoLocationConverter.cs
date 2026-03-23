@@ -5,9 +5,14 @@ namespace DotOcpi.Serialization;
 
 /// <summary>
 /// Converts GeoLocation to/from OCPI wire format (object with string latitude/longitude).
+/// Uses <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/> for zero-allocation
+/// property name matching.
 /// </summary>
 public sealed class GeoLocationConverter : JsonConverter<GeoLocation>
 {
+    private static ReadOnlySpan<byte> LatitudeProperty => "latitude"u8;
+    private static ReadOnlySpan<byte> LongitudeProperty => "longitude"u8;
+
     public override GeoLocation Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -30,16 +35,20 @@ public sealed class GeoLocationConverter : JsonConverter<GeoLocation>
                 throw new JsonException("Expected property name.");
             }
 
-            var propertyName = reader.GetString();
-            reader.Read();
-
-            if (string.Equals(propertyName, "latitude", StringComparison.OrdinalIgnoreCase))
+            if (reader.ValueTextEquals(LatitudeProperty))
             {
+                reader.Read();
                 latitude = reader.GetString();
             }
-            else if (string.Equals(propertyName, "longitude", StringComparison.OrdinalIgnoreCase))
+            else if (reader.ValueTextEquals(LongitudeProperty))
             {
+                reader.Read();
                 longitude = reader.GetString();
+            }
+            else
+            {
+                reader.Read();
+                reader.Skip();
             }
         }
 
@@ -54,8 +63,8 @@ public sealed class GeoLocationConverter : JsonConverter<GeoLocation>
     public override void Write(Utf8JsonWriter writer, GeoLocation value, JsonSerializerOptions options)
     {
         writer.WriteStartObject();
-        writer.WriteString("latitude", value.Latitude);
-        writer.WriteString("longitude", value.Longitude);
+        writer.WriteString(LatitudeProperty, value.Latitude);
+        writer.WriteString(LongitudeProperty, value.Longitude);
         writer.WriteEndObject();
     }
 }

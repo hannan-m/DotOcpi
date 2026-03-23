@@ -323,9 +323,11 @@ Every `await` in the library uses `ConfigureAwait(false)` to avoid unnecessary `
 public async Task<OcpiResult<Location>> GetLocationAsync(
     string cpoId, string locationId, CancellationToken ct)
 {
-    var conn = await _registry.GetAsync(cpoId, ct).ConfigureAwait(false);
-    if (conn is null)
-        return OcpiResult<Location>.Failure(OcpiStatusCode.GenericClientError, "CPO not registered");
+    // CpoConnectionContextProvider caches CpoConnection + raw token per CPO.
+    // ResolveAsync returns synchronously on cache hit (ValueTask, no allocation).
+    var context = await _contextProvider.ResolveAsync(cpoId, ct).ConfigureAwait(false);
+
+    var request = OcpiHttpRequestBuilder.Build(context, HttpMethod.Get, "locations", locationId);
 
     var response = await _httpClient
         .SendAsync(request, ct)
@@ -429,10 +431,14 @@ services.AddHttpClient("OcpiClient")
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),    // Force DNS refresh
         PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2), // Clean up idle connections
-        MaxConnectionsPerServer = 10,                           // Per CPO host
+        MaxConnectionsPerServer = 20,                           // Per CPO host
         EnableMultipleHttp2Connections = true                   // Scale beyond stream limit
     });
 ```
+
+### Connection Context Caching
+
+Module clients resolve CPO connection metadata and auth tokens through `CpoConnectionContextProvider`, which caches the result per CPO in a `ConcurrentDictionary`. This eliminates 2 registry lookups + 1 token fetch on every outbound call. The cache is invalidated automatically after registration, credential rotation, and unregistration operations. Consumers who modify the registry or rotate tokens outside the library call `IOcpiClient.InvalidateConnection(cpoId)` or `InvalidateAllConnections()`.
 
 ### HTTP/2 for Multiplexing
 
@@ -534,7 +540,7 @@ internal sealed class TokenValidator
             return TokenValidationResult.Invalid;
 
         // 4. Constant-time comparison (timing-attack resistant)
-        var storedHash = Convert.FromHexString(connection.InboundTokenHash);
+        var storedHash = Convert.FromHexString(connection.TokenBHash);
         var incomingHash = Convert.FromHexString(tokenHash);
 
         if (!CryptographicOperations.FixedTimeEquals(storedHash, incomingHash))

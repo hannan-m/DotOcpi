@@ -13,5 +13,12 @@
     <!-- Deterministic builds -->
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- NuGet packaging -->
+    <Authors>Muhammad Hannan</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/hannan-m/DotOcpi</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/hannan-m/DotOcpi</PackageProjectUrl>
+    <Copyright>2026 Muhammad Hannan</Copyright>
   </PropertyGroup>
 </Project>

@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using DotOcpi.Client.Internal;
 
 namespace DotOcpi.Client;
@@ -9,44 +8,30 @@ namespace DotOcpi.Client;
 internal sealed class CdrsClient : ICdrsClient
 {
     private readonly HttpClient _httpClient;
-    private readonly OcpiHttpRequestBuilder _requestBuilder;
-    private readonly IOutboundTokenProvider _tokenProvider;
+    private readonly ICpoConnectionContextProvider _contextProvider;
+    private readonly PaginationHandler _pagination;
 
-    internal CdrsClient(
-        HttpClient httpClient,
-        OcpiHttpRequestBuilder requestBuilder,
-        IOutboundTokenProvider tokenProvider
-    )
+    internal CdrsClient(HttpClient httpClient, ICpoConnectionContextProvider contextProvider)
     {
         _httpClient = httpClient;
-        _requestBuilder = requestBuilder;
-        _tokenProvider = tokenProvider;
+        _contextProvider = contextProvider;
+        _pagination = new PaginationHandler(httpClient);
     }
 
-    public async IAsyncEnumerable<object> GetAllCdrsAsync(
+    public IAsyncEnumerable<object> GetAllCdrsAsync(
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        var token = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var modelType = OcpiModelTypeMap.GetCdrType(connection.Version);
-
-        var query = QueryStringBuilder.BuildDateFilter(dateFrom, dateTo);
-        var request = query is not null
-            ? _requestBuilder.BuildWithQuery(HttpMethod.Get, cpoId, "cdrs", query, token)
-            : _requestBuilder.Build(HttpMethod.Get, cpoId, "cdrs", null, token);
-
-        var pagination = new PaginationHandler(_httpClient);
-        await foreach (
-            var item in pagination
-                .StreamAllAsync(request, connection.Version, modelType, token, cancellationToken)
-                .ConfigureAwait(false)
-        )
-        {
-            yield return item;
-        }
-    }
+        CancellationToken cancellationToken = default
+    ) =>
+        PullClientHelper.StreamAllAsync(
+            _contextProvider,
+            _pagination,
+            cpoId,
+            "cdrs",
+            OcpiModelTypeMap.GetCdrType,
+            dateFrom,
+            dateTo,
+            cancellationToken
+        );
 }

@@ -1,4 +1,4 @@
-using System.Text.Json;
+using DotOcpi.Observability;
 using DotOcpi.Registry;
 using DotOcpi.Security;
 using Microsoft.AspNetCore.Http;
@@ -14,14 +14,13 @@ public sealed class OcpiAuthFilter : IEndpointFilter
 {
     private readonly OcpiTokenValidator _tokenValidator;
     private readonly ICpoRegistry _registry;
+    private readonly OcpiMetrics _metrics;
 
-    /// <summary>
-    /// Creates a new OCPI auth filter.
-    /// </summary>
-    public OcpiAuthFilter(OcpiTokenValidator tokenValidator, ICpoRegistry registry)
+    public OcpiAuthFilter(OcpiTokenValidator tokenValidator, ICpoRegistry registry, OcpiMetrics metrics)
     {
         _tokenValidator = tokenValidator;
         _registry = registry;
+        _metrics = metrics;
     }
 
     /// <inheritdoc />
@@ -32,7 +31,8 @@ public sealed class OcpiAuthFilter : IEndpointFilter
 
         if (!AuthorizationHeaderParser.TryParse(authHeader, out var rawToken))
         {
-            return CreateUnauthorizedResponse(httpContext, "Missing or malformed Authorization header.");
+            _metrics.RecordAuthFailure("missing_header");
+            return CreateUnauthorizedResponse("Missing or malformed Authorization header.");
         }
 
         var validationResult = await _tokenValidator
@@ -41,36 +41,24 @@ public sealed class OcpiAuthFilter : IEndpointFilter
 
         if (!validationResult.IsValid)
         {
-            return CreateUnauthorizedResponse(httpContext, "Invalid or unrecognized token.");
+            _metrics.RecordAuthFailure("invalid_token");
+            return CreateUnauthorizedResponse("Invalid or unrecognized token.");
         }
 
-        // Look up the CPO connection by the token hash
-        var tokenHash = TokenHasher.Hash(rawToken);
-        var connection = _registry.FindByTokenHash(tokenHash);
+        // Use the hash already computed by the validator — no need to hash again.
+        var connection = _registry.FindByTokenHash(validationResult.Entry!.TokenHash);
         if (connection is null)
         {
-            return CreateUnauthorizedResponse(httpContext, "No CPO connection associated with this token.");
+            _metrics.RecordAuthFailure("no_connection");
+            return CreateUnauthorizedResponse("No CPO connection associated with this token.");
         }
 
-        // Store the connection in HttpContext for downstream handlers
+        // Store the connection in HttpContext for downstream filters and handlers
         httpContext.Items[typeof(CpoConnection)] = connection;
 
         return await next(context).ConfigureAwait(false);
     }
 
-    private static IResult CreateUnauthorizedResponse(HttpContext httpContext, string message)
-    {
-        httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
-
-        return Results.Json(
-            new
-            {
-                status_code = 2002,
-                status_message = message,
-                timestamp = DateTimeOffset.UtcNow,
-            },
-            statusCode: StatusCodes.Status401Unauthorized,
-            contentType: "application/json"
-        );
-    }
+    private static IResult CreateUnauthorizedResponse(string message) =>
+        OcpiResponseWriter.ErrorResult(StatusCodes.Status401Unauthorized, 2002, message);
 }

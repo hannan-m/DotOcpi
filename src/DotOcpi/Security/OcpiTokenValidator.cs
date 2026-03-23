@@ -1,5 +1,5 @@
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace DotOcpi.Security;
 
@@ -45,14 +45,17 @@ public sealed class OcpiTokenValidator
             return TokenValidationResult.Failed("Token not recognized.");
         }
 
-        // Constant-time comparison of hash bytes to prevent timing attacks.
-        // Even though we already found the entry by hash lookup, this comparison
-        // ensures no timing information leaks about partial hash matches in
-        // alternative store implementations that might use prefix search.
-        var incomingBytes = Encoding.UTF8.GetBytes(incomingHash);
-        var storedBytes = Encoding.UTF8.GetBytes(entry.TokenHash);
-
-        if (!CryptographicOperations.FixedTimeEquals(incomingBytes, storedBytes))
+        // Constant-time comparison to prevent timing attacks. Compares the
+        // char spans directly as bytes — no heap allocation. Even though we
+        // already found the entry by hash lookup, this ensures no timing
+        // information leaks about partial hash matches in alternative store
+        // implementations that might use prefix search.
+        if (
+            !CryptographicOperations.FixedTimeEquals(
+                MemoryMarshal.AsBytes(incomingHash.AsSpan()),
+                MemoryMarshal.AsBytes(entry.TokenHash.AsSpan())
+            )
+        )
         {
             return TokenValidationResult.Failed("Token validation failed.");
         }

@@ -21,8 +21,9 @@ namespace DotOcpi.AspNetCore.Routing;
 public static class OcpiEndpointRouteBuilderExtensions
 {
     /// <summary>
-    /// Maps the OCPI middleware pipeline (exception handling, rate limiting)
-    /// and returns the route group for further endpoint configuration.
+    /// Maps the OCPI middleware pipeline (request IDs, security headers,
+    /// exception handling) and returns the route group for further endpoint
+    /// configuration.
     /// </summary>
     /// <param name="app">The web application.</param>
     /// <param name="basePath">The base path for all OCPI endpoints (default: "/ocpi").</param>
@@ -34,18 +35,30 @@ public static class OcpiEndpointRouteBuilderExtensions
         OcpiRateLimitOptions? rateLimitOptions = null
     )
     {
+        // Middleware pipeline (runs on ALL requests, outermost first):
+        // 1. Request IDs — ensures X-Request-ID and X-Correlation-ID on every
+        //    response, including 404s and unhandled exceptions.
+        // 2. Security headers — X-Content-Type-Options, Cache-Control, X-Frame-Options.
+        // 3. Exception handler — catches unhandled exceptions, returns OCPI 3000.
+        app.UseMiddleware<OcpiRequestIdMiddleware>();
+        app.UseMiddleware<OcpiSecurityHeadersMiddleware>();
         app.UseMiddleware<OcpiExceptionMiddleware>();
-
-        if (rateLimitOptions is not null)
-        {
-            app.UseMiddleware<OcpiRateLimitingMiddleware>(rateLimitOptions);
-        }
 
         var group = app.MapGroup(basePath);
 
-        // Apply cross-cutting OCPI filters to all endpoints in this group
-        group.AddEndpointFilter<OcpiRequestIdFilter>();
+        // Endpoint filter pipeline (runs only on matched OCPI endpoints):
+        // 1. Auth — validates token, stores CpoConnection in HttpContext.Items.
+        // 2. Rate limit — buckets by CPO (CpoConnection now available).
+        // 3. Metrics — records request count and duration.
+        // 4. Context — per-module, builds OcpiRequestContext.
         group.AddEndpointFilter<OcpiAuthFilter>();
+
+        if (rateLimitOptions is not null)
+        {
+            group.AddEndpointFilter(new OcpiRateLimitFilter(rateLimitOptions));
+        }
+
+        group.AddEndpointFilter<OcpiMetricsFilter>();
 
         return group;
     }

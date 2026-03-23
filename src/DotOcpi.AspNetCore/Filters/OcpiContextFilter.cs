@@ -27,15 +27,10 @@ internal sealed class OcpiContextFilter : IEndpointFilter
         {
             // Auth filter should have rejected already; this is a pipeline misconfiguration
             return ValueTask.FromResult<object?>(
-                Results.Json(
-                    new
-                    {
-                        status_code = 3000,
-                        status_message = "Server configuration error.",
-                        timestamp = DateTimeOffset.UtcNow,
-                    },
-                    statusCode: StatusCodes.Status500InternalServerError,
-                    contentType: "application/json"
+                OcpiResponseWriter.ErrorResult(
+                    StatusCodes.Status500InternalServerError,
+                    3000,
+                    "Server configuration error."
                 )
             );
         }

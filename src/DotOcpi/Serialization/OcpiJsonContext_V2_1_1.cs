@@ -11,7 +11,9 @@ namespace DotOcpi.Serialization;
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    WriteIndented = false)]
+    WriteIndented = false,
+    UseStringEnumConverter = true
+)]
 [JsonSerializable(typeof(Location))]
 [JsonSerializable(typeof(Evse))]
 [JsonSerializable(typeof(Connector))]
@@ -41,4 +43,5 @@ namespace DotOcpi.Serialization;
 [JsonSerializable(typeof(IReadOnlyList<Cdr>))]
 [JsonSerializable(typeof(IReadOnlyList<Tariff>))]
 [JsonSerializable(typeof(IReadOnlyList<Token>))]
+[JsonSerializable(typeof(JsonElement))]
 public partial class OcpiJsonContext_V2_1_1 : JsonSerializerContext;

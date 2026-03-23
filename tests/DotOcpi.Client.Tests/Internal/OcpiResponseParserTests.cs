@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using DotOcpi.Client.Internal;
 using FluentAssertions;
 using Xunit;
@@ -36,11 +37,10 @@ public class OcpiResponseParserTests
         var json = """{"status_code": 1000, "data": {"id": "LOC1"}, "timestamp": "2024-01-01T00:00:00Z"}""";
         var response = CreateResponse(json);
 
-        var result = await OcpiResponseParser.ParseObjectAsync<TestLocation>(response, OcpiVersion.V2_2_1);
+        var result = await OcpiResponseParser.ParseObjectAsync<JsonElement>(response, OcpiVersion.V2_2_1);
 
         result.IsSuccess.Should().BeTrue();
-        result.Data.Should().NotBeNull();
-        result.Data!.Id.Should().Be("LOC1");
+        result.Data.GetProperty("id").GetString().Should().Be("LOC1");
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class OcpiResponseParserTests
             """{"status_code": 2003, "status_message": "Unknown location", "timestamp": "2024-01-01T00:00:00Z"}""";
         var response = CreateResponse(json);
 
-        var result = await OcpiResponseParser.ParseObjectAsync<TestLocation>(response, OcpiVersion.V2_2_1);
+        var result = await OcpiResponseParser.ParseObjectAsync<JsonElement>(response, OcpiVersion.V2_2_1);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Value.Should().Be(2003);
@@ -63,7 +63,7 @@ public class OcpiResponseParserTests
         var json = """{"status_code": 2002, "status_message": "Invalid token"}""";
         var response = CreateResponse(json, HttpStatusCode.Unauthorized);
 
-        var result = await OcpiResponseParser.ParseObjectAsync<TestLocation>(response, OcpiVersion.V2_2_1);
+        var result = await OcpiResponseParser.ParseObjectAsync<JsonElement>(response, OcpiVersion.V2_2_1);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Value.Should().Be(2002);
@@ -77,7 +77,7 @@ public class OcpiResponseParserTests
             Content = new StringContent("Internal Server Error", Encoding.UTF8, "text/plain"),
         };
 
-        var result = await OcpiResponseParser.ParseObjectAsync<TestLocation>(response, OcpiVersion.V2_2_1);
+        var result = await OcpiResponseParser.ParseObjectAsync<JsonElement>(response, OcpiVersion.V2_2_1);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Value.Should().Be(3000);
@@ -118,7 +118,7 @@ public class OcpiResponseParserTests
         };
         var response = CreateResponse(json, headers: headers);
 
-        var result = await OcpiResponseParser.ParseListAsync(response, OcpiVersion.V2_2_1, typeof(TestLocation));
+        var result = await OcpiResponseParser.ParseListAsync(response, OcpiVersion.V2_2_1, typeof(JsonElement));
 
         result.Items.Should().HaveCount(2);
         result.TotalCount.Should().Be(10);
@@ -133,7 +133,7 @@ public class OcpiResponseParserTests
         var headers = new Dictionary<string, string> { ["X-Total-Count"] = "3" };
         var response = CreateResponse(json, headers: headers);
 
-        var result = await OcpiResponseParser.ParseListAsync(response, OcpiVersion.V2_2_1, typeof(TestLocation));
+        var result = await OcpiResponseParser.ParseListAsync(response, OcpiVersion.V2_2_1, typeof(JsonElement));
 
         result.Items.Should().HaveCount(1);
         result.NextLink.Should().BeNull();
@@ -145,7 +145,7 @@ public class OcpiResponseParserTests
         var json = """{"status_code": 3000, "status_message": "Server error"}""";
         var response = CreateResponse(json, HttpStatusCode.InternalServerError);
 
-        var result = await OcpiResponseParser.ParseListAsync(response, OcpiVersion.V2_2_1, typeof(TestLocation));
+        var result = await OcpiResponseParser.ParseListAsync(response, OcpiVersion.V2_2_1, typeof(JsonElement));
 
         result.Items.Should().BeEmpty();
         result.StatusCode.Value.Should().Be(3000);
@@ -184,12 +184,12 @@ public class OcpiResponseParserTests
         var result = await OcpiResponseParser.ParseVersionedObjectAsync(
             response,
             OcpiVersion.V2_2_1,
-            typeof(TestLocation)
+            typeof(JsonElement)
         );
 
         result.IsSuccess.Should().BeTrue();
-        result.Data.Should().BeOfType<TestLocation>();
-        ((TestLocation)result.Data!).Id.Should().Be("LOC1");
+        result.Data.Should().BeOfType<JsonElement>();
+        ((JsonElement)result.Data!).GetProperty("id").GetString().Should().Be("LOC1");
     }
 
     [Fact]
@@ -201,16 +201,10 @@ public class OcpiResponseParserTests
         var result = await OcpiResponseParser.ParseVersionedObjectAsync(
             response,
             OcpiVersion.V2_2_1,
-            typeof(TestLocation)
+            typeof(JsonElement)
         );
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Value.Should().Be(2003);
-    }
-
-    /// <summary>Simple test model for deserialization tests.</summary>
-    private sealed class TestLocation
-    {
-        public string? Id { get; set; }
     }
 }

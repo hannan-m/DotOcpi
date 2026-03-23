@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace DotOcpi.Observability;
@@ -51,13 +52,14 @@ public sealed class OcpiMetrics
     /// </summary>
     public void RecordRequest(string direction, string module, string version, int statusCode)
     {
-        _requestsTotal.Add(
-            1,
-            new KeyValuePair<string, object?>("direction", direction),
-            new KeyValuePair<string, object?>("module", module),
-            new KeyValuePair<string, object?>("version", version),
-            new KeyValuePair<string, object?>("status", statusCode)
-        );
+        var tags = new TagList
+        {
+            { "direction", direction },
+            { "module", module },
+            { "version", version },
+            { "status", statusCode },
+        };
+        _requestsTotal.Add(1, tags);
     }
 
     /// <summary>
@@ -65,12 +67,13 @@ public sealed class OcpiMetrics
     /// </summary>
     public void RecordRequestDuration(double durationSeconds, string direction, string module, string version)
     {
-        _requestDuration.Record(
-            durationSeconds,
-            new KeyValuePair<string, object?>("direction", direction),
-            new KeyValuePair<string, object?>("module", module),
-            new KeyValuePair<string, object?>("version", version)
-        );
+        var tags = new TagList
+        {
+            { "direction", direction },
+            { "module", module },
+            { "version", version },
+        };
+        _requestDuration.Record(durationSeconds, tags);
     }
 
     /// <summary>
@@ -78,7 +81,7 @@ public sealed class OcpiMetrics
     /// </summary>
     public void ConnectionActivated(string status)
     {
-        _activeConnections.Add(1, new KeyValuePair<string, object?>("status", status));
+        _activeConnections.Add(1, new TagList { { "status", status } });
     }
 
     /// <summary>
@@ -86,7 +89,7 @@ public sealed class OcpiMetrics
     /// </summary>
     public void ConnectionDeactivated(string status)
     {
-        _activeConnections.Add(-1, new KeyValuePair<string, object?>("status", status));
+        _activeConnections.Add(-1, new TagList { { "status", status } });
     }
 
     /// <summary>
@@ -94,6 +97,6 @@ public sealed class OcpiMetrics
     /// </summary>
     public void RecordAuthFailure(string reason)
     {
-        _authFailures.Add(1, new KeyValuePair<string, object?>("reason", reason));
+        _authFailures.Add(1, new TagList { { "reason", reason } });
     }
 }

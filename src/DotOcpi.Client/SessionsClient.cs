@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using DotOcpi.Client.Internal;
 
 namespace DotOcpi.Client;
@@ -9,46 +8,32 @@ namespace DotOcpi.Client;
 internal sealed class SessionsClient : ISessionsClient
 {
     private readonly HttpClient _httpClient;
-    private readonly OcpiHttpRequestBuilder _requestBuilder;
-    private readonly IOutboundTokenProvider _tokenProvider;
+    private readonly ICpoConnectionContextProvider _contextProvider;
+    private readonly PaginationHandler _pagination;
 
-    internal SessionsClient(
-        HttpClient httpClient,
-        OcpiHttpRequestBuilder requestBuilder,
-        IOutboundTokenProvider tokenProvider
-    )
+    internal SessionsClient(HttpClient httpClient, ICpoConnectionContextProvider contextProvider)
     {
         _httpClient = httpClient;
-        _requestBuilder = requestBuilder;
-        _tokenProvider = tokenProvider;
+        _contextProvider = contextProvider;
+        _pagination = new PaginationHandler(httpClient);
     }
 
-    public async IAsyncEnumerable<object> GetAllSessionsAsync(
+    public IAsyncEnumerable<object> GetAllSessionsAsync(
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        var token = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var modelType = OcpiModelTypeMap.GetSessionType(connection.Version);
-
-        var query = QueryStringBuilder.BuildDateFilter(dateFrom, dateTo);
-        var request = query is not null
-            ? _requestBuilder.BuildWithQuery(HttpMethod.Get, cpoId, "sessions", query, token)
-            : _requestBuilder.Build(HttpMethod.Get, cpoId, "sessions", null, token);
-
-        var pagination = new PaginationHandler(_httpClient);
-        await foreach (
-            var item in pagination
-                .StreamAllAsync(request, connection.Version, modelType, token, cancellationToken)
-                .ConfigureAwait(false)
-        )
-        {
-            yield return item;
-        }
-    }
+        CancellationToken cancellationToken = default
+    ) =>
+        PullClientHelper.StreamAllAsync(
+            _contextProvider,
+            _pagination,
+            cpoId,
+            "sessions",
+            OcpiModelTypeMap.GetSessionType,
+            dateFrom,
+            dateTo,
+            cancellationToken
+        );
 
     /// <summary>
     /// Charging preferences require OCPI 2.2 or later.
@@ -60,30 +45,33 @@ internal sealed class SessionsClient : ISessionsClient
         CancellationToken cancellationToken = default
     )
     {
-        var connection = _requestBuilder.GetConnection(cpoId);
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
 
-        if (connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
+        if (context.Connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
         {
             return OcpiResult<object>.Failure(
                 OcpiStatusCode.GenericClientError,
-                $"Charging preferences are not supported in OCPI {connection.Version.ToVersionString()}."
+                $"Charging preferences are not supported in OCPI {context.Connection.Version.ToVersionString()}."
             );
         }
 
-        var token = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var request = _requestBuilder.Build(
+        var request = OcpiHttpRequestBuilder.Build(
             HttpMethod.Put,
-            cpoId,
+            context,
             "sessions",
             $"{sessionId}/charging_preferences",
-            token,
             preferences
         );
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         return await OcpiResponseParser
-            .ParseVersionedObjectAsync(response, connection.Version, typeof(object), cancellationToken)
+            .ParseVersionedObjectAsync(
+                response,
+                context.Connection.Version,
+                typeof(System.Text.Json.JsonElement),
+                cancellationToken
+            )
             .ConfigureAwait(false);
     }
 }

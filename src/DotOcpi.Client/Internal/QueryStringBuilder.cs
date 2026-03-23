@@ -31,6 +31,5 @@ internal static class QueryStringBuilder
         return sb.ToString();
     }
 
-    private static string FormatDateTime(DateTimeOffset value) =>
-        value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+    private static string FormatDateTime(DateTimeOffset value) => OcpiDateTime.Format(value);
 }

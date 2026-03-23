@@ -1,0 +1,21 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+// Improve code block styling
+.highlight {
+  border-radius: 6px;
+}
+
+// Mermaid diagram dark mode fix
+.mermaid {
+  background: transparent !important;
+}
+
+// Table styling improvements
+table {
+  th {
+    white-space: nowrap;
+  }
+}

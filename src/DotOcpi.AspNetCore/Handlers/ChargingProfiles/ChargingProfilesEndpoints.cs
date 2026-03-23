@@ -11,6 +11,16 @@ namespace DotOcpi.AspNetCore.Handlers.ChargingProfiles;
 /// Maps OCPI ChargingProfiles module callback endpoints.
 /// Only available for OCPI 2.2 and 2.2.1 (not supported in earlier versions).
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT",
+    "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding."
+)]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT",
+    "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed."
+)]
 public static class ChargingProfilesEndpoints
 {
     /// <summary>
@@ -25,6 +35,7 @@ public static class ChargingProfilesEndpoints
 
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/chargingprofiles");
             module.AddEndpointFilter(new OcpiContextFilter("chargingprofiles"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(16 * 1024));
 
             module.MapPost("{correlationId}", HandleChargingProfileResult);
             module.MapPut("{sessionId}", HandleActiveChargingProfileUpdate);
@@ -33,10 +44,9 @@ public static class ChargingProfilesEndpoints
         return ocpiGroup;
     }
 
-    internal static async Task HandleChargingProfileResult(HttpContext httpContext)
+    internal static async Task HandleChargingProfileResult(string correlationId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var correlationId = (string)httpContext.GetRouteValue("correlationId")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.ChargingProfileResult(ctx.NegotiatedVersion))
@@ -50,14 +60,13 @@ public static class ChargingProfilesEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleActiveChargingProfileUpdate(HttpContext httpContext)
+    internal static async Task HandleActiveChargingProfileUpdate(string sessionId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var sessionId = (string)httpContext.GetRouteValue("sessionId")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.ActiveChargingProfile(ctx.NegotiatedVersion))
@@ -71,7 +80,7 @@ public static class ChargingProfilesEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 }

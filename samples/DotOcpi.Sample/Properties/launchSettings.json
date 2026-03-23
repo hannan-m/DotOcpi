@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "DotOcpi.Sample": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5050"
+    }
+  }
+}

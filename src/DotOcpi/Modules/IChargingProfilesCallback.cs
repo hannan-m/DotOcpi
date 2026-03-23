@@ -12,7 +12,8 @@ public interface IChargingProfilesCallback
         OcpiRequestContext context,
         string correlationId,
         object result,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 
     /// <summary>
     /// Handles an active charging profile update from a CPO (PUT).
@@ -21,5 +22,6 @@ public interface IChargingProfilesCallback
         OcpiRequestContext context,
         string sessionId,
         object activeProfile,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 }

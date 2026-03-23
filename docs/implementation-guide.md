@@ -41,14 +41,14 @@ Step-by-step build order for the library. Each phase produces working, testable 
    ├── DotOcpi/DotOcpi.csproj                         # net8.0;net10.0
    ├── DotOcpi.AspNetCore/DotOcpi.AspNetCore.csproj    # net8.0;net10.0
    ├── DotOcpi.Client/DotOcpi.Client.csproj            # net8.0;net10.0
-   └── DotOcpi.Testing/DotOcpi.Testing.csproj          # net8.0;net10.0
+   └── DotOcpi.Simulator/DotOcpi.Simulator.csproj          # net8.0;net10.0
 
    tests/
    ├── DotOcpi.Tests/DotOcpi.Tests.csproj
    ├── DotOcpi.Client.Tests/DotOcpi.Client.Tests.csproj
    ├── DotOcpi.AspNetCore.Tests/DotOcpi.AspNetCore.Tests.csproj
    ├── DotOcpi.Integration.Tests/DotOcpi.Integration.Tests.csproj
-   └── DotOcpi.Testing.Tests/DotOcpi.Testing.Tests.csproj
+   └── DotOcpi.Simulator.Tests/DotOcpi.Simulator.Tests.csproj
 
    benchmarks/
    └── DotOcpi.Benchmarks/DotOcpi.Benchmarks.csproj
@@ -139,7 +139,7 @@ Step-by-step build order for the library. Each phase produces working, testable 
 DotOcpi                  → (no project refs — standalone)
 DotOcpi.AspNetCore       → DotOcpi
 DotOcpi.Client           → DotOcpi
-DotOcpi.Testing          → DotOcpi, DotOcpi.AspNetCore
+DotOcpi.Simulator          → DotOcpi, DotOcpi.AspNetCore
 ```
 
 ### Acceptance Criteria
@@ -537,17 +537,9 @@ internal static class OcpiJsonOptions
 
 One frozen `JsonSerializerOptions` instance per version, created at startup.
 
-#### 4.4 — OcpiPatchHelper
+#### 4.4 — PATCH Handling
 
-```csharp
-// src/DotOcpi/Serialization/OcpiPatchHelper.cs
-public static class OcpiPatchHelper
-{
-    public static T ApplyPatch<T>(T existing, JsonElement patch, JsonTypeInfo<T> typeInfo);
-}
-```
-
-Optional utility for consumers who want RFC 7396 merge semantics. Not used internally.
+PATCH merge is the consumer's responsibility. The library delivers raw `JsonElement` patches to receiver handlers — consumers apply merge semantics appropriate to their storage layer.
 
 ### Tests
 
@@ -559,7 +551,6 @@ tests/DotOcpi.Tests/Serialization/
 ├── DateTimeSerializationTests.cs     // RFC 3339 UTC
 ├── CiStringSerializationTests.cs     // Case preservation
 ├── NullHandlingTests.cs              // Optional fields omitted when null
-├── PatchHelperTests.cs               // Merge semantics
 └── Fixtures/
     ├── ocpi-spec-location-2.0.json
     ├── ocpi-spec-location-2.1.1.json
@@ -577,7 +568,6 @@ Fixture-based tests: deserialize known-good JSON from the OCPI spec examples.
 - [ ] DateTimes serialize as UTC RFC 3339
 - [ ] Optional fields with null values are omitted from JSON output
 - [ ] Fixture-based deserialization passes for all versions
-- [ ] `OcpiPatchHelper.ApplyPatch` correctly merges JSON patches
 - [ ] Source-gen contexts compile on both net8.0 and net10.0
 
 ---
@@ -1034,11 +1024,11 @@ Endpoint filter that runs on every OCPI endpoint:
 3. On success: build `OcpiRequestContext`, store in `HttpContext.Items`
 4. On failure: return `401` with OCPI status 2002
 
-#### 9.3 — OcpiRequestIdFilter
+#### 9.3 — OcpiRequestIdMiddleware
 
-Endpoint filter:
+ASP.NET Core middleware (runs before routing):
 1. Read `X-Request-ID` and `X-Correlation-ID` from request (or generate if missing)
-2. Set on `OcpiRequestContext`
+2. Store in `HttpContext.Items` for downstream access
 3. Echo both in response headers
 
 #### 9.4 — OcpiValidationFilter
@@ -1051,15 +1041,15 @@ Per [strategies.md #3](strategies.md#3-minimal-api-integration):
 
 Endpoint filter that invokes `IOcpiValidator<T>` on deserialized request bodies before they reach the handler. Returns OCPI 2001 (Invalid parameters) on validation failure. This connects Phase 5's validators to the endpoint pipeline.
 
-#### 9.5 — Rate Limiting Middleware
+#### 9.5 — Rate Limiting Filter
 
 Per [strategies.md #5](strategies.md#5-rate-limiting-strategy):
 
 ```csharp
-// src/DotOcpi.AspNetCore/Middleware/OcpiRateLimitingMiddleware.cs
+// src/DotOcpi.AspNetCore/Filters/OcpiRateLimitFilter.cs
 ```
 
-Optional middleware (enabled via `AddRateLimiting()` in Phase 13). Uses ASP.NET Core's built-in rate limiting with per-CPO partitioning:
+Endpoint filter (enabled via `AddRateLimiting()` in Phase 13). Implemented as a filter rather than middleware because it needs access to the authenticated `CpoConnection`. Uses ASP.NET Core's built-in rate limiting with per-CPO partitioning:
 - Partition key: CPO ID from `OcpiRequestContext`
 - Returns HTTP 429 with `Retry-After` header and OCPI status 2000
 - Default: sliding window, 100 requests/minute per CPO
@@ -1123,11 +1113,11 @@ internal static class OcpiResponseWriter
 tests/DotOcpi.AspNetCore.Tests/
 ├── Filters/
 │   ├── OcpiAuthFilterTests.cs
-│   ├── OcpiRequestIdFilterTests.cs
+│   ├── OcpiRateLimitFilterTests.cs
 │   └── OcpiValidationFilterTests.cs
 ├── Middleware/
 │   ├── OcpiExceptionMiddlewareTests.cs
-│   └── OcpiRateLimitingMiddlewareTests.cs
+│   └── OcpiRequestIdMiddlewareTests.cs
 ├── Routing/
 │   ├── OcpiEndpointRoutingTests.cs
 │   └── OcpiVersionRouterTests.cs
@@ -1740,21 +1730,21 @@ tests/DotOcpi.Tests/Configuration/
 
 ## Phase 14: Testing Package
 
-**Goal:** `DotOcpi.Testing` package that consumers use to integration-test their applications.
+**Goal:** `DotOcpi.Simulator` package that consumers use to integration-test their applications.
 
 ### Dependency: Phase 8, Phase 9, Phase 10
 
-### Package: `DotOcpi.Testing`
+### Package: `DotOcpi.Simulator`
 
 ### Steps
 
-#### 14.1 — OcpiTestCpoServer
+#### 14.1 — OcpiCpoSimulator
 
 ```csharp
-// src/DotOcpi.Testing/OcpiTestCpoServer.cs
-public sealed class OcpiTestCpoServer : IAsyncDisposable
+// src/DotOcpi.Simulator/OcpiCpoSimulator.cs
+public sealed class OcpiCpoSimulator : IAsyncDisposable
 {
-    public static OcpiTestCpoServer Create(Action<TestCpoConfiguration>? configure = null);
+    public static OcpiCpoSimulator Create(Action<CpoSimulatorConfiguration>? configure = null);
 
     public Uri BaseUrl { get; }
     public string TokenA { get; }
@@ -1770,11 +1760,11 @@ An in-memory OCPI-compliant CPO that:
 - Serves configurable module data (locations, tariffs, etc.) via GET
 - Accepts `POST` callbacks for commands and charging profiles
 
-#### 14.2 — TestCpoConfiguration
+#### 14.2 — CpoSimulatorConfiguration
 
 ```csharp
-// src/DotOcpi.Testing/TestCpoConfiguration.cs
-public sealed class TestCpoConfiguration
+// src/DotOcpi.Simulator/CpoSimulatorConfiguration.cs
+public sealed class CpoSimulatorConfiguration
 {
     public IReadOnlyList<OcpiVersion> SupportedVersions { get; set; }
     public PartyIdentity CpoIdentity { get; set; }
@@ -1792,15 +1782,15 @@ public sealed class TestCpoConfiguration
 #### 14.3 — DI Integration
 
 ```csharp
-// src/DotOcpi.Testing/TestingExtensions.cs
-public static DotOcpiBuilder AddTestCpoServer(this DotOcpiBuilder builder, OcpiTestCpoServer server);
+// src/DotOcpi.Simulator/TestingExtensions.cs
+public static DotOcpiBuilder AddTestCpoServer(this DotOcpiBuilder builder, OcpiCpoSimulator server);
 ```
 
 ### Tests (testing the testing package)
 
 ```
-tests/DotOcpi.Testing.Tests/
-├── OcpiTestCpoServerTests.cs
+tests/DotOcpi.Simulator.Tests/
+├── OcpiCpoSimulatorTests.cs
 └── FailureInjectionTests.cs
 ```
 
@@ -1810,7 +1800,7 @@ tests/DotOcpi.Testing.Tests/
 - [ ] Handshake simulation produces valid Token B/C
 - [ ] Configurable locations/tariffs returned via GET
 - [ ] Failure injection produces expected errors
-- [ ] Consumer can use `WebApplicationFactory` + `OcpiTestCpoServer` together
+- [ ] Consumer can use `WebApplicationFactory` + `OcpiCpoSimulator` together
 
 ---
 

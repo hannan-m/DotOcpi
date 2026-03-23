@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DotOcpi.Serialization;
 
 namespace DotOcpi.Client.Internal;
@@ -8,10 +9,26 @@ namespace DotOcpi.Client.Internal;
 /// Parses OCPI HTTP responses into <see cref="OcpiResult{T}"/> using stream-based deserialization.
 /// Handles OCPI envelope extraction, status code mapping, and pagination header parsing.
 /// </summary>
-internal static class OcpiResponseParser
+internal static partial class OcpiResponseParser
 {
+    [GeneratedRegex(@"<([^>]+)>;\s*rel=""next""", RegexOptions.IgnoreCase)]
+    private static partial Regex LinkNextRegex();
+
+    private static async Task<JsonDocument> ParseDocumentAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken
+    )
+    {
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// Parses an OCPI response containing a single data object.
+    /// Parses the envelope via <see cref="JsonDocument"/> and deserializes
+    /// only the <c>data</c> property as <typeparamref name="T"/>, so only
+    /// the model type (not <c>OcpiResponse&lt;T&gt;</c>) needs to be in
+    /// the source-generated context.
     /// </summary>
     internal static async Task<OcpiResult<T>> ParseObjectAsync<T>(
         HttpResponseMessage response,
@@ -25,28 +42,26 @@ internal static class OcpiResponseParser
         }
 
         var options = OcpiJsonOptions.GetOptions(version);
-        var envelope = await JsonSerializer
-            .DeserializeAsync<OcpiResponse<T>>(
-                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-                options,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        using var doc = await ParseDocumentAsync(response, cancellationToken).ConfigureAwait(false);
 
-        if (envelope is null)
+        var root = doc.RootElement;
+        var statusCode = new OcpiStatusCode(root.GetProperty("status_code").GetInt32());
+
+        if (!statusCode.IsSuccess)
         {
-            return OcpiResult<T>.Failure(OcpiStatusCode.GenericServerError, "Empty response body.");
+            var message = root.TryGetProperty("status_message", out var msg) ? msg.GetString() : null;
+            return OcpiResult<T>.Failure(statusCode, message ?? "Operation failed.");
         }
 
-        var statusCode = new OcpiStatusCode(envelope.StatusCode);
-        if (statusCode.IsSuccess)
+        if (!root.TryGetProperty("data", out var dataElement))
         {
-            return envelope.Data is not null
-                ? OcpiResult<T>.Success(envelope.Data, envelope.StatusMessage)
-                : OcpiResult<T>.Failure(statusCode, envelope.StatusMessage ?? "Success response with null data.");
+            return OcpiResult<T>.Failure(statusCode, "Success response with null data.");
         }
 
-        return OcpiResult<T>.Failure(statusCode, envelope.StatusMessage ?? "Operation failed.");
+        var data = (T?)dataElement.Deserialize(options.GetTypeInfo(typeof(T)));
+        return data is not null
+            ? OcpiResult<T>.Success(data)
+            : OcpiResult<T>.Failure(OcpiStatusCode.GenericServerError, "Failed to deserialize response data.");
     }
 
     /// <summary>
@@ -66,12 +81,7 @@ internal static class OcpiResponseParser
         }
 
         var options = OcpiJsonOptions.GetOptions(version);
-        using var doc = await JsonDocument
-            .ParseAsync(
-                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-                cancellationToken: cancellationToken
-            )
-            .ConfigureAwait(false);
+        using var doc = await ParseDocumentAsync(response, cancellationToken).ConfigureAwait(false);
 
         var root = doc.RootElement;
         var statusCode = new OcpiStatusCode(root.GetProperty("status_code").GetInt32());
@@ -87,7 +97,7 @@ internal static class OcpiResponseParser
             return OcpiResult<object>.Failure(statusCode, "Success response with no data property.");
         }
 
-        var data = JsonSerializer.Deserialize(dataElement.GetRawText(), modelType, options);
+        var data = dataElement.Deserialize(options.GetTypeInfo(modelType));
         return data is not null
             ? OcpiResult<object>.Success(data)
             : OcpiResult<object>.Failure(OcpiStatusCode.GenericServerError, "Failed to deserialize response data.");
@@ -110,12 +120,7 @@ internal static class OcpiResponseParser
         }
 
         var options = OcpiJsonOptions.GetOptions(version);
-        using var doc = await JsonDocument
-            .ParseAsync(
-                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-                cancellationToken: cancellationToken
-            )
-            .ConfigureAwait(false);
+        using var doc = await ParseDocumentAsync(response, cancellationToken).ConfigureAwait(false);
 
         var root = doc.RootElement;
         var statusCode = new OcpiStatusCode(root.GetProperty("status_code").GetInt32());
@@ -131,7 +136,7 @@ internal static class OcpiResponseParser
         {
             foreach (var element in dataArray.EnumerateArray())
             {
-                var item = JsonSerializer.Deserialize(element.GetRawText(), itemType, options);
+                var item = element.Deserialize(options.GetTypeInfo(itemType));
                 if (item is not null)
                     items.Add(item);
             }
@@ -157,12 +162,7 @@ internal static class OcpiResponseParser
             return OcpiResult.Failure(error.StatusCode, error.StatusMessage ?? "Operation failed.");
         }
 
-        using var doc = await JsonDocument
-            .ParseAsync(
-                await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-                cancellationToken: cancellationToken
-            )
-            .ConfigureAwait(false);
+        using var doc = await ParseDocumentAsync(response, cancellationToken).ConfigureAwait(false);
 
         var statusCode = new OcpiStatusCode(doc.RootElement.GetProperty("status_code").GetInt32());
 
@@ -233,15 +233,8 @@ internal static class OcpiResponseParser
         if (link is null)
             return null;
 
-        // Parse Link: <URL>; rel="next"
-        var start = link.IndexOf('<');
-        var end = link.IndexOf('>');
-        if (start >= 0 && end > start)
-        {
-            return link[(start + 1)..end];
-        }
-
-        return null;
+        var match = LinkNextRegex().Match(link);
+        return match.Success ? match.Groups[1].Value : null;
     }
 }
 

@@ -1,0 +1,147 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">eMSP overview — real-time OCPI status</p>
+    </div>
+    <div class="flex gap-1">
+        <button class="btn btn-outline btn-sm"
+                hx-post="/api/sync/all"
+                hx-swap="none"
+                data-success-message="Sync triggered for all CPOs">
+            ⟳ Sync All
+        </button>
+    </div>
+</div>
+
+<div class="page-body">
+    <!-- Stat Cards -->
+    <div class="card-grid mb-2">
+        <div class="card stat-card cyan">
+            <div class="stat-label">CPOs Connected</div>
+            <div class="stat-value" id="stat-cpos">@Model.CpoCount</div>
+            <div class="stat-meta">Active connections</div>
+        </div>
+        <div class="card stat-card green">
+            <div class="stat-label">Locations</div>
+            <div class="stat-value" id="stat-locations">@Model.LocationCount</div>
+            <div class="stat-meta">Charging stations synced</div>
+        </div>
+        <div class="card stat-card blue">
+            <div class="stat-label">Sessions</div>
+            <div class="stat-value" id="stat-sessions">@Model.SessionCount</div>
+            <div class="stat-meta">Charging sessions tracked</div>
+        </div>
+        <div class="card stat-card yellow">
+            <div class="stat-label">CDRs</div>
+            <div class="stat-value" id="stat-cdrs">@Model.CdrCount</div>
+            <div class="stat-meta">Charge detail records</div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <!-- Left: Active Sessions (live) + Recent Activity -->
+        <div>
+            <div class="card mb-2">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 style="font-size: .9rem; font-weight: 600;">Active Sessions</h3>
+                    <a href="/Sessions?status=ACTIVE" class="btn btn-ghost btn-sm">View all →</a>
+                </div>
+                <div id="dashboard-sessions"
+                     hx-get="/api/sessions-table?status=ACTIVE"
+                     hx-trigger="load, every 3s"
+                     hx-swap="innerHTML">
+                    <div class="text-sm text-muted" style="padding: 1rem; text-align: center;">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 style="font-size: .9rem; font-weight: 600;">Recent Activity</h3>
+                    <span class="text-xs text-muted">Live via SSE</span>
+                </div>
+                <ul class="activity-feed" id="activity-feed">
+                    <li class="activity-item">
+                        <div class="activity-icon health">♥</div>
+                        <div>
+                            <div class="activity-text">Dashboard loaded — waiting for events</div>
+                            <div class="activity-time">@DateTime.Now.ToString("HH:mm:ss")</div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Right: Connected CPOs + Quick Start -->
+        <div>
+            <div class="card mb-2">
+                <h3 style="font-size: .9rem; font-weight: 600; margin-bottom: .75rem;">Connected CPOs</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>CPO</th>
+                                <th>Version</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cpo in Model.Connections)
+                            {
+                                <tr>
+                                    <td class="mono">@cpo.ConnectionKey</td>
+                                    <td class="mono">@cpo.Version.ToVersionString()</td>
+                                    <td>
+                                        <span class="badge badge-@(cpo.Status.ToString().ToLower())">
+                                            <span class="badge-dot"></span>
+                                            @cpo.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="/Locations?cpo=@cpo.ConnectionKey" class="btn btn-ghost btn-sm">Locations</a>
+                                        <button class="btn btn-ghost btn-sm"
+                                                hx-post="/api/sync/@cpo.ConnectionKey"
+                                                hx-swap="none"
+                                                data-success-message="Sync triggered for @cpo.ConnectionKey">
+                                            ⟳
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!Model.Connections.Any())
+                            {
+                                <tr><td colspan="4" class="text-center text-muted" style="padding: 2rem;">No CPOs registered yet. <a href="/Cpos">Register one →</a></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Command History -->
+            <div class="card">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 style="font-size: .9rem; font-weight: 600;">Command History</h3>
+                    <a href="/Commands" class="btn btn-ghost btn-sm">Full view →</a>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Time</th><th>CPO</th><th>Type</th><th>Status</th></tr>
+                        </thead>
+                        <tbody id="command-history"
+                               hx-get="/api/commands/history"
+                               hx-trigger="load, every 5s"
+                               hx-swap="innerHTML">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -5,7 +5,11 @@ namespace DotOcpi;
 /// <summary>
 /// OCPI protocol versions supported by this library.
 /// </summary>
-[SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores", Justification = "Underscores represent OCPI version numbers")]
+[SuppressMessage(
+    "Naming",
+    "CA1707:Identifiers should not contain underscores",
+    Justification = "Underscores represent OCPI version numbers"
+)]
 public enum OcpiVersion
 {
     /// <summary>OCPI 2.0</summary>

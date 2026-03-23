@@ -1,10 +1,13 @@
+using System.Net;
+using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 
 namespace DotOcpi.Client.Internal;
 
 /// <summary>
-/// Configures the named HttpClient for OCPI operations with standard resilience policies.
+/// Configures the named HttpClient for OCPI operations with standard
+/// resilience policies and SSRF prevention via DNS-level validation.
 /// </summary>
 public static class OcpiHttpClientConfiguration
 {
@@ -31,11 +34,47 @@ public static class OcpiHttpClientConfiguration
                 {
                     PooledConnectionLifetime = TimeSpan.FromMinutes(5),
                     MaxConnectionsPerServer = 20,
+                    ConnectCallback = ValidateAndConnectAsync,
                 }
             );
 
         builder.AddStandardResilienceHandler();
 
         return builder;
+    }
+
+    /// <summary>
+    /// SocketsHttpHandler ConnectCallback that resolves DNS and validates the
+    /// resulting IP addresses against private/loopback/link-local ranges before
+    /// establishing a connection. Blocks SSRF attacks from CPO-provided URLs.
+    /// </summary>
+    private static async ValueTask<Stream> ValidateAndConnectAsync(
+        SocketsHttpConnectionContext context,
+        CancellationToken cancellationToken
+    )
+    {
+        var host = context.DnsEndPoint.Host;
+        var port = context.DnsEndPoint.Port;
+
+        var addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+
+        if (addresses.Length == 0)
+            throw new InvalidOperationException($"DNS resolution for '{host}' returned no addresses.");
+
+        SsrfGuard.Validate(addresses, host, port);
+
+        // Connect to the first resolved address that succeeds
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+
+        try
+        {
+            await socket.ConnectAsync(addresses, port, cancellationToken).ConfigureAwait(false);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 }

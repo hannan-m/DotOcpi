@@ -13,11 +13,7 @@ public class TariffsClientTests
         handler.EnqueueResponse(TestJsonData.WrapList(TestJsonData.Tariff, TestJsonData.Tariff2));
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new TariffsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TariffsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var items = new List<object>();
         await foreach (var item in client.GetAllTariffsAsync("DE:ALL"))
@@ -46,11 +42,7 @@ public class TariffsClientTests
         );
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new TariffsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TariffsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var items = new List<object>();
         await foreach (var item in client.GetAllTariffsAsync("DE:ALL"))
@@ -69,11 +61,7 @@ public class TariffsClientTests
         handler.EnqueueResponse(TestJsonData.WrapEmpty());
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new TariffsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TariffsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         await foreach (
             var _ in client.GetAllTariffsAsync(
@@ -92,11 +80,7 @@ public class TariffsClientTests
         handler.EnqueueResponse(TestJsonData.WrapEmpty());
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new TariffsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TariffsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         await foreach (var _ in client.GetAllTariffsAsync("DE:ALL")) { }
 
@@ -110,11 +94,7 @@ public class TariffsClientTests
         handler.EnqueueResponse(TestJsonData.WrapError(), System.Net.HttpStatusCode.InternalServerError);
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new TariffsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TariffsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var items = new List<object>();
         await foreach (var item in client.GetAllTariffsAsync("DE:ALL"))

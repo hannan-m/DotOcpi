@@ -15,5 +15,6 @@ public interface ITokensSender
         DateTimeOffset? dateTo,
         int offset,
         int limit,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 }

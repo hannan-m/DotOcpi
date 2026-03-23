@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using DotOcpi.AspNetCore.Handlers.Tokens;
 using DotOcpi.Modules;
 using FluentAssertions;
@@ -332,12 +333,11 @@ public class TokensEndpointsTests
                 Arg.Any<object?>(),
                 Arg.Any<CancellationToken>()
             )
-            .Returns(OcpiResult<object>.Success(new { allowed = "ALLOWED" }));
+            .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"allowed": "ALLOWED"}""").RootElement));
 
         var httpContext = CreateAuthorizeContext(authorizer, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["tokenUid"] = "TOKEN123";
 
-        await TokensEndpoints.HandleTokenAuthorize(httpContext);
+        await TokensEndpoints.HandleTokenAuthorize("TOKEN123", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -365,12 +365,11 @@ public class TokensEndpointsTests
                 Arg.Any<object?>(),
                 Arg.Any<CancellationToken>()
             )
-            .Returns(OcpiResult<object>.Success(new { allowed = "ALLOWED" }));
+            .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"allowed": "ALLOWED"}""").RootElement));
 
         var httpContext = CreateAuthorizeContext(authorizer, OcpiVersion.V2_2_1, """{"location_id": "LOC1"}""");
-        httpContext.Request.RouteValues["tokenUid"] = "TOKEN123";
 
-        await TokensEndpoints.HandleTokenAuthorize(httpContext);
+        await TokensEndpoints.HandleTokenAuthorize("TOKEN123", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await authorizer
@@ -388,9 +387,8 @@ public class TokensEndpointsTests
     {
         var authorizer = Substitute.For<ITokensAuthorizer>();
         var httpContext = CreateAuthorizeContext(authorizer, OcpiVersion.V2_2_1, "not valid json{{{");
-        httpContext.Request.RouteValues["tokenUid"] = "TOKEN123";
 
-        await TokensEndpoints.HandleTokenAuthorize(httpContext);
+        await TokensEndpoints.HandleTokenAuthorize("TOKEN123", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -411,9 +409,8 @@ public class TokensEndpointsTests
             .Returns(OcpiResult<object>.Failure(OcpiStatusCode.GenericClientError, "Token unknown"));
 
         var httpContext = CreateAuthorizeContext(authorizer, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["tokenUid"] = "UNKNOWN";
 
-        await TokensEndpoints.HandleTokenAuthorize(httpContext);
+        await TokensEndpoints.HandleTokenAuthorize("UNKNOWN", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);

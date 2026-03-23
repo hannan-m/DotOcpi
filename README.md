@@ -17,7 +17,7 @@ An open-source OCPI (Open Charge Point Interface) .NET library for the eMSP side
 | `DotOcpi` | Core: version-specific models, interfaces, result types, token management, version negotiation |
 | `DotOcpi.AspNetCore` | ASP.NET Core server integration: middleware, endpoint routing, OCPI auth pipeline |
 | `DotOcpi.Client` | HttpClient-based OCPI client for calling CPO endpoints |
-| `DotOcpi.Testing` | In-memory OCPI-compliant test CPO server for consumer integration tests |
+| `DotOcpi.Simulator` | In-memory OCPI-compliant test CPO server for consumer integration tests |
 
 ## Quick Start
 
@@ -58,10 +58,10 @@ await foreach (var location in locationsClient.GetAllLocationsAsync("DE:CPO"))
 
 ## Testing
 
-Use the `DotOcpi.Testing` package to run integration tests against a real OCPI-compliant test CPO:
+Use the `DotOcpi.Simulator` package to run integration tests against a real OCPI-compliant test CPO:
 
 ```csharp
-await using var cpo = await OcpiTestCpoServer.CreateAsync(config =>
+await using var cpo = await OcpiCpoSimulator.CreateAsync(config =>
 {
     config.SupportedVersions = [OcpiVersion.V2_2_1];
     config.Locations = [new { id = "LOC1", name = "Test Location" }];

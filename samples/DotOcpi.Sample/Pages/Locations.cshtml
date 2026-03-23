@@ -1,0 +1,139 @@
+@page
+@using System.Text.Json
+@model LocationsModel
+@{
+    ViewData["Title"] = "Locations";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Locations</h1>
+        <p class="page-subtitle">@Model.Locations.Count charging stations across all CPOs</p>
+    </div>
+    <form method="get" class="flex gap-1 items-center">
+        <select name="cpo" class="form-select" style="width: auto; min-width: 160px;" onchange="this.form.submit()">
+            <option value="">All CPOs</option>
+            @foreach (var key in Model.CpoKeys)
+            {
+                <option value="@key" selected="@(Model.FilterCpo == key)">@key</option>
+            }
+        </select>
+    </form>
+</div>
+
+<div class="page-body">
+    @for (var i = 0; i < Model.Locations.Count; i++)
+    {
+        var (cpoKey, loc) = Model.Locations[i];
+        var locId = loc.TryGetProperty("id", out var idP) ? idP.GetString() ?? "" : "";
+        var name = loc.TryGetProperty("name", out var nameP) ? nameP.GetString() : "—";
+        var city = loc.TryGetProperty("city", out var cityP) ? cityP.GetString() : "—";
+        var country = loc.TryGetProperty("country", out var countryP) ? countryP.GetString() : "—";
+        var evses = loc.TryGetProperty("evses", out var evsesP) && evsesP.ValueKind == JsonValueKind.Array
+            ? evsesP.EnumerateArray().ToList()
+            : new List<JsonElement>();
+
+        <div class="card" style="margin-bottom: 1rem;">
+            <div class="flex items-center gap-1" style="margin-bottom: 0.75rem;">
+                <h3 style="margin: 0; flex: 1;">@name</h3>
+                <span class="badge badge-info">@cpoKey</span>
+            </div>
+            <div class="flex gap-2 text-sm text-muted" style="margin-bottom: 1rem;">
+                <span class="mono">@locId</span>
+                <span>·</span>
+                <span>@city, @country</span>
+                <span>·</span>
+                <span>@evses.Count EVSE(s)</span>
+            </div>
+
+            @foreach (var evse in evses)
+            {
+                var evseUid = evse.TryGetProperty("uid", out var eUid) ? eUid.GetString() ?? "" : "";
+                var evseStatus = evse.TryGetProperty("status", out var eSt) ? eSt.GetString() : "UNKNOWN";
+                var connectors = evse.TryGetProperty("connectors", out var conns) && conns.ValueKind == JsonValueKind.Array
+                    ? conns.EnumerateArray().ToList()
+                    : new List<JsonElement>();
+                var conn = connectors.Count > 0 ? connectors[0] : (JsonElement?)null;
+                var connId = conn?.TryGetProperty("id", out var cId) == true ? cId.GetString() : "1";
+                var standard = conn?.TryGetProperty("standard", out var cStd) == true ? cStd.GetString() : "—";
+                var powerType = conn?.TryGetProperty("power_type", out var cPt) == true ? cPt.GetString() : "—";
+                var voltage = conn?.TryGetProperty("max_voltage", out var cV) == true ? cV.GetInt32()
+                    : conn?.TryGetProperty("voltage", out var cV2) == true ? cV2.GetInt32() : 0;
+                var amperage = conn?.TryGetProperty("max_amperage", out var cA) == true ? cA.GetInt32()
+                    : conn?.TryGetProperty("amperage", out var cA2) == true ? cA2.GetInt32() : 0;
+                var powerKw = conn?.TryGetProperty("max_electric_power", out var cP) == true
+                    ? (cP.GetInt32() / 1000.0).ToString("F0")
+                    : (voltage * amperage / 1000.0).ToString("F0");
+
+                var statusBadge = evseStatus switch
+                {
+                    "AVAILABLE" => "badge-success",
+                    "CHARGING" => "badge-active",
+                    "RESERVED" => "badge-warning",
+                    _ => "badge-error"
+                };
+                var evseKey = $"{cpoKey}-{locId}-{evseUid}".Replace("*", "_").Replace(":", "_");
+
+                <div class="evse-card">
+                    <div class="evse-header">
+                        <div>
+                            <span class="mono" style="font-weight: 600;">@evseUid</span>
+                            <span class="text-sm text-muted" style="margin-left: 0.5rem;">@standard · @powerType · @powerKw kW</span>
+                        </div>
+                        <span class="badge @statusBadge">
+                            <span class="badge-dot"></span>
+                            @evseStatus
+                        </span>
+                    </div>
+
+                    <div class="evse-body">
+                        @if (evseStatus == "AVAILABLE")
+                        {
+                            <form hx-post="/api/commands/start-session"
+                                  hx-target="#evse-live-@evseKey"
+                                  hx-swap="innerHTML"
+                                  style="display: inline;">
+                                <input type="hidden" name="cpoId" value="@cpoKey" />
+                                <input type="hidden" name="locationId" value="@locId" />
+                                <input type="hidden" name="evseUid" value="@evseUid" />
+                                <input type="hidden" name="connectorId" value="@connId" />
+                                <input type="hidden" name="tokenUid" value="TOKEN001" />
+                                <button type="submit" class="btn btn-sm btn-primary">⚡ Start Charging</button>
+                            </form>
+                        }
+                        else if (evseStatus == "CHARGING")
+                        {
+                            <span class="text-sm" style="color: var(--green);">Charging in progress — see live session below</span>
+                        }
+                        else if (evseStatus == "RESERVED")
+                        {
+                            <span class="text-sm" style="color: var(--yellow);">Reserved</span>
+                        }
+                    </div>
+
+                    @* Live session area: populated by start-session response or HTMX polling *@
+                    <div id="evse-live-@evseKey"
+                         class="evse-live-session"
+                         hx-get="/api/evse-session?cpoId=@cpoKey&evseUid=@evseUid"
+                         hx-trigger="every 3s"
+                         hx-swap="innerHTML">
+                    </div>
+                </div>
+            }
+
+            @if (evses.Count == 0)
+            {
+                <div class="text-sm text-muted">No EVSEs configured</div>
+            }
+        </div>
+    }
+    @if (Model.Locations.Count == 0)
+    {
+        <div class="card">
+            <div class="empty-state">
+                <div class="empty-state-icon">◎</div>
+                <div class="empty-state-text">No locations synced yet. Trigger a sync from the Sync Status page.</div>
+            </div>
+        </div>
+    }
+</div>

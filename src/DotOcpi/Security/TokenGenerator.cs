@@ -1,3 +1,4 @@
+using System.Buffers.Text;
 using System.Security.Cryptography;
 
 namespace DotOcpi.Security;
@@ -26,6 +27,10 @@ public static class TokenGenerator
 
         Span<byte> buffer = stackalloc byte[byteLength];
         RandomNumberGenerator.Fill(buffer);
+#if NET9_0_OR_GREATER
+        return Base64Url.EncodeToString(buffer);
+#else
         return Convert.ToBase64String(buffer).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+#endif
     }
 }

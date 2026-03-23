@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <!-- Override Directory.Build.props multi-targeting — sample targets net10.0 only -->
+    <TargetFrameworks />
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- Sample prioritizes readability over zero-allocation logging -->
+    <!-- Sample prioritizes readability over strict analysis -->
+    <NoWarn>$(NoWarn);CA1873;CA1861;CA1852;CA1310;CA1859;CS9113</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DotOcpi\DotOcpi.csproj" />
+    <ProjectReference Include="..\..\src\DotOcpi.AspNetCore\DotOcpi.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\DotOcpi.Client\DotOcpi.Client.csproj" />
+    <ProjectReference Include="..\..\src\DotOcpi.Simulator\DotOcpi.Simulator.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+</Project>

@@ -1,33 +1,75 @@
-using DotOcpi.Models.V2_2_1;
-
 namespace DotOcpi.Validation;
 
 /// <summary>
-/// Validates Session models against OCPI 2.2.1 protocol rules.
+/// Validates Session models against OCPI protocol rules across all supported versions.
+/// All versions share the same validation rules: non-negative kWh, valid time range,
+/// ISO 4217 currency, and completed sessions must have an end timestamp.
 /// </summary>
-public sealed class SessionValidator : IOcpiValidator<Session>
+public sealed class SessionValidator
+    : IOcpiValidator<Models.V2_0.Session>,
+        IOcpiValidator<Models.V2_1_1.Session>,
+        IOcpiValidator<Models.V2_2.Session>,
+        IOcpiValidator<Models.V2_2_1.Session>
 {
     /// <inheritdoc />
-    public OcpiValidationResult Validate(Session model)
+    public OcpiValidationResult Validate(Models.V2_0.Session model)
     {
         var errors = new List<OcpiValidationError>();
-
-        ValidateKwh(model, errors);
-        ValidateTimeRange(model, errors);
-        ValidateCurrency(model, errors);
-        ValidateCompletedSession(model, errors);
-
+        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateKwh(Session model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_1_1.Session model)
     {
-        if (model.Kwh < 0)
+        var errors = new List<OcpiValidationError>();
+        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2.Session model)
+    {
+        var errors = new List<OcpiValidationError>();
+        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2_1.Session model)
+    {
+        var errors = new List<OcpiValidationError>();
+        ValidateCore(model.Kwh, model.StartDateTime, model.EndDateTime, model.Currency, model.Status, errors);
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    OcpiValidationResult IOcpiValidator.Validate(object model) =>
+        model switch
+        {
+            Models.V2_0.Session m => Validate(m),
+            Models.V2_1_1.Session m => Validate(m),
+            Models.V2_2.Session m => Validate(m),
+            Models.V2_2_1.Session m => Validate(m),
+            _ => throw new ArgumentException($"Unsupported Session type: {model.GetType().Name}", nameof(model)),
+        };
+
+    // SessionStatus values are identical across versions (ACTIVE, COMPLETED, etc.)
+    // but they're separate enum types per namespace, so we accept int to unify.
+    private static void ValidateCore(
+        decimal kwh,
+        DateTimeOffset startDateTime,
+        DateTimeOffset? endDateTime,
+        string currency,
+        object status,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (kwh < 0)
         {
             errors.Add(
                 new OcpiValidationError(
                     "SESSION_NEGATIVE_KWH",
-                    $"Kwh value {model.Kwh} is negative.",
+                    $"Kwh value {kwh} is negative.",
                     "Energy delivered must be zero or positive."
                 )
                 {
@@ -35,11 +77,8 @@ public sealed class SessionValidator : IOcpiValidator<Session>
                 }
             );
         }
-    }
 
-    private static void ValidateTimeRange(Session model, List<OcpiValidationError> errors)
-    {
-        if (model.EndDateTime is { } endDateTime && endDateTime < model.StartDateTime)
+        if (endDateTime is { } end && end < startDateTime)
         {
             errors.Add(
                 new OcpiValidationError(
@@ -52,28 +91,11 @@ public sealed class SessionValidator : IOcpiValidator<Session>
                 }
             );
         }
-    }
 
-    private static void ValidateCurrency(Session model, List<OcpiValidationError> errors)
-    {
-        if (model.Currency.Length != 3 || !model.Currency.All(char.IsLetter))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "SESSION_INVALID_CURRENCY",
-                    $"Currency '{model.Currency}' is not a valid ISO 4217 code.",
-                    "Provide a 3-letter ISO 4217 currency code (e.g. 'EUR', 'USD')."
-                )
-                {
-                    PropertyPath = "Currency",
-                }
-            );
-        }
-    }
+        ValidationHelpers.ValidateCurrency(currency, "SESSION_INVALID_CURRENCY", errors);
 
-    private static void ValidateCompletedSession(Session model, List<OcpiValidationError> errors)
-    {
-        if (model.Status == SessionStatus.COMPLETED && model.EndDateTime is null)
+        // COMPLETED status check — compare by string name to avoid coupling to version-specific enums
+        if (status.ToString() == "COMPLETED" && endDateTime is null)
         {
             errors.Add(
                 new OcpiValidationError(

@@ -15,8 +15,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var items = new List<object>();
@@ -37,8 +36,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await foreach (
@@ -60,8 +58,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection(OcpiVersion.V2_2_1);
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var prefs = new Models.V2_2_1.ChargingPreferences { ProfileType = Models.V2_2_1.ProfileType.FAST };
@@ -80,8 +77,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection(OcpiVersion.V2_0);
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.PutChargingPreferencesAsync("DE:ALL", "SESSION1", new object());
@@ -98,8 +94,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection(OcpiVersion.V2_1_1);
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.PutChargingPreferencesAsync("DE:ALL", "SESSION1", new object());
@@ -117,8 +112,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection(OcpiVersion.V2_2);
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var prefs = new Models.V2_2.ChargingPreferences { ProfileType = Models.V2_2.ProfileType.FAST };
@@ -137,8 +131,7 @@ public class SessionsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new SessionsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var items = new List<object>();

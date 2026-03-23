@@ -25,15 +25,10 @@ public sealed class OcpiBodySizeLimitFilter : IEndpointFilter
         var contentLength = context.HttpContext.Request.ContentLength;
         if (contentLength > _maxBodySize)
         {
-            return Results.Json(
-                new
-                {
-                    status_code = 2000,
-                    status_message = $"Request body exceeds maximum size of {_maxBodySize} bytes.",
-                    timestamp = DateTimeOffset.UtcNow,
-                },
-                statusCode: StatusCodes.Status413PayloadTooLarge,
-                contentType: "application/json"
+            return OcpiResponseWriter.ErrorResult(
+                StatusCodes.Status413PayloadTooLarge,
+                2000,
+                $"Request body exceeds maximum size of {_maxBodySize} bytes."
             );
         }
 

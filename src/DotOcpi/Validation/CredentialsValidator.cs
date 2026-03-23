@@ -1,44 +1,92 @@
-using DotOcpi.Models.V2_2_1;
-
 namespace DotOcpi.Validation;
 
 /// <summary>
-/// Validates Credentials models against OCPI 2.2.1 protocol rules.
+/// Validates Credentials models against OCPI protocol rules across all supported versions.
+/// V2_0/V2_1_1: HTTPS URL, non-empty token, flat country code / party ID.
+/// V2_2/V2_2_1: HTTPS URL, non-empty token, roles array with country code validation.
 /// </summary>
-public sealed class CredentialsValidator : IOcpiValidator<Credentials>
+public sealed class CredentialsValidator
+    : IOcpiValidator<Models.V2_0.Credentials>,
+        IOcpiValidator<Models.V2_1_1.Credentials>,
+        IOcpiValidator<Models.V2_2.Credentials>,
+        IOcpiValidator<Models.V2_2_1.Credentials>
 {
     /// <inheritdoc />
-    public OcpiValidationResult Validate(Credentials model)
+    public OcpiValidationResult Validate(Models.V2_0.Credentials model)
     {
         var errors = new List<OcpiValidationError>();
 
-        ValidateUrl(model, errors);
-        ValidateToken(model, errors);
-        ValidateRoles(model, errors);
+        ValidateUrlAndToken(model.Url, model.Token, errors);
+        ValidationHelpers.ValidateCountryAlpha2(
+            model.CountryCode,
+            "CREDENTIALS_INVALID_COUNTRY_CODE",
+            "CountryCode",
+            errors
+        );
 
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateUrl(Credentials model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_1_1.Credentials model)
     {
-        if (!Uri.TryCreate(model.Url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "CREDENTIALS_INVALID_URL",
-                    $"Versions URL '{model.Url}' is not a valid HTTPS URL.",
-                    "Provide an absolute HTTPS URL pointing to the versions endpoint."
-                )
-                {
-                    PropertyPath = "Url",
-                }
-            );
-        }
+        var errors = new List<OcpiValidationError>();
+
+        ValidateUrlAndToken(model.Url, model.Token, errors);
+        ValidationHelpers.ValidateCountryAlpha2(
+            model.CountryCode,
+            "CREDENTIALS_INVALID_COUNTRY_CODE",
+            "CountryCode",
+            errors
+        );
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateToken(Credentials model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2.Credentials model)
     {
-        if (string.IsNullOrWhiteSpace(model.Token))
+        var errors = new List<OcpiValidationError>();
+
+        ValidateUrlAndToken(model.Url, model.Token, errors);
+        ValidateRoles(model.Roles, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2_1.Credentials model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidateUrlAndToken(model.Url, model.Token, errors);
+        ValidateRoles(model.Roles, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    OcpiValidationResult IOcpiValidator.Validate(object model) =>
+        model switch
+        {
+            Models.V2_0.Credentials m => Validate(m),
+            Models.V2_1_1.Credentials m => Validate(m),
+            Models.V2_2.Credentials m => Validate(m),
+            Models.V2_2_1.Credentials m => Validate(m),
+            _ => throw new ArgumentException($"Unsupported Credentials type: {model.GetType().Name}", nameof(model)),
+        };
+
+    private static void ValidateUrlAndToken(string url, string token, List<OcpiValidationError> errors)
+    {
+        ValidationHelpers.ValidateHttpsUrl(
+            url,
+            "CREDENTIALS_INVALID_URL",
+            $"Versions URL '{url}' is not a valid HTTPS URL.",
+            "Provide an absolute HTTPS URL pointing to the versions endpoint.",
+            "Url",
+            errors
+        );
+
+        if (string.IsNullOrWhiteSpace(token))
         {
             errors.Add(
                 new OcpiValidationError(
@@ -53,40 +101,61 @@ public sealed class CredentialsValidator : IOcpiValidator<Credentials>
         }
     }
 
-    private static void ValidateRoles(Credentials model, List<OcpiValidationError> errors)
+    private static void ValidateRoles(
+        IReadOnlyList<Models.V2_2.CredentialsRole> roles,
+        List<OcpiValidationError> errors
+    )
     {
-        if (model.Roles.Count == 0)
+        if (roles.Count == 0)
         {
-            errors.Add(
-                new OcpiValidationError(
-                    "CREDENTIALS_NO_ROLES",
-                    "Credentials must have at least one role.",
-                    "Provide at least one CredentialsRole."
-                )
-                {
-                    PropertyPath = "Roles",
-                }
-            );
+            AddNoRolesError(errors);
             return;
         }
 
-        for (var i = 0; i < model.Roles.Count; i++)
+        for (var i = 0; i < roles.Count; i++)
         {
-            var role = model.Roles[i];
-            var cc = (string)role.CountryCode;
-            if (cc.Length != 2 || !cc.All(char.IsLetter))
-            {
-                errors.Add(
-                    new OcpiValidationError(
-                        "CREDENTIALS_ROLE_INVALID_COUNTRY_CODE",
-                        $"Role[{i}] CountryCode '{cc}' is not a valid ISO 3166-1 alpha-2 code.",
-                        "Provide a 2-letter country code."
-                    )
-                    {
-                        PropertyPath = $"Roles[{i}].CountryCode",
-                    }
-                );
-            }
+            ValidationHelpers.ValidateCountryAlpha2(
+                (string)roles[i].CountryCode,
+                "CREDENTIALS_ROLE_INVALID_COUNTRY_CODE",
+                $"Roles[{i}].CountryCode",
+                errors
+            );
         }
+    }
+
+    private static void ValidateRoles(
+        IReadOnlyList<Models.V2_2_1.CredentialsRole> roles,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (roles.Count == 0)
+        {
+            AddNoRolesError(errors);
+            return;
+        }
+
+        for (var i = 0; i < roles.Count; i++)
+        {
+            ValidationHelpers.ValidateCountryAlpha2(
+                (string)roles[i].CountryCode,
+                "CREDENTIALS_ROLE_INVALID_COUNTRY_CODE",
+                $"Roles[{i}].CountryCode",
+                errors
+            );
+        }
+    }
+
+    private static void AddNoRolesError(List<OcpiValidationError> errors)
+    {
+        errors.Add(
+            new OcpiValidationError(
+                "CREDENTIALS_NO_ROLES",
+                "Credentials must have at least one role.",
+                "Provide at least one CredentialsRole."
+            )
+            {
+                PropertyPath = "Roles",
+            }
+        );
     }
 }

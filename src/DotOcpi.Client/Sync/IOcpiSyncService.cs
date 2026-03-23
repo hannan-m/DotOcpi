@@ -13,8 +13,9 @@ public interface IOcpiSyncService
 
     /// <summary>
     /// Synchronizes a specific module from a specific CPO.
+    /// Returns a <see cref="SyncResult"/> describing the outcome.
     /// </summary>
-    Task SyncModuleFromCpoAsync(
+    Task<SyncResult> SyncModuleFromCpoAsync(
         string cpoId,
         string moduleId,
         DateTimeOffset? since = null,

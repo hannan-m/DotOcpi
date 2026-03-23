@@ -1,117 +1,95 @@
-using DotOcpi.Models.V2_2_1;
-
 namespace DotOcpi.Validation;
 
 /// <summary>
-/// Validates Location models against OCPI 2.2.1 protocol rules.
+/// Validates Location models against OCPI protocol rules across all supported versions.
+/// V2_0/V2_1_1: coordinates, country (alpha-3), EVSE uniqueness.
+/// V2_2/V2_2_1: all of the above plus country code (alpha-2) and publish consistency.
 /// </summary>
-public sealed class LocationValidator : IOcpiValidator<Location>
+public sealed class LocationValidator
+    : IOcpiValidator<Models.V2_0.Location>,
+        IOcpiValidator<Models.V2_1_1.Location>,
+        IOcpiValidator<Models.V2_2.Location>,
+        IOcpiValidator<Models.V2_2_1.Location>
 {
     /// <inheritdoc />
-    public OcpiValidationResult Validate(Location model)
+    public OcpiValidationResult Validate(Models.V2_0.Location model)
     {
         var errors = new List<OcpiValidationError>();
 
-        ValidateCoordinates(model.Coordinates, "Coordinates", errors);
-        ValidateCountryCode(model.CountryCode, errors);
-        ValidateCountry(model.Country, errors);
-        ValidatePublishConsistency(model, errors);
+        ValidationHelpers.ValidateCoordinates(model.Coordinates, "Coordinates", errors);
+        ValidationHelpers.ValidateCountryAlpha3(model.Country, errors);
         ValidateEvses(model.Evses, errors);
 
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateCoordinates(
-        GeoLocation coordinates,
-        string propertyPath,
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_1_1.Location model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCoordinates(model.Coordinates, "Coordinates", errors);
+        ValidationHelpers.ValidateCountryAlpha3(model.Country, errors);
+        ValidateEvses(model.Evses, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2.Location model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCoordinates(model.Coordinates, "Coordinates", errors);
+        ValidationHelpers.ValidateCountryAlpha2(
+            (string)model.CountryCode,
+            "LOCATION_INVALID_COUNTRY_CODE",
+            "CountryCode",
+            errors
+        );
+        ValidationHelpers.ValidateCountryAlpha3(model.Country, errors);
+        ValidatePublishConsistency(model.Publish, model.PublishAllowedTo, errors);
+        ValidateEvses(model.Evses, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2_1.Location model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCoordinates(model.Coordinates, "Coordinates", errors);
+        ValidationHelpers.ValidateCountryAlpha2(
+            (string)model.CountryCode,
+            "LOCATION_INVALID_COUNTRY_CODE",
+            "CountryCode",
+            errors
+        );
+        ValidationHelpers.ValidateCountryAlpha3(model.Country, errors);
+        ValidatePublishConsistency(model.Publish, model.PublishAllowedTo, errors);
+        ValidateEvses(model.Evses, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    OcpiValidationResult IOcpiValidator.Validate(object model) =>
+        model switch
+        {
+            Models.V2_0.Location m => Validate(m),
+            Models.V2_1_1.Location m => Validate(m),
+            Models.V2_2.Location m => Validate(m),
+            Models.V2_2_1.Location m => Validate(m),
+            _ => throw new ArgumentException($"Unsupported Location type: {model.GetType().Name}", nameof(model)),
+        };
+
+    private static void ValidatePublishConsistency(
+        bool publish,
+        IReadOnlyList<Models.V2_2_1.PublishTokenType>? publishAllowedTo,
         List<OcpiValidationError> errors
     )
     {
-        if (
-            !decimal.TryParse(
-                coordinates.Latitude,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var lat
-            )
-            || lat < -90m
-            || lat > 90m
-        )
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "LOCATION_INVALID_LATITUDE",
-                    $"Latitude '{coordinates.Latitude}' is not a valid decimal between -90 and 90.",
-                    "Provide a decimal latitude in the range [-90, 90]."
-                )
-                {
-                    PropertyPath = $"{propertyPath}.Latitude",
-                }
-            );
-        }
-
-        if (
-            !decimal.TryParse(
-                coordinates.Longitude,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var lon
-            )
-            || lon < -180m
-            || lon > 180m
-        )
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "LOCATION_INVALID_LONGITUDE",
-                    $"Longitude '{coordinates.Longitude}' is not a valid decimal between -180 and 180.",
-                    "Provide a decimal longitude in the range [-180, 180]."
-                )
-                {
-                    PropertyPath = $"{propertyPath}.Longitude",
-                }
-            );
-        }
-    }
-
-    private static void ValidateCountryCode(CiString countryCode, List<OcpiValidationError> errors)
-    {
-        var value = (string)countryCode;
-        if (value.Length != 2 || !value.All(char.IsLetter))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "LOCATION_INVALID_COUNTRY_CODE",
-                    $"CountryCode '{value}' is not a valid ISO 3166-1 alpha-2 code.",
-                    "Provide a 2-letter country code (e.g. 'NL', 'DE')."
-                )
-                {
-                    PropertyPath = "CountryCode",
-                }
-            );
-        }
-    }
-
-    private static void ValidateCountry(string country, List<OcpiValidationError> errors)
-    {
-        if (country.Length != 3 || !country.All(char.IsLetter))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "LOCATION_INVALID_COUNTRY",
-                    $"Country '{country}' is not a valid ISO 3166-1 alpha-3 code.",
-                    "Provide a 3-letter country code (e.g. 'NLD', 'DEU')."
-                )
-                {
-                    PropertyPath = "Country",
-                }
-            );
-        }
-    }
-
-    private static void ValidatePublishConsistency(Location model, List<OcpiValidationError> errors)
-    {
-        if (!model.Publish && (model.PublishAllowedTo is null || model.PublishAllowedTo.Count == 0))
+        if (!publish && (publishAllowedTo is null || publishAllowedTo.Count == 0))
         {
             errors.Add(
                 new OcpiValidationError(
@@ -126,75 +104,184 @@ public sealed class LocationValidator : IOcpiValidator<Location>
         }
     }
 
-    private static void ValidateEvses(IReadOnlyList<Evse>? evses, List<OcpiValidationError> errors)
+    private static void ValidatePublishConsistency(
+        bool publish,
+        IReadOnlyList<Models.V2_2.PublishTokenType>? publishAllowedTo,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (!publish && (publishAllowedTo is null || publishAllowedTo.Count == 0))
+        {
+            errors.Add(
+                new OcpiValidationError(
+                    "LOCATION_PUBLISH_MISSING_ALLOWED_TO",
+                    "Location has Publish=false but PublishAllowedTo is empty.",
+                    "Either set Publish to true or provide PublishAllowedTo entries."
+                )
+                {
+                    PropertyPath = "PublishAllowedTo",
+                }
+            );
+        }
+    }
+
+    // V2_0/V2_1_1: EVSE.Uid is string, Connector.Id is string
+    private static void ValidateEvses(IReadOnlyList<Models.V2_0.Evse>? evses, List<OcpiValidationError> errors)
     {
         if (evses is null || evses.Count == 0)
-        {
             return;
-        }
 
         var evseUids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < evses.Count; i++)
         {
             var evse = evses[i];
-            var uid = (string)evse.Uid;
+            ValidateEvseCore(evse.Uid, evse.Connectors.Count, i, evseUids, errors);
 
-            if (!evseUids.Add(uid))
+            var connectorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var j = 0; j < evse.Connectors.Count; j++)
             {
-                errors.Add(
-                    new OcpiValidationError(
-                        "LOCATION_DUPLICATE_EVSE_UID",
-                        $"Duplicate EVSE UID '{uid}' found.",
-                        "Each EVSE within a Location must have a unique UID."
-                    )
-                    {
-                        PropertyPath = $"Evses[{i}].Uid",
-                    }
-                );
+                if (!connectorIds.Add(evse.Connectors[j].Id))
+                {
+                    AddDuplicateConnectorError(evse.Connectors[j].Id, evse.Uid, i, j, errors);
+                }
             }
-
-            if (evse.Connectors.Count == 0)
-            {
-                errors.Add(
-                    new OcpiValidationError(
-                        "EVSE_NO_CONNECTORS",
-                        $"EVSE '{uid}' has no connectors.",
-                        "Each EVSE must have at least one connector."
-                    )
-                    {
-                        PropertyPath = $"Evses[{i}].Connectors",
-                    }
-                );
-            }
-
-            ValidateConnectorUniqueness(evse, i, errors);
 
             if (evse.Coordinates is { } evseCoords)
-            {
-                ValidateCoordinates(evseCoords, $"Evses[{i}].Coordinates", errors);
-            }
+                ValidationHelpers.ValidateCoordinates(evseCoords, $"Evses[{i}].Coordinates", errors);
         }
     }
 
-    private static void ValidateConnectorUniqueness(Evse evse, int evseIndex, List<OcpiValidationError> errors)
+    // V2_1_1 overload (same shape as V2_0 for validation-relevant fields)
+    private static void ValidateEvses(IReadOnlyList<Models.V2_1_1.Evse>? evses, List<OcpiValidationError> errors)
     {
-        var connectorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var j = 0; j < evse.Connectors.Count; j++)
+        if (evses is null || evses.Count == 0)
+            return;
+
+        var evseUids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < evses.Count; i++)
         {
-            var connectorId = (string)evse.Connectors[j].Id;
-            if (!connectorIds.Add(connectorId))
+            var evse = evses[i];
+            ValidateEvseCore(evse.Uid, evse.Connectors.Count, i, evseUids, errors);
+
+            var connectorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var j = 0; j < evse.Connectors.Count; j++)
             {
-                errors.Add(
-                    new OcpiValidationError(
-                        "EVSE_DUPLICATE_CONNECTOR_ID",
-                        $"Duplicate Connector ID '{connectorId}' in EVSE '{(string)evse.Uid}'.",
-                        "Each Connector within an EVSE must have a unique ID."
-                    )
-                    {
-                        PropertyPath = $"Evses[{evseIndex}].Connectors[{j}].Id",
-                    }
-                );
+                if (!connectorIds.Add(evse.Connectors[j].Id))
+                {
+                    AddDuplicateConnectorError(evse.Connectors[j].Id, evse.Uid, i, j, errors);
+                }
             }
+
+            if (evse.Coordinates is { } evseCoords)
+                ValidationHelpers.ValidateCoordinates(evseCoords, $"Evses[{i}].Coordinates", errors);
         }
+    }
+
+    // V2_2/V2_2_1: EVSE.Uid is CiString, Connector.Id is CiString
+    private static void ValidateEvses(IReadOnlyList<Models.V2_2.Evse>? evses, List<OcpiValidationError> errors)
+    {
+        if (evses is null || evses.Count == 0)
+            return;
+
+        var evseUids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < evses.Count; i++)
+        {
+            var evse = evses[i];
+            ValidateEvseCore((string)evse.Uid, evse.Connectors.Count, i, evseUids, errors);
+
+            var connectorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var j = 0; j < evse.Connectors.Count; j++)
+            {
+                if (!connectorIds.Add((string)evse.Connectors[j].Id))
+                {
+                    AddDuplicateConnectorError((string)evse.Connectors[j].Id, (string)evse.Uid, i, j, errors);
+                }
+            }
+
+            if (evse.Coordinates is { } evseCoords)
+                ValidationHelpers.ValidateCoordinates(evseCoords, $"Evses[{i}].Coordinates", errors);
+        }
+    }
+
+    private static void ValidateEvses(IReadOnlyList<Models.V2_2_1.Evse>? evses, List<OcpiValidationError> errors)
+    {
+        if (evses is null || evses.Count == 0)
+            return;
+
+        var evseUids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < evses.Count; i++)
+        {
+            var evse = evses[i];
+            ValidateEvseCore((string)evse.Uid, evse.Connectors.Count, i, evseUids, errors);
+
+            var connectorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var j = 0; j < evse.Connectors.Count; j++)
+            {
+                if (!connectorIds.Add((string)evse.Connectors[j].Id))
+                {
+                    AddDuplicateConnectorError((string)evse.Connectors[j].Id, (string)evse.Uid, i, j, errors);
+                }
+            }
+
+            if (evse.Coordinates is { } evseCoords)
+                ValidationHelpers.ValidateCoordinates(evseCoords, $"Evses[{i}].Coordinates", errors);
+        }
+    }
+
+    private static void ValidateEvseCore(
+        string uid,
+        int connectorCount,
+        int index,
+        HashSet<string> evseUids,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (!evseUids.Add(uid))
+        {
+            errors.Add(
+                new OcpiValidationError(
+                    "LOCATION_DUPLICATE_EVSE_UID",
+                    $"Duplicate EVSE UID '{uid}' found.",
+                    "Each EVSE within a Location must have a unique UID."
+                )
+                {
+                    PropertyPath = $"Evses[{index}].Uid",
+                }
+            );
+        }
+
+        if (connectorCount == 0)
+        {
+            errors.Add(
+                new OcpiValidationError(
+                    "EVSE_NO_CONNECTORS",
+                    $"EVSE '{uid}' has no connectors.",
+                    "Each EVSE must have at least one connector."
+                )
+                {
+                    PropertyPath = $"Evses[{index}].Connectors",
+                }
+            );
+        }
+    }
+
+    private static void AddDuplicateConnectorError(
+        string connectorId,
+        string evseUid,
+        int evseIndex,
+        int connectorIndex,
+        List<OcpiValidationError> errors
+    )
+    {
+        errors.Add(
+            new OcpiValidationError(
+                "EVSE_DUPLICATE_CONNECTOR_ID",
+                $"Duplicate Connector ID '{connectorId}' in EVSE '{evseUid}'.",
+                "Each Connector within an EVSE must have a unique ID."
+            )
+            {
+                PropertyPath = $"Evses[{evseIndex}].Connectors[{connectorIndex}].Id",
+            }
+        );
     }
 }

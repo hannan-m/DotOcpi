@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Text.Json;
 using DotOcpi.Serialization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DotOcpi.AspNetCore;
 
@@ -11,6 +12,9 @@ namespace DotOcpi.AspNetCore;
 /// </summary>
 public static class OcpiResponseWriter
 {
+    private static DateTimeOffset GetTimestamp(HttpContext httpContext) =>
+        httpContext.RequestServices?.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
+
     /// <summary>
     /// Writes a successful OCPI response with data payload.
     /// </summary>
@@ -30,11 +34,43 @@ public static class OcpiResponseWriter
             Data = data,
             StatusCode = statusCode,
             StatusMessage = statusMessage,
-            Timestamp = DateTimeOffset.UtcNow,
+            Timestamp = GetTimestamp(httpContext),
         };
 
         var options = OcpiJsonOptions.GetOptions(version);
-        return JsonSerializer.SerializeAsync(httpContext.Response.Body, envelope, options, cancellationToken);
+        return JsonSerializer.SerializeAsync(
+            httpContext.Response.Body,
+            envelope,
+            options.GetTypeInfo(typeof(OcpiResponse<T>)),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Writes a successful OCPI response with no data payload.
+    /// Uses <see cref="Utf8JsonWriter"/> directly — fully NativeAOT-safe.
+    /// </summary>
+    public static async Task WriteSuccessNoDataAsync(
+        HttpContext httpContext,
+        int statusCode = 1000,
+        string? statusMessage = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        httpContext.Response.ContentType = "application/json";
+
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("status_code"u8, statusCode);
+            if (statusMessage is not null)
+                writer.WriteString("status_message"u8, statusMessage);
+            writer.WriteString("timestamp"u8, GetTimestamp(httpContext));
+            writer.WriteEndObject();
+        }
+
+        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -61,12 +97,11 @@ public static class OcpiResponseWriter
             writer.WriteNumber("status_code"u8, statusCode);
             if (statusMessage is not null)
                 writer.WriteString("status_message"u8, statusMessage);
-            writer.WritePropertyName("timestamp"u8);
-            JsonSerializer.Serialize(writer, DateTimeOffset.UtcNow, options);
+            writer.WriteString("timestamp"u8, GetTimestamp(httpContext));
             if (data is not null)
             {
                 writer.WritePropertyName("data"u8);
-                JsonSerializer.Serialize(writer, data, data.GetType(), options);
+                JsonSerializer.Serialize(writer, data, options.GetTypeInfo(data.GetType()));
             }
             writer.WriteEndObject();
         }
@@ -93,12 +128,11 @@ public static class OcpiResponseWriter
         {
             writer.WriteStartObject();
             writer.WriteNumber("status_code"u8, OcpiStatusCode.Success.Value);
-            writer.WritePropertyName("timestamp"u8);
-            JsonSerializer.Serialize(writer, DateTimeOffset.UtcNow, options);
+            writer.WriteString("timestamp"u8, GetTimestamp(httpContext));
             writer.WriteStartArray("data"u8);
             foreach (var item in items)
             {
-                JsonSerializer.Serialize(writer, item, item.GetType(), options);
+                JsonSerializer.Serialize(writer, item, options.GetTypeInfo(item.GetType()));
             }
             writer.WriteEndArray();
             writer.WriteEndObject();
@@ -109,8 +143,10 @@ public static class OcpiResponseWriter
 
     /// <summary>
     /// Writes an OCPI error response (no data payload).
+    /// Uses <see cref="Utf8JsonWriter"/> directly — no reflection, no source-gen
+    /// context needed, fully NativeAOT-safe.
     /// </summary>
-    public static Task WriteErrorAsync(
+    public static async Task WriteErrorAsync(
         HttpContext httpContext,
         int httpStatusCode,
         int ocpiStatusCode,
@@ -121,51 +157,74 @@ public static class OcpiResponseWriter
         httpContext.Response.StatusCode = httpStatusCode;
         httpContext.Response.ContentType = "application/json";
 
-        var body = JsonSerializer.Serialize(
-            new
-            {
-                status_code = ocpiStatusCode,
-                status_message = statusMessage,
-                timestamp = DateTimeOffset.UtcNow,
-            }
-        );
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("status_code"u8, ocpiStatusCode);
+            writer.WriteString("status_message"u8, statusMessage);
+            writer.WriteString("timestamp"u8, GetTimestamp(httpContext));
+            writer.WriteEndObject();
+        }
 
-        return httpContext.Response.WriteAsync(body, cancellationToken);
+        await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Creates an <see cref="IResult"/> that writes an OCPI error response using
+    /// <see cref="Utf8JsonWriter"/> — no anonymous object allocation.
+    /// For use in endpoint filters that must return <see cref="IResult"/>.
+    /// </summary>
+    internal static IResult ErrorResult(int httpStatusCode, int ocpiStatusCode, string statusMessage) =>
+        new OcpiErrorResult(httpStatusCode, ocpiStatusCode, statusMessage);
+
+    /// <summary>
+    /// Creates an <see cref="IResult"/> that writes an OCPI validation error response
+    /// with a data array of error details — no anonymous object allocation.
+    /// </summary>
+    internal static IResult ValidationErrorResult(IReadOnlyList<Validation.OcpiValidationError> errors) =>
+        new OcpiValidationErrorResult(errors);
 
     /// <summary>
     /// Writes an <see cref="OcpiResult"/> as an OCPI response (no data payload).
     /// </summary>
-    internal static Task WriteResultAsync(
+    internal static async Task WriteResultAsync(
         HttpContext httpContext,
         OcpiResult result,
-        OcpiVersion version,
         CancellationToken cancellationToken = default
     )
     {
         if (result.IsSuccess)
         {
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            return WriteSuccessAsync<object?>(
-                httpContext,
-                null,
-                version,
-                result.StatusCode.Value,
-                result.StatusMessage,
-                cancellationToken
-            );
+            httpContext.Response.ContentType = "application/json";
+
+            var buffer = new ArrayBufferWriter<byte>(256);
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("status_code"u8, result.StatusCode.Value);
+                if (result.StatusMessage is not null)
+                    writer.WriteString("status_message"u8, result.StatusMessage);
+                writer.WriteString("timestamp"u8, GetTimestamp(httpContext));
+                writer.WriteEndObject();
+            }
+
+            await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+            return;
         }
 
         var httpStatus = result.StatusCode.IsServerError
             ? StatusCodes.Status500InternalServerError
             : StatusCodes.Status400BadRequest;
-        return WriteErrorAsync(
-            httpContext,
-            httpStatus,
-            result.StatusCode.Value,
-            result.StatusMessage ?? "Operation failed.",
-            cancellationToken
-        );
+        await WriteErrorAsync(
+                httpContext,
+                httpStatus,
+                result.StatusCode.Value,
+                result.StatusMessage ?? "Operation failed.",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -201,5 +260,45 @@ public static class OcpiResponseWriter
             result.StatusMessage ?? "Operation failed.",
             cancellationToken
         );
+    }
+
+    private sealed class OcpiErrorResult(int httpStatusCode, int ocpiStatusCode, string statusMessage) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext) =>
+            WriteErrorAsync(httpContext, httpStatusCode, ocpiStatusCode, statusMessage, httpContext.RequestAborted);
+    }
+
+    private sealed class OcpiValidationErrorResult(IReadOnlyList<Validation.OcpiValidationError> errors) : IResult
+    {
+        public async Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            httpContext.Response.ContentType = "application/json";
+
+            var buffer = new ArrayBufferWriter<byte>(512);
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("status_code"u8, 2001);
+                writer.WriteString("status_message"u8, "Invalid or missing parameters.");
+                writer.WriteStartArray("data"u8);
+                foreach (var error in errors)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("code"u8, error.Code);
+                    writer.WriteString("message"u8, error.Message);
+                    if (error.PropertyPath is not null)
+                        writer.WriteString("property_path"u8, error.PropertyPath);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+                writer.WriteString("timestamp"u8, GetTimestamp(httpContext));
+                writer.WriteEndObject();
+            }
+
+            await httpContext
+                .Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted)
+                .ConfigureAwait(false);
+        }
     }
 }

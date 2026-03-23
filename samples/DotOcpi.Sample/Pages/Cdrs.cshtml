@@ -1,0 +1,78 @@
+@page
+@model CdrsModel
+@{
+    ViewData["Title"] = "CDRs";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Charge Detail Records</h1>
+        <p class="page-subtitle">@Model.Cdrs.Count CDRs across all CPOs</p>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>ID</th>
+                    <th>CPO</th>
+                    <th>Session</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Energy (kWh)</th>
+                    <th>Duration (h)</th>
+                    <th>Total Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < Model.Cdrs.Count; i++)
+                {
+                    var (cpoKey, cdr) = Model.Cdrs[i];
+                    var id = cdr.TryGetProperty("id", out var idP) ? idP.GetString() : "—";
+                    // V2.2+: session_id as flat field. V2.0/V2.1.1: not present, derive from CDR ID (CDR-{sessionId}).
+                    var sessionId = cdr.TryGetProperty("session_id", out var sesP) ? sesP.GetString() ?? "—" : "—";
+                    if (sessionId == "—" && id is not null && id.StartsWith("CDR-"))
+                        sessionId = id["CDR-".Length..];
+                    var start = cdr.TryGetProperty("start_date_time", out var startP) ? startP.GetString() : "—";
+                    var end = cdr.TryGetProperty("end_date_time", out var endP) ? endP.GetString() : "—";
+                    var energy = cdr.TryGetProperty("total_energy", out var enP) ? enP.GetDecimal().ToString("F1") : "—";
+                    var time = cdr.TryGetProperty("total_time", out var tP) ? tP.GetDecimal().ToString("F2") : "—";
+                    var cost = "—";
+                    if (cdr.TryGetProperty("total_cost", out var costP))
+                    {
+                        if (costP.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            cost = costP.GetDecimal().ToString("F2") + " EUR";
+                        else if (costP.ValueKind == System.Text.Json.JsonValueKind.Object && costP.TryGetProperty("excl_vat", out var excl))
+                            cost = excl.GetDecimal().ToString("F2") + " EUR";
+                    }
+
+                    <tr class="expand-toggle" data-target="cdr-expand-@i">
+                        <td style="width:20px">▸</td>
+                        <td class="mono">@id</td>
+                        <td><span class="badge badge-info">@cpoKey</span></td>
+                        <td class="mono text-sm">@sessionId</td>
+                        <td class="mono text-sm">@start</td>
+                        <td class="mono text-sm">@end</td>
+                        <td class="mono">@energy</td>
+                        <td class="mono">@time</td>
+                        <td class="mono">@cost</td>
+                    </tr>
+                    <tr class="expand-content" id="cdr-expand-@i">
+                        <td colspan="9">
+                            <div class="expand-inner">
+                                <pre class="result-box" style="max-height: 300px; overflow: auto;">@System.Text.Json.JsonSerializer.Serialize(cdr, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                @if (Model.Cdrs.Count == 0)
+                {
+                    <tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">▤</div><div class="empty-state-text">No CDRs yet. Complete a charging session to generate one.</div></div></td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

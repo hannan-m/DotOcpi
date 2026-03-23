@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DotOcpi.AspNetCore.Handlers.Credentials;
 using DotOcpi.Modules;
 using FluentAssertions;
@@ -40,7 +41,7 @@ public class CredentialsEndpointsTests
         var handler = Substitute.For<ICredentialsHandler>();
         handler
             .OnCredentialsPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<object>.Success(new { token = "xyz" }));
+            .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"token": "xyz"}""").RootElement));
 
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
 
@@ -66,7 +67,7 @@ public class CredentialsEndpointsTests
         var handler = Substitute.For<ICredentialsHandler>();
         handler
             .OnCredentialsPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<object>.Success(new { token = "xyz" }));
+            .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"token": "xyz"}""").RootElement));
 
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_0, CredentialsJsonV20);
 
@@ -88,7 +89,7 @@ public class CredentialsEndpointsTests
         var handler = Substitute.For<ICredentialsHandler>();
         handler
             .OnCredentialsPutAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<object>.Success(new { token = "new-token" }));
+            .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"token": "new-token"}""").RootElement));
 
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
 
@@ -133,7 +134,11 @@ public class CredentialsEndpointsTests
         var handler = Substitute.For<ICredentialsHandler>();
         handler
             .GetCredentialsAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<CancellationToken>())
-            .Returns(OcpiResult<object>.Success(new { token = "current-token", url = "https://example.com" }));
+            .Returns(
+                OcpiResult<object>.Success(
+                    JsonDocument.Parse("""{"token": "current-token", "url": "https://example.com"}""").RootElement
+                )
+            );
 
         var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1);
 

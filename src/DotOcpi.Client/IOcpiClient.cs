@@ -34,4 +34,17 @@ public interface IOcpiClient
 
     /// <summary>Manage charging profiles on CPOs (2.2+ only).</summary>
     IChargingProfilesClient ChargingProfiles { get; }
+
+    /// <summary>
+    /// Invalidates the cached connection context for a CPO, forcing the next
+    /// call to re-resolve from the registry and token provider. Call this after
+    /// modifying the CPO registry or rotating tokens outside the library's own
+    /// registration and credential operations.
+    /// </summary>
+    void InvalidateConnection(string cpoId);
+
+    /// <summary>
+    /// Invalidates all cached connection contexts.
+    /// </summary>
+    void InvalidateAllConnections();
 }

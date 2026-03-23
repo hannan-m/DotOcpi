@@ -1,0 +1,130 @@
+@page
+@model DotOcpi.Sample.Pages.Cpos.DetailModel
+@{
+    ViewData["Title"] = $"CPO: {Model.Connection?.ConnectionKey}";
+}
+
+@if (Model.Connection is null)
+{
+    <div class="page-body"><div class="empty-state"><div class="empty-state-text">CPO not found.</div></div></div>
+    return;
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">@Model.Connection.ConnectionKey</h1>
+        <p class="page-subtitle">CPO Detail — OCPI @Model.Connection.Version.ToVersionString()</p>
+    </div>
+    <span class="badge badge-@(Model.Connection.Status.ToString().ToLower())">
+        <span class="badge-dot"></span>
+        @Model.Connection.Status
+    </span>
+</div>
+
+<div class="page-body">
+    <!-- Info Card -->
+    <div class="detail-header">
+        <div>
+            <div class="detail-title">@Model.Connection.CpoCountryCode:@Model.Connection.CpoPartyId</div>
+            <div class="detail-meta">
+                <span class="detail-meta-item">eMSP: <strong>@Model.Connection.EmspCountryCode:@Model.Connection.EmspPartyId</strong></span>
+                <span class="detail-meta-item">Modules: <strong>@Model.Connection.ModuleEndpoints.Count</strong></span>
+                <span class="detail-meta-item">Registered: <strong>@Model.Connection.CreatedAt.ToString("yyyy-MM-dd HH:mm")</strong></span>
+            </div>
+        </div>
+        <div class="flex gap-1">
+            <button class="btn btn-outline btn-sm"
+                    hx-post="/api/sync/@Model.Connection.ConnectionKey"
+                    hx-swap="none"
+                    data-success-message="Sync triggered">
+                ⟳ Sync All Modules
+            </button>
+        </div>
+    </div>
+
+    <!-- Module Tabs -->
+    <div class="tabs">
+        <a href="/Cpos/Detail?key=@Model.Connection.ConnectionKey&tab=locations"
+           class="tab @(Model.ActiveTab == "locations" ? "active" : "")">Locations</a>
+        <a href="/Cpos/Detail?key=@Model.Connection.ConnectionKey&tab=tariffs"
+           class="tab @(Model.ActiveTab == "tariffs" ? "active" : "")">Tariffs</a>
+        <a href="/Cpos/Detail?key=@Model.Connection.ConnectionKey&tab=sessions"
+           class="tab @(Model.ActiveTab == "sessions" ? "active" : "")">Sessions</a>
+        <a href="/Cpos/Detail?key=@Model.Connection.ConnectionKey&tab=cdrs"
+           class="tab @(Model.ActiveTab == "cdrs" ? "active" : "")">CDRs</a>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="table-wrap">
+        <div class="table-header">
+            <span class="table-title">@(Model.ActiveTab?.ToUpperInvariant()) — @Model.TabData.Count items</span>
+            <button class="btn btn-outline btn-sm"
+                    hx-post="/api/sync/@Model.Connection.ConnectionKey/@Model.ActiveTab"
+                    hx-swap="none"
+                    data-success-message="Syncing @Model.ActiveTab...">
+                ⟳ Sync @Model.ActiveTab
+            </button>
+        </div>
+        @if (Model.TabData.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">⊘</div>
+                <div class="empty-state-text">No @Model.ActiveTab data synced yet. Click "Sync" to pull from CPO.</div>
+            </div>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name / Info</th>
+                        <th>Last Updated</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.TabData)
+                    {
+                        var id = item.TryGetProperty("id", out var idProp) ? idProp.GetString() : "—";
+                        var name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString()
+                                 : item.TryGetProperty("currency", out var curProp) ? curProp.GetString()
+                                 : item.TryGetProperty("status", out var statusProp) ? statusProp.GetString()
+                                 : "—";
+                        var lastUpdated = item.TryGetProperty("last_updated", out var luProp) ? luProp.GetString() : "—";
+                        <tr>
+                            <td class="mono">@id</td>
+                            <td>@name</td>
+                            <td class="mono text-sm text-muted">@lastUpdated</td>
+                            <td>
+                                <details>
+                                    <summary class="btn btn-ghost btn-sm" style="cursor:pointer;">View JSON</summary>
+                                    <pre class="result-box mt-1" style="max-height: 300px; overflow: auto;">@System.Text.Json.JsonSerializer.Serialize(item, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
+                                </details>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <!-- Module Endpoints -->
+    <div class="section mt-2">
+        <h3 class="section-title">Module Endpoints</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Module</th><th>URL</th></tr></thead>
+                <tbody>
+                    @foreach (var ep in Model.Connection.ModuleEndpoints)
+                    {
+                        <tr>
+                            <td class="mono">@ep.Key</td>
+                            <td class="mono text-sm text-muted" style="word-break: break-all;">@ep.Value</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

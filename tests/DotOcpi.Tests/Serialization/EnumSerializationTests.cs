@@ -1,6 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DotOcpi.Models.V2_2_1;
-using DotOcpi.Serialization;
 using FluentAssertions;
 using Xunit;
 
@@ -11,7 +11,7 @@ public class EnumSerializationTests
     private static JsonSerializerOptions CreateOptions()
     {
         var options = new JsonSerializerOptions();
-        options.Converters.Add(new OcpiEnumConverterFactory());
+        options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }
 
@@ -73,7 +73,8 @@ public class EnumSerializationTests
     {
         var options = CreateOptions();
         JsonSerializer.Serialize(CommandResultType.EVSE_OCCUPIED, options).Should().Be("\"EVSE_OCCUPIED\"");
-        JsonSerializer.Serialize(CommandResultType.CANCELED_RESERVATION, options)
+        JsonSerializer
+            .Serialize(CommandResultType.CANCELED_RESERVATION, options)
             .Should()
             .Be("\"CANCELED_RESERVATION\"");
     }

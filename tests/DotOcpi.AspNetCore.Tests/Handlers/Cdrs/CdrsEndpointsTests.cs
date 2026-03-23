@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DotOcpi.AspNetCore.Handlers.Cdrs;
 using DotOcpi.Modules;
 using FluentAssertions;
@@ -173,16 +174,14 @@ public class CdrsEndpointsTests
     [Fact]
     public async Task HandleCdrGet_ReturnsDataFromReceiver()
     {
-        var cdrData = new { id = "CDR1", currency = "EUR" };
+        var cdrData = JsonDocument.Parse("""{"id": "CDR1", "currency": "EUR"}""").RootElement;
         var receiver = Substitute.For<ICdrsReceiver>();
         receiver
             .GetCdrAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(OcpiResult<object>.Success(cdrData));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["cdrId"] = "CDR1";
-
-        await CdrsEndpoints.HandleCdrGet(httpContext);
+        await CdrsEndpoints.HandleCdrGet("CDR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -199,9 +198,7 @@ public class CdrsEndpointsTests
             .Returns(OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "CDR not found"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["cdrId"] = "CDR1";
-
-        await CdrsEndpoints.HandleCdrGet(httpContext);
+        await CdrsEndpoints.HandleCdrGet("CDR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         await receiver.Received(1).GetCdrAsync(Arg.Any<OcpiRequestContext>(), "CDR1", Arg.Any<CancellationToken>());

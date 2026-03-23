@@ -50,8 +50,7 @@ public static class OcpiVersionExtensions
     /// <summary>
     /// Returns true if this version uses the 2.2+ URL pattern with country_code/party_id in paths.
     /// </summary>
-    public static bool UsesPartyIdInUrls(this OcpiVersion version) =>
-        version is OcpiVersion.V2_2 or OcpiVersion.V2_2_1;
+    public static bool UsesPartyIdInUrls(this OcpiVersion version) => version is OcpiVersion.V2_2 or OcpiVersion.V2_2_1;
 
     /// <summary>
     /// Returns true if this is a deprecated intermediary version (2.2).

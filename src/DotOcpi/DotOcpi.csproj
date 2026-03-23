@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <Description>Core OCPI protocol library for eMSP: version-specific models, interfaces, result types, token management, version negotiation</Description>
     <PackageTags>ocpi;emsp;ev;charging;protocol</PackageTags>
@@ -18,5 +17,4 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
-
 </Project>

@@ -13,8 +13,9 @@ How the library itself is tested, and how consumers test their integrations.
 - [7. Test Data Strategy](#7-test-data-strategy)
 - [8. Security Testing](#8-security-testing)
 - [9. Serialization Testing](#9-serialization-testing)
-- [10. Consumer Testing (DotOcpi.Testing)](#10-consumer-testing-dotocpitesting)
-- [11. CI/CD Pipeline](#11-cicd-pipeline)
+- [10. Consumer Testing (DotOcpi.Simulator)](#10-consumer-testing-dotocpitesting)
+- [11. Sync Testing](#11-sync-testing)
+- [12. CI/CD Pipeline](#12-cicd-pipeline)
 
 ---
 
@@ -89,8 +90,7 @@ tests/
 │   ├── Serialization/
 │   │   ├── SerializationTests.cs     # Per-version JSON round-trip
 │   │   ├── EnumSerializationTests.cs
-│   │   ├── CiStringTests.cs
-│   │   └── PatchHelperTests.cs
+│   │   └── CiStringTests.cs
 │   ├── TokenManagement/
 │   │   ├── TokenGeneratorTests.cs
 │   │   ├── TokenValidatorTests.cs
@@ -125,7 +125,7 @@ tests/
 │   ├── DotOcpi.AspNetCore.Tests.csproj
 │   ├── Middleware/
 │   │   ├── OcpiAuthFilterTests.cs
-│   │   ├── OcpiRequestIdFilterTests.cs
+│   │   ├── OcpiRequestIdFilterTests.cs  # Tests OcpiRequestIdMiddleware (replacement for removed filter)
 │   │   └── OcpiExceptionMiddlewareTests.cs
 │   ├── Handlers/
 │   │   ├── OcpiEndpointTestHelper.cs   # Shared test infrastructure
@@ -156,9 +156,9 @@ tests/
 │       ├── IntegrationTestBase.cs
 │       └── TestEmspApplication.cs
 │
-└── DotOcpi.Testing.Tests/            # Tests for the testing package itself
-    ├── DotOcpi.Testing.Tests.csproj
-    ├── OcpiTestCpoServerTests.cs
+└── DotOcpi.Simulator.Tests/            # Tests for the testing package itself
+    ├── DotOcpi.Simulator.Tests.csproj
+    ├── OcpiCpoSimulatorTests.cs
     └── FailureInjectionTests.cs
 ```
 
@@ -169,8 +169,8 @@ graph TD
     UT["DotOcpi.Tests"] --> Core["DotOcpi"]
     CT["DotOcpi.Client.Tests"] --> Client["DotOcpi.Client"]
     AT["DotOcpi.AspNetCore.Tests"] --> Server["DotOcpi.AspNetCore"]
-    IT["DotOcpi.Integration.Tests"] --> Server & Client & Testing["DotOcpi.Testing"]
-    TT["DotOcpi.Testing.Tests"] --> Testing
+    IT["DotOcpi.Integration.Tests"] --> Server & Client & Testing["DotOcpi.Simulator"]
+    TT["DotOcpi.Simulator.Tests"] --> Testing
 ```
 
 ---
@@ -192,7 +192,6 @@ graph TD
 | **InMemoryCpoRegistry** | CRUD operations, lookup by ID/token/party, concurrent access | Nothing |
 | **OcpiJsonContext per version** | Round-trip serialize/deserialize for every model type | Nothing |
 | **Custom JsonConverters** | DateTime format, enum values, CiString serialization | Nothing |
-| **OcpiPatchHelper** | Merge semantics: add, update, remove (null), nested objects | Nothing |
 | **IOcpiValidator<T>** | Valid models pass, invalid models fail with correct error | Nothing |
 | **Registration orchestrator** | Happy path, version mismatch, CPO rejection, timeout | `ICredentialsClient`, `IVersionDiscovery`, `ITokenStore`, `ICpoRegistry` |
 | **Module handlers** | Deserialize → invoke consumer → return correct HTTP + OCPI response | `ILocationsReceiver`, etc. (see [Handler Endpoint Testing](#4-handler-endpoint-testing)) |
@@ -341,7 +340,7 @@ graph TD
     subgraph "Integration Test"
         Test["xUnit Test Method"]
         Factory["WebApplicationFactory&lt;Program&gt;"]
-        TestCpo["OcpiTestCpoServer<br/>(in-memory CPO)"]
+        TestCpo["OcpiCpoSimulator<br/>(in-memory CPO)"]
     end
 
     subgraph "In-Memory eMSP"
@@ -381,7 +380,7 @@ graph TD
 ```csharp
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
-    protected OcpiTestCpoServer TestCpo { get; private set; } = null!;
+    protected OcpiCpoSimulator TestCpo { get; private set; } = null!;
     protected WebApplicationFactory<Program> Factory { get; private set; } = null!;
     protected HttpClient HttpClient { get; private set; } = null!;
     protected IOcpiClient OcpiClient { get; private set; } = null!;
@@ -393,7 +392,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     public virtual async Task InitializeAsync()
     {
-        TestCpo = OcpiTestCpoServer.Create(ConfigureTestCpo);
+        TestCpo = OcpiCpoSimulator.Create(ConfigureTestCpo);
 
         Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -425,7 +424,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
             TestCpo.BaseUrl, TestCpo.TokenA);
     }
 
-    protected virtual void ConfigureTestCpo(TestCpoConfiguration config)
+    protected virtual void ConfigureTestCpo(CpoSimulatorConfiguration config)
     {
         config.SupportedVersions = [OcpiVersion.V2_2_1];
     }
@@ -552,14 +551,14 @@ public class LocationSerializationTests
 ```csharp
 public class MultiVersionFlowTests : IAsyncLifetime
 {
-    private OcpiTestCpoServer _cpo211 = null!;
-    private OcpiTestCpoServer _cpo221 = null!;
+    private OcpiCpoSimulator _cpo211 = null!;
+    private OcpiCpoSimulator _cpo221 = null!;
 
     public async Task InitializeAsync()
     {
-        _cpo211 = OcpiTestCpoServer.Create(c =>
+        _cpo211 = OcpiCpoSimulator.Create(c =>
             c.SupportedVersions = [OcpiVersion.V2_1_1]);
-        _cpo221 = OcpiTestCpoServer.Create(c =>
+        _cpo221 = OcpiCpoSimulator.Create(c =>
             c.SupportedVersions = [OcpiVersion.V2_2_1]);
 
         // Register both
@@ -906,14 +905,14 @@ public class CiStringTests
 
 ---
 
-## 10. Consumer Testing (DotOcpi.Testing)
+## 10. Consumer Testing (DotOcpi.Simulator)
 
-The `DotOcpi.Testing` package enables consumers to test their own integrations. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API.
+The `DotOcpi.Simulator` package enables consumers to test their own integrations. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API.
 
 ### Testing the Testing Package Itself
 
-The `DotOcpi.Testing.Tests` project verifies:
-- `OcpiTestCpoServer` responds correctly to version discovery
+The `DotOcpi.Simulator.Tests` project verifies:
+- `OcpiCpoSimulator` responds correctly to version discovery
 - Handshake simulation produces valid Token B/C
 - Configured locations/tariffs are returned via GET
 - Failure injection produces the expected errors
@@ -922,7 +921,20 @@ The `DotOcpi.Testing.Tests` project verifies:
 
 ---
 
-## 11. CI/CD Pipeline
+## 11. Sync Testing
+
+Tests for the pull-sync subsystem (`DotOcpi.Client.Sync`) cover scheduling, option resolution, and the sync service itself.
+
+| Test Class | What It Tests | Key Techniques |
+|---|---|---|
+| **OcpiSyncServiceTests** | Handler callbacks invoked per module, timestamp tracking for incremental sync, error handling per CPO/module | `MockHttpMessageHandler` for HTTP stubbing, `FakeTimeProvider` to control clock without real delays |
+| **OcpiPullSyncBackgroundServiceTests** | Scheduling logic, connection filtering (only syncs registered CPOs with matching modules), per-CPO/module interval resolution | `FakeTimeProvider` to advance time deterministically |
+| **PullSyncOptionsResolverTests** | All four levels of cascading option resolution: global defaults, per-module overrides, per-CPO overrides, per-CPO-per-module overrides | Pure unit tests, no mocks needed |
+| **PullSyncOptionsValidatorTests** | Startup validation: rejects zero/negative intervals, excessive jitter, unknown module names | Tests against `IValidateOptions<T>` return values |
+
+---
+
+## 12. CI/CD Pipeline
 
 ### Test Execution Order
 
@@ -971,7 +983,7 @@ jobs:
 | `DotOcpi` | 80% line | Core protocol logic, models, validation |
 | `DotOcpi.Client` | 80% line | HTTP client, pagination, response parsing |
 | `DotOcpi.AspNetCore` | 80% line | Middleware, endpoints, routing |
-| `DotOcpi.Testing` | 70% line | Test infrastructure (lower bar acceptable) |
+| `DotOcpi.Simulator` | 70% line | Test infrastructure (lower bar acceptable) |
 
 ### Test Traits for CI Filtering
 

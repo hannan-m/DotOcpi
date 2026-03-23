@@ -1,0 +1,109 @@
+@page
+@model SessionsModel
+@{
+    ViewData["Title"] = "Sessions";
+    var statusFilter = ViewContext.HttpContext.Request.Query["status"].ToString();
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Sessions</h1>
+        <p class="page-subtitle" id="session-count">@Model.Sessions.Count charging sessions tracked</p>
+    </div>
+    <div class="flex gap-1">
+        <a href="/Sessions" class="btn btn-sm @(string.IsNullOrEmpty(statusFilter) ? "btn-primary" : "btn-outline")">All</a>
+        <a href="/Sessions?status=ACTIVE" class="btn btn-sm @(statusFilter == "ACTIVE" ? "btn-primary" : "btn-outline")">Active</a>
+        <a href="/Sessions?status=COMPLETED" class="btn btn-sm @(statusFilter == "COMPLETED" ? "btn-primary" : "btn-outline")">Completed</a>
+    </div>
+</div>
+
+<div class="page-body">
+    <div id="sessions-table"
+         hx-get="/api/sessions-table@(string.IsNullOrEmpty(statusFilter) ? "" : $"?status={statusFilter}")"
+         hx-trigger="every 3s"
+         hx-swap="innerHTML">
+        @* Initial server-rendered content *@
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>CPO</th>
+                        <th>Location</th>
+                        <th>EVSE</th>
+                        <th>Status</th>
+                        <th>kWh</th>
+                        <th>Start</th>
+                        <th>Cost</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (cpoKey, ses) in Model.Sessions)
+                    {
+                        var id = ses.TryGetProperty("id", out var idP) ? idP.GetString() : "—";
+                        // V2.2+: location_id/evse_uid as flat fields. V2.0/V2.1.1: embedded in location object.
+                        var locId = ses.TryGetProperty("location_id", out var locP) ? locP.GetString() ?? "—"
+                            : ses.TryGetProperty("location", out var embLoc) && embLoc.TryGetProperty("id", out var embLocId) ? embLocId.GetString() ?? "—" : "—";
+                        var evseUid = ses.TryGetProperty("evse_uid", out var evseP) ? evseP.GetString() ?? "—"
+                            : ses.TryGetProperty("location", out var embLoc2) && embLoc2.TryGetProperty("evses", out var embEvses)
+                              && embEvses.ValueKind == System.Text.Json.JsonValueKind.Array && embEvses.GetArrayLength() > 0
+                              && embEvses[0].TryGetProperty("uid", out var embUid) ? embUid.GetString() ?? "—" : "—";
+                        var status = ses.TryGetProperty("status", out var stP) ? stP.GetString() : "—";
+                        var kwh = ses.TryGetProperty("kwh", out var kwhP) ? kwhP.GetDecimal().ToString("F1") : "—";
+                        var start = ses.TryGetProperty("start_date_time", out var startP) ? startP.GetString() : "—";
+                        var cost = "—";
+                        if (ses.TryGetProperty("total_cost", out var costP))
+                        {
+                            if (costP.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                cost = costP.GetDecimal().ToString("F2") + " EUR";
+                            else if (costP.ValueKind == System.Text.Json.JsonValueKind.Object && costP.TryGetProperty("excl_vat", out var excl))
+                                cost = excl.GetDecimal().ToString("F2") + " EUR";
+                        }
+                        var badgeClass = status switch
+                        {
+                            "ACTIVE" => "badge-active",
+                            "COMPLETED" => "badge-completed",
+                            "PENDING" => "badge-warning",
+                            _ => "badge-info"
+                        };
+
+                        <tr>
+                            <td class="mono">@id</td>
+                            <td><span class="badge badge-info">@cpoKey</span></td>
+                            <td class="mono">@locId</td>
+                            <td class="mono text-sm">@evseUid</td>
+                            <td>
+                                <span class="badge @badgeClass">
+                                    <span class="badge-dot"></span>
+                                    @status
+                                </span>
+                            </td>
+                            <td class="mono">@kwh</td>
+                            <td class="mono text-sm text-muted">@start</td>
+                            <td class="mono">@cost</td>
+                            <td>
+                                @if (status == "ACTIVE")
+                                {
+                                    <form hx-post="/api/commands/stop-session"
+                                          hx-target="#stop-r-@id"
+                                          hx-swap="innerHTML"
+                                          style="display: inline;">
+                                        <input type="hidden" name="cpoId" value="@cpoKey" />
+                                        <input type="hidden" name="sessionId" value="@id" />
+                                        <button type="submit" class="btn btn-sm btn-danger">■ Stop</button>
+                                    </form>
+                                    <span id="stop-r-@id"></span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Sessions.Count == 0)
+                    {
+                        <tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">▶</div><div class="empty-state-text">No sessions tracked yet. Start a session from the Locations or Commands tab.</div></div></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

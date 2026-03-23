@@ -1,13 +1,17 @@
+using DotOcpi.Client.Internal;
 using DotOcpi.Registration;
 
 namespace DotOcpi.Client;
 
 /// <summary>
 /// Default implementation of <see cref="IOcpiClient"/>.
-/// All module clients share the same HttpClient and request builder.
+/// Wraps <see cref="IRegistrationClient"/> with automatic cache invalidation
+/// so registration and credential operations keep the connection cache consistent.
 /// </summary>
 internal sealed class OcpiClient : IOcpiClient
 {
+    private readonly ICpoConnectionContextProvider _contextProvider;
+
     public OcpiClient(
         IRegistrationClient registration,
         IVersionDiscovery versions,
@@ -17,10 +21,12 @@ internal sealed class OcpiClient : IOcpiClient
         ITariffsClient tariffs,
         ITokensClient tokens,
         ICommandsClient commands,
-        IChargingProfilesClient chargingProfiles
+        IChargingProfilesClient chargingProfiles,
+        ICpoConnectionContextProvider contextProvider
     )
     {
-        Registration = registration;
+        _contextProvider = contextProvider;
+        Registration = new InvalidatingRegistrationClient(registration, contextProvider);
         Versions = versions;
         Locations = locations;
         Sessions = sessions;
@@ -40,4 +46,8 @@ internal sealed class OcpiClient : IOcpiClient
     public ITokensClient Tokens { get; }
     public ICommandsClient Commands { get; }
     public IChargingProfilesClient ChargingProfiles { get; }
+
+    public void InvalidateConnection(string cpoId) => _contextProvider.Invalidate(cpoId);
+
+    public void InvalidateAllConnections() => _contextProvider.InvalidateAll();
 }

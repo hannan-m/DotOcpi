@@ -11,7 +11,12 @@ public interface ITariffsReceiver
     Task<OcpiResult> OnTariffPutAsync(OcpiRequestContext context, string tariffId, object data, CancellationToken ct);
 
     /// <summary>Handles a Tariff PATCH from a CPO (2.0/2.1.1 only; 2.2+ rejects PATCH with 405).</summary>
-    Task<OcpiResult> OnTariffPatchAsync(OcpiRequestContext context, string tariffId, JsonElement patch, CancellationToken ct);
+    Task<OcpiResult> OnTariffPatchAsync(
+        OcpiRequestContext context,
+        string tariffId,
+        JsonElement patch,
+        CancellationToken ct
+    );
 
     /// <summary>Handles a Tariff DELETE from a CPO.</summary>
     Task<OcpiResult> OnTariffDeleteAsync(OcpiRequestContext context, string tariffId, CancellationToken ct);

@@ -1,0 +1,62 @@
+@page
+@model SyncModel
+@{
+    ViewData["Title"] = "Sync Status";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Sync Status</h1>
+        <p class="page-subtitle">Pull synchronization status for all CPOs</p>
+    </div>
+    <button class="btn btn-primary btn-sm"
+            hx-post="/api/sync/all"
+            hx-swap="none"
+            data-success-message="Sync triggered for all CPOs">
+        ⟳ Sync All
+    </button>
+</div>
+
+<div class="page-body">
+    @foreach (var cpo in Model.CpoSyncs)
+    {
+        <div class="section">
+            <h3 class="section-title flex items-center gap-1">
+                <span class="badge badge-info">@cpo.ConnectionKey</span>
+                <span class="text-sm text-muted">OCPI @cpo.Version</span>
+            </h3>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Module</th>
+                            <th>Items Stored</th>
+                            <th class="text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var mod in cpo.Modules)
+                        {
+                            <tr>
+                                <td class="mono">@mod.Name</td>
+                                <td class="mono">@mod.ItemCount</td>
+                                <td class="text-right">
+                                    <button class="btn btn-outline btn-sm"
+                                            hx-post="/api/sync/@cpo.ConnectionKey/@mod.Name"
+                                            hx-swap="none"
+                                            data-success-message="Syncing @mod.Name from @cpo.ConnectionKey...">
+                                        ⟳ Sync Now
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    @if (Model.CpoSyncs.Count == 0)
+    {
+        <div class="empty-state"><div class="empty-state-icon">⟳</div><div class="empty-state-text">No CPOs registered. Register a CPO first.</div></div>
+    }
+</div>

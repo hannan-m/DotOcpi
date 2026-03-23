@@ -2,7 +2,7 @@ using DotOcpi.Integration.Tests.Fixtures;
 using DotOcpi.Registration;
 using DotOcpi.Registry;
 using DotOcpi.Security;
-using DotOcpi.Testing;
+using DotOcpi.Simulator;
 using FluentAssertions;
 using Xunit;
 
@@ -50,21 +50,7 @@ public class RegistrationFlowTests : IntegrationTestBase
         var credentialsUrl = detail.Endpoints.First(e => e.Identifier == "credentials").Url;
 
         var tokenB = TokenGenerator.Generate();
-        var credentials = new
-        {
-            token = tokenB,
-            url = "https://emsp.example.com/ocpi/versions",
-            roles = new[]
-            {
-                new
-                {
-                    role = "EMSP",
-                    business_details = new { name = "Test eMSP" },
-                    party_id = "MSP",
-                    country_code = "NL",
-                },
-            },
-        };
+        var credentials = TestCredentialsHelper.V2_2_1(tokenB);
 
         var response = await credentialsClient.PostCredentialsAsync(
             credentialsUrl,
@@ -91,21 +77,7 @@ public class RegistrationFlowTests : IntegrationTestBase
         var credentialsClient = new CredentialsClient(httpClient);
 
         var newTokenC = TokenGenerator.Generate();
-        var credentials = new
-        {
-            token = newTokenC,
-            url = "https://emsp.example.com/ocpi/versions",
-            roles = new[]
-            {
-                new
-                {
-                    role = "EMSP",
-                    business_details = new { name = "Test eMSP" },
-                    party_id = "MSP",
-                    country_code = "NL",
-                },
-            },
-        };
+        var credentials = TestCredentialsHelper.V2_2_1(newTokenC);
 
         var response = await credentialsClient.PutCredentialsAsync(
             $"{Server.BaseUrl}ocpi/credentials",
@@ -156,21 +128,7 @@ public class RegistrationFlowTests : IntegrationTestBase
         var ourTokenB = TokenGenerator.Generate();
         var ourTokenBHash = TokenHasher.Hash(ourTokenB);
 
-        var credentials = new
-        {
-            token = ourTokenB,
-            url = "https://emsp.example.com/ocpi/versions",
-            roles = new[]
-            {
-                new
-                {
-                    role = "EMSP",
-                    business_details = new { name = "Test eMSP" },
-                    party_id = "MSP",
-                    country_code = "NL",
-                },
-            },
-        };
+        var credentials = TestCredentialsHelper.V2_2_1(ourTokenB);
 
         var cpoResponse = await credentialsClient.PostCredentialsAsync(
             credentialsUrl,
@@ -210,7 +168,7 @@ public class RegistrationFlowTests : IntegrationTestBase
     [Fact]
     public async Task MultiVersion_NegotiatesHighest()
     {
-        await using var server = await OcpiTestCpoServer.CreateAsync(c =>
+        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
             c.SupportedVersions = [OcpiVersion.V2_0, OcpiVersion.V2_1_1, OcpiVersion.V2_2_1]
         );
 
@@ -230,27 +188,11 @@ public class RegistrationFlowTests : IntegrationTestBase
         using var httpClient = CreateHttpClient();
         var credentialsClient = new CredentialsClient(httpClient);
 
-        var credentials = new
-        {
-            token = TokenGenerator.Generate(),
-            url = "https://emsp.example.com/ocpi/versions",
-            roles = new[]
-            {
-                new
-                {
-                    role = "EMSP",
-                    business_details = new { name = "Test eMSP" },
-                    party_id = "MSP",
-                    country_code = "NL",
-                },
-            },
-        };
-
         await credentialsClient.PostCredentialsAsync(
             $"{Server.BaseUrl}ocpi/credentials",
             Server.TokenA,
             OcpiVersion.V2_2_1,
-            credentials
+            TestCredentialsHelper.V2_2_1(TokenGenerator.Generate())
         );
     }
 }

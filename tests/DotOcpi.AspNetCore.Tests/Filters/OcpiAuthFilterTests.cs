@@ -1,4 +1,5 @@
 using DotOcpi.AspNetCore.Filters;
+using DotOcpi.Observability;
 using DotOcpi.Registry;
 using DotOcpi.Security;
 using FluentAssertions;
@@ -18,7 +19,15 @@ public class OcpiAuthFilterTests
     public OcpiAuthFilterTests()
     {
         _tokenValidator = new OcpiTokenValidator(_tokenStore);
-        _filter = new OcpiAuthFilter(_tokenValidator, _registry);
+        var metrics = new OcpiMetrics(new TestMeterFactory());
+        _filter = new OcpiAuthFilter(_tokenValidator, _registry, metrics);
+    }
+
+    private sealed class TestMeterFactory : System.Diagnostics.Metrics.IMeterFactory
+    {
+        public System.Diagnostics.Metrics.Meter Create(System.Diagnostics.Metrics.MeterOptions options) => new(options);
+
+        public void Dispose() { }
     }
 
     private static CpoConnection CreateConnection() =>

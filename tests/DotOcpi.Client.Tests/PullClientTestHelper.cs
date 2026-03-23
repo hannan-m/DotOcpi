@@ -5,7 +5,7 @@ using NSubstitute;
 namespace DotOcpi.Client.Tests;
 
 /// <summary>
-/// Shared setup for pull client tests using MockHttpMessageHandler.
+/// Shared setup for client tests using MockHttpMessageHandler.
 /// </summary>
 internal static class PullClientTestHelper
 {
@@ -28,6 +28,9 @@ internal static class PullClientTestHelper
                     ["sessions"] = "https://cpo.example.com/ocpi/2.2.1/cpo/sessions",
                     ["cdrs"] = "https://cpo.example.com/ocpi/2.2.1/cpo/cdrs",
                     ["tariffs"] = "https://cpo.example.com/ocpi/2.2.1/cpo/tariffs",
+                    ["tokens"] = "https://cpo.example.com/ocpi/2.2.1/cpo/tokens",
+                    ["commands"] = "https://cpo.example.com/ocpi/2.2.1/cpo/commands",
+                    ["chargingprofiles"] = "https://cpo.example.com/ocpi/2.2.1/cpo/chargingprofiles",
                 },
             TokenBHash = "hash",
             Status = ConnectionStatus.Connected,
@@ -35,17 +38,14 @@ internal static class PullClientTestHelper
             UpdatedAt = DateTimeOffset.UtcNow,
         };
 
-    internal static OcpiHttpRequestBuilder CreateBuilder(CpoConnection connection)
+    internal static ICpoConnectionContextProvider CreateContextProvider(
+        CpoConnection connection,
+        string token = "test-token"
+    )
     {
-        var registry = Substitute.For<ICpoRegistry>();
-        registry.FindByConnectionKey(connection.ConnectionKey).Returns(connection);
-        return new OcpiHttpRequestBuilder(registry);
-    }
-
-    internal static IOutboundTokenProvider CreateTokenProvider(string token = "test-token")
-    {
-        var provider = Substitute.For<IOutboundTokenProvider>();
-        provider.GetTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(token);
+        var provider = Substitute.For<ICpoConnectionContextProvider>();
+        var context = new CpoConnectionContext { Connection = connection, RawToken = token };
+        provider.ResolveAsync(connection.ConnectionKey, Arg.Any<CancellationToken>()).Returns(context);
         return provider;
     }
 }

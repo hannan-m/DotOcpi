@@ -39,14 +39,14 @@ public sealed class InMemoryCpoRegistry : ICpoRegistry
         var key = EmspKey(emspCountryCode, emspPartyId);
         if (_byEmspIdentity.TryGetValue(key, out var connections))
         {
-            return connections.Values.ToList();
+            return connections.Values.ToArray();
         }
 
         return [];
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<CpoConnection> GetAll() => _byConnectionKey.Values.ToList();
+    public IReadOnlyList<CpoConnection> GetAll() => _byConnectionKey.Values.ToArray();
 
     /// <inheritdoc />
     public bool AddOrUpdate(CpoConnection connection)

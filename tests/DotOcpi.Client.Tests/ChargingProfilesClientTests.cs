@@ -29,8 +29,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection();
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.SetChargingProfileAsync("DE:ALL", "SESSION1", new object());
@@ -47,8 +46,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection(OcpiVersion.V2_0);
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.SetChargingProfileAsync("DE:ALL", "SESSION1", new object());
@@ -65,8 +63,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection(OcpiVersion.V2_1_1);
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.SetChargingProfileAsync("DE:ALL", "SESSION1", new object());
@@ -84,8 +81,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection();
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.DeleteChargingProfileAsync("DE:ALL", "SESSION1");
@@ -103,8 +99,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection();
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.GetActiveChargingProfileAsync("DE:ALL", "SESSION1");
@@ -120,8 +115,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection(OcpiVersion.V2_0);
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.DeleteChargingProfileAsync("DE:ALL", "SESSION1");
@@ -139,8 +133,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection();
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await client.SetChargingProfileAsync("DE:ALL", "SESSION1", new object());
@@ -162,8 +155,7 @@ public class ChargingProfilesClientTests
         var connection = CreateConnection();
         var client = new ChargingProfilesClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.SetChargingProfileAsync("DE:ALL", "SESSION1", new object());

@@ -1,6 +1,7 @@
-using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using DotOcpi.Client.Internal;
+using DotOcpi.Serialization;
 
 namespace DotOcpi.Client;
 
@@ -10,18 +11,12 @@ namespace DotOcpi.Client;
 internal sealed class TokensClient : ITokensClient
 {
     private readonly HttpClient _httpClient;
-    private readonly OcpiHttpRequestBuilder _requestBuilder;
-    private readonly IOutboundTokenProvider _tokenProvider;
+    private readonly ICpoConnectionContextProvider _contextProvider;
 
-    internal TokensClient(
-        HttpClient httpClient,
-        OcpiHttpRequestBuilder requestBuilder,
-        IOutboundTokenProvider tokenProvider
-    )
+    internal TokensClient(HttpClient httpClient, ICpoConnectionContextProvider contextProvider)
     {
         _httpClient = httpClient;
-        _requestBuilder = requestBuilder;
-        _tokenProvider = tokenProvider;
+        _contextProvider = contextProvider;
     }
 
     public async Task<OcpiResult> PushTokenAsync(
@@ -31,8 +26,8 @@ internal sealed class TokensClient : ITokensClient
         CancellationToken cancellationToken = default
     )
     {
-        var cpoToken = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var request = _requestBuilder.Build(HttpMethod.Put, cpoId, "tokens", tokenUid, cpoToken, token);
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        var request = OcpiHttpRequestBuilder.Build(HttpMethod.Put, context, "tokens", tokenUid, token);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
@@ -46,15 +41,11 @@ internal sealed class TokensClient : ITokensClient
         CancellationToken cancellationToken = default
     )
     {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        var cpoToken = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        var request = OcpiHttpRequestBuilder.Build(HttpMethod.Patch, context, "tokens", tokenUid);
 
-        var request = _requestBuilder.Build(HttpMethod.Patch, cpoId, "tokens", tokenUid, cpoToken);
-
-        // Serialize the JsonElement directly as the request body
-        var json = JsonSerializer.SerializeToUtf8Bytes(patch);
-        request.Content = new ByteArrayContent(json);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        var options = OcpiJsonOptions.GetOptions(context.Connection.Version);
+        request.Content = JsonContent.Create(patch, options.GetTypeInfo(typeof(JsonElement)));
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
