@@ -14,6 +14,7 @@ public sealed partial class CpoHealthMonitor : BackgroundService
     private readonly ICpoRegistry _registry;
     private readonly HttpClient _httpClient;
     private readonly ILogger<CpoHealthMonitor> _logger;
+    private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _interval;
     private readonly int _maxFailures;
     private readonly TimeSpan _timeout;
@@ -26,6 +27,7 @@ public sealed partial class CpoHealthMonitor : BackgroundService
         ICpoRegistry registry,
         HttpClient httpClient,
         ILogger<CpoHealthMonitor> logger,
+        TimeProvider? timeProvider = null,
         TimeSpan? interval = null,
         int maxConsecutiveFailures = 3,
         TimeSpan? healthCheckTimeout = null
@@ -34,6 +36,7 @@ public sealed partial class CpoHealthMonitor : BackgroundService
         _registry = registry;
         _httpClient = httpClient;
         _logger = logger;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _interval = interval ?? TimeSpan.FromMinutes(5);
         _maxFailures = maxConsecutiveFailures;
         _timeout = healthCheckTimeout ?? TimeSpan.FromSeconds(10);
@@ -84,15 +87,15 @@ public sealed partial class CpoHealthMonitor : BackgroundService
                     var restored = connection with
                     {
                         Status = ConnectionStatus.Connected,
-                        LastHealthCheckAt = DateTimeOffset.UtcNow,
-                        UpdatedAt = DateTimeOffset.UtcNow,
+                        LastHealthCheckAt = _timeProvider.GetUtcNow(),
+                        UpdatedAt = _timeProvider.GetUtcNow(),
                     };
                     _registry.AddOrUpdate(restored);
                     LogHealthRestored(_logger, connection.ConnectionKey);
                 }
                 else
                 {
-                    var updated = connection with { LastHealthCheckAt = DateTimeOffset.UtcNow };
+                    var updated = connection with { LastHealthCheckAt = _timeProvider.GetUtcNow() };
                     _registry.AddOrUpdate(updated);
                 }
 
@@ -108,7 +111,7 @@ public sealed partial class CpoHealthMonitor : BackgroundService
                     var offline = connection with
                     {
                         Status = ConnectionStatus.Offline,
-                        UpdatedAt = DateTimeOffset.UtcNow,
+                        UpdatedAt = _timeProvider.GetUtcNow(),
                     };
                     _registry.AddOrUpdate(offline);
                     LogCpoMarkedOffline(_logger, connection.ConnectionKey, failures);
