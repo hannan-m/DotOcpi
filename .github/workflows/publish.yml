@@ -11,6 +11,7 @@ permissions:
 jobs:
   validate:
     name: Build & Test
+    needs: format-check
     strategy:
       matrix:
         include:
@@ -69,7 +70,7 @@ jobs:
 
   pack:
     name: Pack
-    needs: [validate, format-check]
+    needs: validate
     runs-on: ubuntu-latest
 
     steps:
