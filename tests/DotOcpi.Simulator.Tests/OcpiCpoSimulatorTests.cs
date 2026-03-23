@@ -817,8 +817,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // Wait briefly then check no callbacks are pending
-        await Task.Delay(200);
+        // No response_url means no callback was enqueued — should complete immediately
         var pending = server.WaitForPendingCallbacksAsync();
         pending.IsCompleted.Should().BeTrue();
     }
