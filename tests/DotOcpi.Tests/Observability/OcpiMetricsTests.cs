@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 using DotOcpi.Observability;
+using DotOcpi.Tests.Fixtures;
 using FluentAssertions;
 using Microsoft.Extensions.Diagnostics.Metrics.Testing;
 using Xunit;
@@ -105,25 +106,5 @@ public sealed class OcpiMetricsTests : IDisposable
     public void MeterName_IsCorrect()
     {
         OcpiMetrics.MeterName.Should().Be("DotOcpi");
-    }
-
-    private sealed class TestMeterFactory : IMeterFactory
-    {
-        private readonly List<Meter> _meters = [];
-
-        public Meter Create(MeterOptions options)
-        {
-            var meter = new Meter(options);
-            _meters.Add(meter);
-            return meter;
-        }
-
-        public void Dispose()
-        {
-            foreach (var meter in _meters)
-            {
-                meter.Dispose();
-            }
-        }
     }
 }

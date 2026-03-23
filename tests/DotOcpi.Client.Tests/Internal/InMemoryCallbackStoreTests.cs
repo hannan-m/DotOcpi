@@ -1,4 +1,5 @@
 using DotOcpi.Client.Internal;
+using DotOcpi.Client.Tests.Fixtures;
 using FluentAssertions;
 using Xunit;
 
@@ -119,22 +120,5 @@ public class InMemoryCallbackStoreTests
         var result = await store.GetAndRemoveAsync("corr-1");
         result!.CpoId.Should().Be("NL:TNM");
         result.CommandType.Should().Be("STOP_SESSION");
-    }
-
-    /// <summary>
-    /// Fake TimeProvider for testing time-dependent logic without real delays.
-    /// </summary>
-    private sealed class FakeTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        internal FakeTimeProvider(DateTimeOffset startTime)
-        {
-            _utcNow = startTime;
-        }
-
-        public override DateTimeOffset GetUtcNow() => _utcNow;
-
-        internal void Advance(TimeSpan duration) => _utcNow += duration;
     }
 }
