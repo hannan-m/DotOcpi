@@ -102,4 +102,4 @@ dotnet add package DotOcpi.Client
 
 ## Next Steps
 
-[Quick Start](quick-start){: .btn .btn-primary }
+[Quick Start](/DotOcpi/getting-started/quick-start/){: .btn .btn-primary }

@@ -197,7 +197,7 @@ if (result.IsSuccess)
 
 ## What's Next?
 
-- [Configuration Reference](configuration) — customize versions, logging, security
-- [Registration Guide](../guides/registration) — understand the full registration flow
-- [Module Guides](../modules/) — deep dive into each OCPI module
-- [Testing Guide](../advanced/testing) — test against a fake CPO server
+- [Configuration Reference](/DotOcpi/getting-started/configuration/) — customize versions, logging, security
+- [Registration Guide](/DotOcpi/guides/registration/) — understand the full registration flow
+- [Module Guides](/DotOcpi/modules/) — deep dive into each OCPI module
+- [Testing Guide](/DotOcpi/advanced/testing/) — test against a fake CPO server

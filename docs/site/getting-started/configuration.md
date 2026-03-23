@@ -133,7 +133,7 @@ For production, implement `ITokenStore`:
 .AddTokenStore<AzureKeyVaultTokenStore>()
 ```
 
-See [Custom Token Store](../advanced/custom-token-store) for a full implementation guide.
+See [Custom Token Store](/DotOcpi/advanced/custom-token-store/) for a full implementation guide.
 
 ## CPO Registry
 
@@ -145,7 +145,7 @@ For production, implement `ICpoRegistryStore`:
 .AddCpoRegistryStore<SqlCpoRegistryStore>()
 ```
 
-See [Custom Registry Store](../advanced/custom-registry-store) for a full implementation guide.
+See [Custom Registry Store](/DotOcpi/advanced/custom-registry-store/) for a full implementation guide.
 
 ## Server Endpoint Mapping
 
@@ -243,7 +243,7 @@ Configure per-component log levels in `appsettings.json`:
 }
 ```
 
-See [Observability](../api-reference/observability) for the full list of log categories and event IDs.
+See [Observability](/DotOcpi/api-reference/observability/) for the full list of log categories and event IDs.
 
 ## Startup Validation
 

@@ -35,7 +35,7 @@ The Commands module lets your eMSP send charging commands to CPOs. Commands foll
 
 ## Sending Commands
 
-See [Sending Commands Guide](../guides/sending-commands) for detailed examples.
+See [Sending Commands Guide](/DotOcpi/guides/sending-commands/) for detailed examples.
 
 ```csharp
 // Start session

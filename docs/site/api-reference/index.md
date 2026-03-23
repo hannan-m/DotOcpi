@@ -10,10 +10,10 @@ has_children: true
 Detailed reference for all public types, interfaces, and configuration options.
 {: .fs-6 .fw-300 }
 
-- [Core Types](core-types) — Value types, result types, enums
-- [DI Registration](di-registration) — Service registration and builder API
-- [Module Handlers](module-handlers) — Server-side receiver interfaces
-- [Client Interfaces](client-interfaces) — Client-side operation interfaces
-- [Security](security) — Token generation, hashing, and authentication
-- [CPO Registry](registry) — Connection management and lookup
-- [Observability](observability) — Logging, metrics, and tracing
+- [Core Types](/DotOcpi/api-reference/core-types/) — Value types, result types, enums
+- [DI Registration](/DotOcpi/api-reference/di-registration/) — Service registration and builder API
+- [Module Handlers](/DotOcpi/api-reference/module-handlers/) — Server-side receiver interfaces
+- [Client Interfaces](/DotOcpi/api-reference/client-interfaces/) — Client-side operation interfaces
+- [Security](/DotOcpi/api-reference/security/) — Token generation, hashing, and authentication
+- [CPO Registry](/DotOcpi/api-reference/registry/) — Connection management and lookup
+- [Observability](/DotOcpi/api-reference/observability/) — Logging, metrics, and tracing

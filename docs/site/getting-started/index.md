@@ -22,6 +22,6 @@ DotOcpi is a .NET library that implements the [OCPI protocol](https://github.com
 
 ## Steps
 
-1. [Install the NuGet packages](installation)
-2. [Run through the quick start](quick-start)
-3. [Configure for your environment](configuration)
+1. [Install the NuGet packages](/DotOcpi/getting-started/installation/)
+2. [Run through the quick start](/DotOcpi/getting-started/quick-start/)
+3. [Configure for your environment](/DotOcpi/getting-started/configuration/)

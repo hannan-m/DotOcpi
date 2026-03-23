@@ -110,7 +110,7 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
 
 ### Production Implementation
 
-See [Custom Token Store](../advanced/custom-token-store) for implementing `ITokenStore` with Azure Key Vault, HashiCorp Vault, or a database.
+See [Custom Token Store](/DotOcpi/advanced/custom-token-store/) for implementing `ITokenStore` with Azure Key Vault, HashiCorp Vault, or a database.
 
 ## Token Rotation
 
