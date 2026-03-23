@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace DotOcpi.AspNetCore.Filters;
 
 /// <summary>
 /// Endpoint filter that rejects request bodies exceeding a configured
 /// size limit. Returns HTTP 413 with OCPI status 2000.
+/// Enforces limits both via Content-Length header and Kestrel's per-request
+/// body size feature to prevent bypass via chunked transfer encoding.
 /// </summary>
 public sealed class OcpiBodySizeLimitFilter : IEndpointFilter
 {
@@ -30,6 +33,13 @@ public sealed class OcpiBodySizeLimitFilter : IEndpointFilter
                 2000,
                 $"Request body exceeds maximum size of {_maxBodySize} bytes."
             );
+        }
+
+        // Enforce at the Kestrel level for chunked requests without Content-Length
+        var bodySizeFeature = context.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (bodySizeFeature is { IsReadOnly: false })
+        {
+            bodySizeFeature.MaxRequestBodySize = _maxBodySize;
         }
 
         return await next(context).ConfigureAwait(false);

@@ -1,6 +1,7 @@
 using DotOcpi.AspNetCore.Filters;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using NSubstitute;
 using Xunit;
 
@@ -109,5 +110,25 @@ public class OcpiBodySizeLimitFilterTests
         );
 
         nextCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task NoContentLength_SetsKestrelBodySizeLimit()
+    {
+        var filter = new OcpiBodySizeLimitFilter(2048);
+        var httpContext = new DefaultHttpContext();
+        var bodySizeFeature = new FakeMaxRequestBodySizeFeature();
+        httpContext.Features.Set<IHttpMaxRequestBodySizeFeature>(bodySizeFeature);
+        var filterContext = CreateFilterContext(httpContext);
+
+        await filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
+
+        bodySizeFeature.MaxRequestBodySize.Should().Be(2048);
+    }
+
+    private sealed class FakeMaxRequestBodySizeFeature : IHttpMaxRequestBodySizeFeature
+    {
+        public bool IsReadOnly => false;
+        public long? MaxRequestBodySize { get; set; }
     }
 }
