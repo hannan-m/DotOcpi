@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- IOcpiSyncHandler callback interface for receiving pulled OCPI data as page-level batches during sync
+- SyncContext and SyncResult types for sync operation metadata
+- OcpiPullSyncBackgroundService — periodic background service driving pull sync for all active CPOs
+- Hierarchical PullSyncOptions with per-module (ModuleSyncOptions) and per-CPO (CpoSyncOptions) overrides; resolution order: CPO+module → CPO default → module-level → global
+- PullSyncOptionsValidator — startup validation rejecting invalid intervals, jitter, and module names
+- PaginationHandler.StreamPagesAsync — page-level streaming for efficient sync handler delivery
+- AddPullSync() registers background service; AddSyncHandler<T>() registers consumer's IOcpiSyncHandler
+- Max-page guard (10,000) in PaginationHandler to prevent infinite pagination from malicious CPOs
+- OcpiRequestIdMiddleware — middleware for X-Request-ID / X-Correlation-ID header propagation
+- OcpiSecurityHeadersMiddleware — sets X-Content-Type-Options: nosniff, Cache-Control: no-store, X-Frame-Options: DENY
+- OcpiMetricsFilter — endpoint filter populating OcpiMetrics counters and duration histograms
+- OcpiRateLimitFilter — per-CPO rate limiting as endpoint filter (runs after auth, has access to CpoConnection)
+- SsrfGuard — DNS-level SSRF prevention blocking private/loopback/link-local IPs on outbound requests
+- InvalidatingRegistrationClient — auto-invalidates connection cache after registration operations
+- CpoConnectionContextProvider — caches resolved CPO connection + auth token per CPO
+- IOcpiClient.InvalidateConnection(cpoId) and InvalidateAllConnections() for manual cache invalidation
+- DotOcpi.Simulator package (renamed from DotOcpi.Testing) — full OCPI CPO simulator
+- OcpiCpoSimulator: session energy progression with configurable rate and interval
+- OcpiCpoSimulator: configurable session/CDR templates via Func<SessionContext, object>
+- OcpiCpoSimulator: CPO push webhooks for session updates to eMSP endpoints
+- OcpiCpoSimulator: POST /tokens/{uid}/authorize endpoint with configurable result
+- OcpiCpoSimulator: simulates full session lifecycle (START_SESSION creates session, STOP_SESSION completes + generates CDR)
+- CpoHealthMonitor: actual HTTP health checks against CPO versions endpoints with failure counting and Offline marking
+- Sample dashboard: interactive Razor Pages UI with HTMX, SSE real-time updates, Swagger UI
+- NuGet packaging metadata (author, license, repository URL) in Directory.Build.props
+
+### Changed
+- DotOcpi.Testing renamed to DotOcpi.Simulator; OcpiTestCpoServer → OcpiCpoSimulator, TestCpoConfiguration → CpoSimulatorConfiguration
+- IOcpiSyncService.SyncModuleFromCpoAsync returns Task<SyncResult> instead of Task
+- OcpiSyncService delivers page-level batches to IOcpiSyncHandler instead of discarding pulled items
+- PullSyncOptions.Modules renamed to EnabledModules; RandomJitter renamed to MaxJitter
+- OcpiRequestIdFilter replaced by OcpiRequestIdMiddleware (cross-cutting, runs before endpoint routing)
+- OcpiRateLimitingMiddleware replaced by OcpiRateLimitFilter (needs CpoConnection from auth pipeline)
+- Client module internals refactored to cache CPO connection context per CPO, eliminating redundant per-call lookups
+- OcpiHttpRequestBuilder is now stateless and no longer depends on ICpoRegistry
+
+### Removed
+- OcpiPatchHelper — consumers handle JSON PATCH merge in their own domain layer
+- NullableCiStringConverter, OcpiEnumConverterFactory, OcpiNullableDateTimeConverter — consolidated into simpler converters
+- OcpiRequestIdFilter — replaced by OcpiRequestIdMiddleware
+- OcpiRateLimitingMiddleware — replaced by OcpiRateLimitFilter
+
+### Security
+- SyncResult.ErrorMessage sanitized — generic message only, no raw exception details in public API
+- Module ID validation in SyncModuleFromCpoAsync prevents invalid modules from reaching internal type selectors
+- SSRF guard validates CPO-provided URLs post-DNS-resolution against private IP ranges
+
 ## [0.1.0] - 2026-03-14
 
 ### Added
@@ -21,7 +71,7 @@ All notable changes to this project will be documented in this file.
 - OcpiMetrics with request counter, duration histogram, connection gauge, and auth failure counter
 - Health checks: OcpiRegistryHealthCheck (aggregate), OcpiCpoHealthCheck (per-CPO), OcpiTokenStoreHealthCheck
 - DI registration via AddDotOcpi() builder pattern with options validation
-- DotOcpi.Testing: OcpiTestCpoServer with configurable module data and failure injection
+- DotOcpi.Simulator: OcpiCpoSimulator with configurable module data and failure injection
 - Integration tests covering registration flow, module data retrieval, and security
 - CI pipeline with net8.0 x net10.0 x ubuntu x windows matrix
 - BenchmarkDotNet benchmarks for serialization, token operations, and registry lookups
