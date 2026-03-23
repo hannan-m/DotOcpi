@@ -21,11 +21,13 @@ public static class TokenGenerator
     /// <param name="byteLength">Number of random bytes. Must be >= 64.</param>
     /// <returns>A base64url-encoded token string.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="byteLength"/> is less than 64.</exception>
+    private const int StackAllocThreshold = 256;
+
     public static string Generate(int byteLength = MinTokenBytes)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(byteLength, MinTokenBytes);
 
-        Span<byte> buffer = stackalloc byte[byteLength];
+        Span<byte> buffer = byteLength <= StackAllocThreshold ? stackalloc byte[byteLength] : new byte[byteLength];
         RandomNumberGenerator.Fill(buffer);
 #if NET9_0_OR_GREATER
         return Base64Url.EncodeToString(buffer);

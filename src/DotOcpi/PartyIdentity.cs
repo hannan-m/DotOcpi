@@ -6,8 +6,19 @@ namespace DotOcpi;
 /// </summary>
 /// <param name="CountryCode">ISO 3166-1 alpha-2 country code (e.g., "DE", "NL").</param>
 /// <param name="PartyId">CPO or eMSP identifier (max 3 characters).</param>
-public readonly record struct PartyIdentity(string CountryCode, string PartyId)
+public readonly record struct PartyIdentity
 {
+    public string CountryCode { get; }
+    public string PartyId { get; }
+
+    public PartyIdentity(string CountryCode, string PartyId)
+    {
+        ArgumentNullException.ThrowIfNull(CountryCode);
+        ArgumentNullException.ThrowIfNull(PartyId);
+        this.CountryCode = CountryCode;
+        this.PartyId = PartyId;
+    }
+
     /// <summary>
     /// Returns a composite identifier in the format "{CC}_{PID}" (uppercased).
     /// Deterministic and suitable for dictionary keys and registry lookups.

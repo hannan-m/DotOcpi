@@ -9,6 +9,7 @@ using Xunit;
 
 namespace DotOcpi.AspNetCore.Tests.Filters;
 
+[Trait("Category", "Security")]
 public class OcpiAuthFilterTests
 {
     private readonly OcpiTokenValidator _tokenValidator;

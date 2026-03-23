@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace DotOcpi.Simulator.State;
 
 /// <summary>
@@ -13,7 +15,7 @@ internal sealed class ConnectionState
     public string? IssuedTokenB { get; set; }
     public string? ReceivedTokenC { get; set; }
     public string? EmspVersionsUrl { get; set; }
-    public Dictionary<string, string> EmspModuleEndpoints { get; } = new();
+    public ConcurrentDictionary<string, string> EmspModuleEndpoints { get; } = new();
     public DateTimeOffset? RegisteredAt { get; set; }
 
     /// <summary>Atomically sets the negotiated version.</summary>
