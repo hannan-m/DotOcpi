@@ -69,6 +69,7 @@ public class OcpiExceptionMiddlewareTests
     }
 
     [Fact]
+    [Trait("Category", "Security")]
     public async Task UnhandledException_DoesNotLeakStackTrace()
     {
         var middleware = new OcpiExceptionMiddleware(
