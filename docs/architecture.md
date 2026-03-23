@@ -245,18 +245,29 @@ graph TD
 
 ### Request Pipeline
 
+The pipeline uses a combination of middleware (runs on every request) and endpoint filters (runs per-endpoint). The ordering is:
+
+1. **OcpiRequestIdMiddleware** (middleware) — Extract/generate `X-Request-ID` and `X-Correlation-ID`
+2. **OcpiSecurityHeadersMiddleware** (middleware) — Add `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `X-Frame-Options: DENY`
+3. **OcpiExceptionMiddleware** (middleware) — Catch unhandled exceptions, return OCPI 3000 error envelope
+4. **OcpiAuthFilter** (endpoint filter) — Extract `Authorization: Token` header, constant-time hash comparison
+5. **OcpiRateLimitFilter** (optional endpoint filter) — Rate limiting per CPO
+6. **OcpiMetricsFilter** (endpoint filter) — Record request metrics
+7. Per-module: **OcpiContextFilter** + **OcpiBodySizeLimitFilter** (endpoint filters)
+
 ```mermaid
 graph TD
     subgraph "ASP.NET Core Pipeline"
-        Req[Incoming HTTP Request] --> ReqId[Request ID Middleware<br/><i>Extract/generate X-Request-ID<br/>and X-Correlation-ID</i>]
-        ReqId --> Auth[OCPI Auth Middleware<br/><i>Extract Authorization: Token header<br/>Constant-time hash comparison</i>]
+        Req[Incoming HTTP Request] --> ReqId["1. OcpiRequestIdMiddleware<br/><i>Extract/generate X-Request-ID<br/>and X-Correlation-ID</i>"]
+        ReqId --> SecHeaders["2. OcpiSecurityHeadersMiddleware<br/><i>nosniff, no-store, DENY</i>"]
+        SecHeaders --> ExcMw["3. OcpiExceptionMiddleware<br/><i>Catch unhandled exceptions</i>"]
+        ExcMw --> Auth["4. OcpiAuthFilter (endpoint filter)<br/><i>Extract Authorization: Token header<br/>Constant-time hash comparison</i>"]
         Auth -->|Invalid| Reject["401 + OCPI 2002<br/>(Not enough information)"]
-        Auth -->|Valid| Resolve[CPO Resolution<br/><i>Look up CPO in registry<br/>by token hash</i>]
-        Resolve --> Version[Version Resolution<br/><i>Determine negotiated version<br/>for this CPO</i>]
-        Version --> Route[Endpoint Routing<br/><i>Route to correct<br/>module handler</i>]
-        Route --> Handler[Version-Specific Handler<br/><i>Deserialize, validate,<br/>invoke consumer callback</i>]
+        Auth -->|Valid| RateLimit["5. OcpiRateLimitFilter (optional)"]
+        RateLimit --> Metrics["6. OcpiMetricsFilter"]
+        Metrics --> Context["7. OcpiContextFilter + OcpiBodySizeLimitFilter"]
+        Context --> Handler[Version-Specific Handler<br/><i>Deserialize, validate,<br/>invoke consumer callback</i>]
         Handler --> Response[OCPI Response Envelope<br/><i>Wrap in standard format<br/>with status_code, timestamp</i>]
-        Response --> RespHeaders[Response Headers<br/><i>Echo X-Request-ID<br/>Set X-Correlation-ID</i>]
     end
 ```
 
@@ -514,7 +525,7 @@ sequenceDiagram
     eMSP->>Store: Store TOKEN_C hash (for eMSP→CPO calls)
     eMSP->>Store: Store TOKEN_B hash (for authenticating CPO→eMSP calls)
     eMSP->>Store: Delete TOKEN_A
-    eMSP->>Registry: Store CPO entry (version, endpoints, party info, status: CONNECTED)
+    eMSP->>Registry: Store CPO entry (version, endpoints, party info, status: Connected)
 ```
 
 ### Token Lifecycle State Machine
@@ -586,6 +597,18 @@ public interface IRegistrationClient
         CancellationToken cancellationToken = default);
 }
 
+// Request/result types:
+public record RegistrationRequest(
+    string VersionsUrl,
+    string TokenA,
+    string EmspCountryCode,
+    string EmspPartyId,
+    string EmspVersionsUrl,
+    string EmspBusinessName,
+    IReadOnlyList<OcpiVersion>? SupportedVersions = null);
+
+public record RegistrationResult(CpoConnection Connection, string CpoToken);
+
 // Consumer usage:
 var result = await ocpiClient.Registration.RegisterAsync(new RegistrationRequest(
     VersionsUrl: "https://cpo.example.com/ocpi/versions",
@@ -615,47 +638,32 @@ var credentials = await ocpiClient.Credentials.PostAsync(cpoCredentialsUrl, toke
 
 Each module defines a receiver or sender interface. Version-specific implementations handle the model differences. The consumer implements the version-agnostic callback interfaces.
 
+The `IModuleHandler` interface is internal to `DotOcpi.AspNetCore.Handlers`. Consumers do not implement it directly. Instead, the `ModuleHandlerFactory` resolves the correct version-specific handler at runtime based on the negotiated OCPI version for each CPO connection.
+
 ```mermaid
 classDiagram
     class IModuleHandler {
-        <<interface>>
-        +ModuleId: string
-        +SupportedVersions: OcpiVersion[]
+        <<internal interface in DotOcpi.AspNetCore.Handlers>>
     }
 
-    class ILocationsReceiverHandler {
-        <<interface>>
-        +HandlePutAsync(request) OcpiResult
-        +HandlePatchAsync(request) OcpiResult
-        +HandleGetAsync(request) OcpiResult~object~
-    }
-
-    class LocationsReceiverHandler_V2_1_1 {
-        -ILocationsReceiver _consumer
-        +HandlePutAsync(request) OcpiResult
-        +HandlePatchAsync(request) OcpiResult
-        +HandleGetAsync(request) OcpiResult~object~
-    }
-
-    class LocationsReceiverHandler_V2_2_1 {
-        -ILocationsReceiver _consumer
-        +HandlePutAsync(request) OcpiResult
-        +HandlePatchAsync(request) OcpiResult
-        +HandleGetAsync(request) OcpiResult~object~
+    class ModuleHandlerFactory {
+        <<internal>>
+        +Resolve(version, moduleId) IModuleHandler
     }
 
     class ILocationsReceiver {
         <<interface - consumer implements>>
         +OnLocationPutAsync(context, locationId, data, ct) Task
         +OnLocationPatchAsync(context, locationId, patch, ct) Task
-        +GetLocationAsync(context, locationId, ct) Task~object~
+        +OnEvsePutAsync(context, locationId, evseUid, data, ct) Task
+        +OnEvsePatchAsync(context, locationId, evseUid, patch, ct) Task
+        +OnConnectorPutAsync(context, locationId, evseUid, connectorId, data, ct) Task
+        +OnConnectorPatchAsync(context, locationId, evseUid, connectorId, patch, ct) Task
+        +GetLocationAsync(context, locationId, ct) Task~OcpiResult~object~~
     }
 
-    IModuleHandler <|-- ILocationsReceiverHandler
-    ILocationsReceiverHandler <|.. LocationsReceiverHandler_V2_1_1
-    ILocationsReceiverHandler <|.. LocationsReceiverHandler_V2_2_1
-    LocationsReceiverHandler_V2_1_1 --> ILocationsReceiver
-    LocationsReceiverHandler_V2_2_1 --> ILocationsReceiver
+    ModuleHandlerFactory --> IModuleHandler : resolves
+    IModuleHandler --> ILocationsReceiver : delegates to
 ```
 
 ### Version-Dispatched Consumer Models
@@ -826,27 +834,36 @@ graph TD
 classDiagram
     class ITokenStore {
         <<interface>>
-        +StoreTokenAsync(cpoId, tokenHash, purpose, ct) Task
-        +GetTokenAsync(cpoId, purpose, ct) Task~string?~
-        +RemoveTokenAsync(cpoId, purpose, ct) Task
+        +StoreAsync(tokenHash, purpose, partyId, ct) ValueTask
+        +FindAsync(tokenHash, ct) ValueTask~TokenEntry?~
+        +RemoveAsync(tokenHash, ct) ValueTask~bool~
+        +RotateTokenAsync(oldTokenHash, newTokenHash, purpose, partyId, ct) ValueTask
+    }
+
+    class TokenEntry {
+        <<record>>
+        +TokenHash: string
+        +Purpose: TokenPurpose
+        +PartyId: string
     }
 
     class TokenPurpose {
         <<enumeration>>
         TokenA
-        InboundTokenB
-        OutboundTokenC
+        TokenB
+        TokenC
     }
 
-    class TokenValidator {
+    class OcpiTokenValidator {
         +ValidateAsync(authHeader, ct) ValueTask~TokenValidationResult~
     }
 
     class InMemoryTokenStore {
         -ConcurrentDictionary _tokens
-        +StoreTokenAsync(...)
-        +GetTokenAsync(...)
-        +RemoveTokenAsync(...)
+        +StoreAsync(...)
+        +FindAsync(...)
+        +RemoveAsync(...)
+        +RotateTokenAsync(...)
     }
 
     class ITokenStore_Consumer {
@@ -859,16 +876,16 @@ classDiagram
     ITokenStore <|.. InMemoryTokenStore : built-in
     ITokenStore <|.. ITokenStore_Consumer : consumer provides
     ITokenStore --> TokenPurpose
+    ITokenStore --> TokenEntry
 
     class TokenValidationResult {
         +IsValid: bool
-        +CpoId: string?
-        +EmspIdentity: PartyIdentity?
-        +NegotiatedVersion: OcpiVersion?
+        +Entry: TokenEntry?
+        +Error: string?
     }
 
-    TokenValidator --> TokenValidationResult
-    TokenValidator --> ITokenStore : uses
+    OcpiTokenValidator --> TokenValidationResult
+    OcpiTokenValidator --> ITokenStore : uses
 ```
 
 ### Token Security Requirements
@@ -907,55 +924,49 @@ graph TD
 classDiagram
     class ICpoRegistry {
         <<interface>>
-        +GetAsync(cpoId, ct) Task~CpoConnection?~
-        +GetByCpoPartyAsync(countryCode, partyId, ct) Task~CpoConnection?~
-        +GetByTokenHashAsync(tokenHash, ct) Task~CpoConnection?~
-        +UpsertAsync(connection, ct) Task
-        +RemoveAsync(cpoId, ct) Task
-        +GetAllAsync(ct) Task~IReadOnlyList~CpoConnection~~
-        +UpdateStatusAsync(cpoId, status, ct) Task
-        +UpdateLastActivityAsync(cpoId, ct) Task
+        +FindByConnectionKey(connectionKey) CpoConnection?
+        +FindByTokenHash(tokenBHash) CpoConnection?
+        +FindByEmspIdentity(emspCountryCode, emspPartyId) IReadOnlyList~CpoConnection~
+        +GetAll() IReadOnlyList~CpoConnection~
+        +AddOrUpdate(connection) bool
+        +Remove(connectionKey) bool
     }
 
     class CpoConnection {
-        +Id: string
-        +CpoIdentity: PartyIdentity
-        +EmspIdentity: PartyIdentity
-        +NegotiatedVersion: OcpiVersion
-        +ModuleEndpoints: IReadOnlyDictionary~string, Uri~
-        +InboundTokenHash: string
-        +OutboundTokenHash: string
+        +ConnectionKey: string (computed: CpoCountryCode:CpoPartyId)
+        +CpoCountryCode: string
+        +CpoPartyId: string
+        +EmspCountryCode: string
+        +EmspPartyId: string
+        +Version: OcpiVersion
+        +ModuleEndpoints: IReadOnlyDictionary~string, string~
+        +TokenBHash: string
         +Status: ConnectionStatus
-        +BusinessDetails: BusinessDetails
-        +Version: long
-        +LastActivity: DateTimeOffset
-        +LastUpdated: DateTimeOffset
         +CreatedAt: DateTimeOffset
-    }
-
-    class PartyIdentity {
-        +CountryCode: string
-        +PartyId: string
+        +UpdatedAt: DateTimeOffset
+        +CpoVersionsUrl: string?
+        +EmspVersionsUrl: string?
+        +LastHealthCheckAt: DateTimeOffset?
+        +ConcurrencyVersion: long
     }
 
     class ConnectionStatus {
         <<enumeration>>
-        PENDING
-        CONNECTED
-        SUSPENDED
-        OFFLINE
+        Pending
+        Connected
+        Offline
+        Unregistered
+        Suspended
     }
 
     class ICpoRegistryStore {
         <<interface - consumer implements for persistence>>
         +LoadAllAsync(ct) Task~IReadOnlyList~CpoConnection~~
         +SaveAsync(connection, ct) Task
-        +RemoveAsync(cpoId, ct) Task
+        +RemoveAsync(connectionKey, ct) Task
     }
 
     ICpoRegistry --> CpoConnection
-    CpoConnection --> PartyIdentity : CpoIdentity
-    CpoConnection --> PartyIdentity : EmspIdentity
     CpoConnection --> ConnectionStatus
     ICpoRegistry ..> ICpoRegistryStore : backed by
 ```
@@ -967,14 +978,14 @@ graph TD
     subgraph "Inbound Request (CPO → eMSP)"
         IR[Request arrives] --> ExtractToken[Extract token from<br/>Authorization header]
         ExtractToken --> HashToken[Hash token]
-        HashToken --> LookupToken["Registry.GetByTokenHashAsync()"]
+        HashToken --> LookupToken["Registry.FindByTokenHash()"]
         LookupToken --> Found{Found?}
         Found -->|No| Reject[401 Unauthorized]
         Found -->|Yes| Context[Build OcpiRequestContext<br/>with CpoConnection]
     end
 
     subgraph "Outbound Request (eMSP → CPO)"
-        OR[Consumer calls client] --> LookupCpo["Registry.GetAsync(cpoId)"]
+        OR[Consumer calls client] --> LookupCpo["Registry.FindByConnectionKey(connectionKey)"]
         LookupCpo --> GetEndpoint[Get module endpoint URL<br/>for negotiated version]
         GetEndpoint --> GetToken[Get outbound token hash<br/>→ retrieve raw from ITokenStore]
         GetToken --> BuildReq[Build HTTP request]
@@ -1066,21 +1077,11 @@ Exceptions are for infrastructure failures, not OCPI protocol errors. See [strat
 
 ```mermaid
 classDiagram
-    class OcpiException {
-        +CpoId: string?
-        +Version: OcpiVersion?
-    }
-    class OcpiTransportException {
-        +StatusCode: HttpStatusCode?
-        +RequestId: string?
-    }
-    class OcpiRegistrationException {
-        +Reason: RegistrationFailureReason
-    }
+    class OcpiException
+    class OcpiTransportException
+    class OcpiRegistrationException
     class OcpiConfigurationException
-    class OcpiSerializationException {
-        +ModuleId: string?
-    }
+    class OcpiSerializationException
 
     Exception <|-- OcpiException
     OcpiException <|-- OcpiTransportException
@@ -1109,13 +1110,11 @@ graph TD
 
     subgraph "Shared Custom Converters"
         Conv1["OcpiDateTimeConverter<br/><i>RFC 3339 format</i>"]
-        Conv2["OcpiEnumConverter<br/><i>OCPI string values, e.g. UPPER_SNAKE_CASE</i>"]
         Conv3["CiStringConverter<br/><i>Case-insensitive string type</i>"]
-        Conv4["PriceConverter<br/><i>2.2+ Price object vs 2.0/2.1.1 number</i>"]
+        Conv5["GeoLocationConverter<br/><i>GeoLocation serialization</i>"]
     end
 
-    Ctx20 & Ctx211 & Ctx22 & Ctx221 --> Conv1 & Conv2 & Conv3
-    Ctx22 & Ctx221 --> Conv4
+    Ctx20 & Ctx211 & Ctx22 & Ctx221 --> Conv1 & Conv3 & Conv5
 ```
 
 ### OCPI Response Envelope
@@ -1249,20 +1248,27 @@ DotOcpi/
 ├── src/
 │   ├── DotOcpi/
 │   │   ├── DotOcpi.csproj
+│   │   ├── DotOcpiBuilder.cs
+│   │   ├── DotOcpiOptions.cs
+│   │   ├── DotOcpiServiceCollectionExtensions.cs
 │   │   ├── OcpiVersion.cs
+│   │   ├── OcpiVersionExtensions.cs
 │   │   ├── OcpiResult.cs
+│   │   ├── OcpiResponse.cs
 │   │   ├── OcpiStatusCode.cs
 │   │   ├── OcpiRequestContext.cs
+│   │   ├── OcpiDateTime.cs
+│   │   ├── OcpiSentinel.cs
+│   │   ├── CiString.cs
+│   │   ├── GeoLocation.cs
+│   │   ├── PartyIdentity.cs
+│   │   ├── PaginatedResult.cs
 │   │   ├── Exceptions/
 │   │   │   ├── OcpiException.cs
 │   │   │   ├── OcpiTransportException.cs
 │   │   │   ├── OcpiRegistrationException.cs
 │   │   │   ├── OcpiConfigurationException.cs
 │   │   │   └── OcpiSerializationException.cs
-│   │   ├── OcpiSentinel.cs
-│   │   ├── CiString.cs
-│   │   ├── GeoLocation.cs
-│   │   ├── PaginatedResult.cs
 │   │   ├── Logging/
 │   │   │   ├── LogCategories.cs
 │   │   │   ├── OcpiLogEvents.cs
@@ -1277,26 +1283,33 @@ DotOcpi/
 │   │   ├── Registration/
 │   │   │   ├── IRegistrationClient.cs
 │   │   │   ├── ICredentialsClient.cs
-│   │   │   ├── ICredentialsHandler.cs
+│   │   │   ├── CredentialsClient.cs
+│   │   │   ├── CredentialsResponse.cs
 │   │   │   ├── IVersionDiscovery.cs
+│   │   │   ├── VersionDiscovery.cs
+│   │   │   ├── VersionInfo.cs
+│   │   │   ├── VersionNegotiator.cs
 │   │   │   └── RegistrationOrchestrator.cs
-│   │   ├── TokenManagement/
+│   │   ├── Security/
 │   │   │   ├── ITokenStore.cs
 │   │   │   ├── InMemoryTokenStore.cs
 │   │   │   ├── TokenGenerator.cs
 │   │   │   ├── TokenHasher.cs
-│   │   │   ├── TokenValidator.cs
-│   │   │   └── AuthorizationHeaderParser.cs
+│   │   │   ├── OcpiTokenValidator.cs
+│   │   │   ├── AuthorizationHeaderParser.cs
+│   │   │   ├── TokenPurpose.cs
+│   │   │   └── TokenValidationResult.cs
 │   │   ├── Registry/
 │   │   │   ├── ICpoRegistry.cs
 │   │   │   ├── ICpoRegistryStore.cs
 │   │   │   ├── ICacheInvalidationNotifier.cs
 │   │   │   ├── IDistributedLockProvider.cs
+│   │   │   ├── ConnectionStatus.cs
 │   │   │   ├── CpoConnection.cs
 │   │   │   ├── CpoHealthMonitor.cs
-│   │   │   ├── InMemoryCpoRegistry.cs
-│   │   │   └── PartyIdentity.cs
+│   │   │   └── InMemoryCpoRegistry.cs
 │   │   ├── Modules/
+│   │   │   ├── ICredentialsHandler.cs
 │   │   │   ├── ILocationsReceiver.cs
 │   │   │   ├── ISessionsReceiver.cs
 │   │   │   ├── ICdrsReceiver.cs
@@ -1340,100 +1353,172 @@ DotOcpi/
 │   │   │       └── AuthorizationInfo.cs
 │   │   ├── Serialization/
 │   │   │   ├── OcpiDateTimeConverter.cs
-│   │   │   ├── OcpiStatusEnumConverter.cs
-│   │   │   ├── CiStringJsonConverter.cs
+│   │   │   ├── CiStringConverter.cs
 │   │   │   ├── GeoLocationConverter.cs
-│   │   │   ├── PriceConverter.cs
 │   │   │   ├── OcpiJsonContext_V2_0.cs
 │   │   │   ├── OcpiJsonContext_V2_1_1.cs
 │   │   │   ├── OcpiJsonContext_V2_2.cs
 │   │   │   ├── OcpiJsonContext_V2_2_1.cs
+│   │   │   ├── OcpiRegistrationJsonContext.cs
 │   │   │   └── OcpiJsonOptions.cs
-│   │   └── Extensions/
-│   │       └── ServiceCollectionExtensions.cs
+│   │   └── Validation/
+│   │       ├── IOcpiValidator.cs
+│   │       ├── OcpiValidationResult.cs
+│   │       ├── OcpiValidationError.cs
+│   │       ├── ValidationHelpers.cs
+│   │       ├── LocationValidator.cs
+│   │       ├── SessionValidator.cs
+│   │       ├── CdrValidator.cs
+│   │       ├── TariffValidator.cs
+│   │       ├── TokenValidator.cs
+│   │       ├── CommandValidator.cs
+│   │       ├── ChargingProfileValidator.cs
+│   │       ├── CredentialsValidator.cs
+│   │       └── PatchValidator.cs
 │   │
 │   ├── DotOcpi.Client/
 │   │   ├── DotOcpi.Client.csproj
 │   │   ├── IOcpiClient.cs
 │   │   ├── OcpiClient.cs
+│   │   ├── ILocationsClient.cs
+│   │   ├── LocationsClient.cs
+│   │   ├── ISessionsClient.cs
+│   │   ├── SessionsClient.cs
+│   │   ├── ICdrsClient.cs
+│   │   ├── CdrsClient.cs
+│   │   ├── ITariffsClient.cs
+│   │   ├── TariffsClient.cs
+│   │   ├── ITokensClient.cs
+│   │   ├── TokensClient.cs
+│   │   ├── ICommandsClient.cs
+│   │   ├── CommandsClient.cs
+│   │   ├── IChargingProfilesClient.cs
+│   │   ├── ChargingProfilesClient.cs
+│   │   ├── IOutboundTokenProvider.cs
+│   │   ├── DotOcpiClientExtensions.cs
 │   │   ├── Internal/
 │   │   │   ├── OcpiHttpRequestBuilder.cs
 │   │   │   ├── OcpiResponseParser.cs
 │   │   │   ├── PaginationHandler.cs
 │   │   │   ├── PullClientHelper.cs
+│   │   │   ├── CpoConnectionContext.cs
 │   │   │   ├── CpoConnectionContextProvider.cs
+│   │   │   ├── ICpoConnectionContextProvider.cs
 │   │   │   ├── SsrfGuard.cs
 │   │   │   ├── InvalidatingRegistrationClient.cs
-│   │   │   └── OcpiModelTypeMap.cs
-│   │   ├── Sync/
-│   │   │   ├── IOcpiSyncService.cs
-│   │   │   ├── OcpiSyncService.cs
-│   │   │   ├── IOcpiSyncHandler.cs
-│   │   │   ├── OcpiPullSyncBackgroundService.cs
-│   │   │   ├── PullSyncOptions.cs
-│   │   │   ├── PullSyncOptionsResolver.cs
-│   │   │   ├── PullSyncOptionsValidator.cs
-│   │   │   ├── CpoSyncOptions.cs
-│   │   │   ├── ModuleSyncOptions.cs
-│   │   │   ├── SyncContext.cs
-│   │   │   ├── SyncResult.cs
-│   │   │   ├── ISyncStateStore.cs
-│   │   │   └── InMemorySyncStateStore.cs
-│   │   ├── Modules/
-│   │   │   ├── LocationsClient.cs
-│   │   │   ├── SessionsClient.cs
-│   │   │   ├── CdrsClient.cs
-│   │   │   ├── TariffsClient.cs
-│   │   │   ├── TokensClient.cs
-│   │   │   ├── CommandsClient.cs
-│   │   │   └── ChargingProfilesClient.cs
-│   │   └── Extensions/
-│   │       └── DotOcpiClientExtensions.cs
+│   │   │   ├── OcpiModelTypeMap.cs
+│   │   │   ├── OcpiHttpClientConfiguration.cs
+│   │   │   ├── QueryStringBuilder.cs
+│   │   │   ├── ICallbackStore.cs
+│   │   │   └── InMemoryCallbackStore.cs
+│   │   └── Sync/
+│   │       ├── IOcpiSyncService.cs
+│   │       ├── OcpiSyncService.cs
+│   │       ├── IOcpiSyncHandler.cs
+│   │       ├── OcpiPullSyncBackgroundService.cs
+│   │       ├── PullSyncOptions.cs
+│   │       ├── PullSyncOptionsResolver.cs
+│   │       ├── PullSyncOptionsValidator.cs
+│   │       ├── CpoSyncOptions.cs
+│   │       ├── ModuleSyncOptions.cs
+│   │       ├── SyncContext.cs
+│   │       ├── SyncResult.cs
+│   │       ├── ISyncStateStore.cs
+│   │       └── InMemorySyncStateStore.cs
 │   │
 │   ├── DotOcpi.AspNetCore/
 │   │   ├── DotOcpi.AspNetCore.csproj
+│   │   ├── DotOcpiAspNetCoreExtensions.cs
+│   │   ├── DotOcpiStartupValidator.cs
+│   │   ├── OcpiResponseWriter.cs
+│   │   ├── OcpiHttpContextExtensions.cs
 │   │   ├── Filters/
 │   │   │   ├── OcpiAuthFilter.cs
 │   │   │   ├── OcpiValidationFilter.cs
+│   │   │   ├── OcpiContextFilter.cs
+│   │   │   ├── OcpiBodySizeLimitFilter.cs
 │   │   │   ├── OcpiMetricsFilter.cs
 │   │   │   └── OcpiRateLimitFilter.cs
 │   │   ├── Middleware/
 │   │   │   ├── OcpiExceptionMiddleware.cs
 │   │   │   ├── OcpiRequestIdMiddleware.cs
 │   │   │   └── OcpiSecurityHeadersMiddleware.cs
-│   │   ├── Endpoints/
-│   │   │   ├── VersionsEndpoints.cs
-│   │   │   ├── CredentialsEndpoints.cs
-│   │   │   ├── LocationsEndpoints.cs
-│   │   │   ├── SessionsEndpoints.cs
-│   │   │   ├── CdrsEndpoints.cs
-│   │   │   ├── TariffsEndpoints.cs
-│   │   │   ├── TokensEndpoints.cs
-│   │   │   ├── CommandsEndpoints.cs
-│   │   │   └── ChargingProfilesEndpoints.cs
-│   │   ├── Routing/
-│   │   │   ├── OcpiEndpointRouteBuilder.cs
-│   │   │   └── OcpiVersionRouter.cs
-│   │   └── Extensions/
-│   │       ├── ServiceCollectionExtensions.cs
-│   │       └── EndpointRouteBuilderExtensions.cs
+│   │   ├── Handlers/
+│   │   │   ├── IModuleHandler.cs
+│   │   │   ├── ModuleHandler.cs
+│   │   │   ├── ModuleHandlerFactory.cs
+│   │   │   ├── EndpointHelper.cs
+│   │   │   ├── Locations/
+│   │   │   │   └── LocationsEndpoints.cs
+│   │   │   ├── Sessions/
+│   │   │   │   └── SessionsEndpoints.cs
+│   │   │   ├── Cdrs/
+│   │   │   │   └── CdrsEndpoints.cs
+│   │   │   ├── Tariffs/
+│   │   │   │   └── TariffsEndpoints.cs
+│   │   │   ├── Tokens/
+│   │   │   │   └── TokensEndpoints.cs
+│   │   │   ├── Commands/
+│   │   │   │   └── CommandsEndpoints.cs
+│   │   │   ├── Credentials/
+│   │   │   │   └── CredentialsEndpoints.cs
+│   │   │   └── ChargingProfiles/
+│   │   │       └── ChargingProfilesEndpoints.cs
+│   │   ├── HealthChecks/
+│   │   │   ├── OcpiCpoHealthCheck.cs
+│   │   │   ├── OcpiHealthCheckExtensions.cs
+│   │   │   ├── OcpiRegistryHealthCheck.cs
+│   │   │   └── OcpiTokenStoreHealthCheck.cs
+│   │   └── Routing/
+│   │       └── OcpiEndpointRouteBuilderExtensions.cs
 │   │
 │   └── DotOcpi.Simulator/
 │       ├── DotOcpi.Simulator.csproj
 │       ├── OcpiCpoSimulator.cs
 │       ├── CpoSimulatorConfiguration.cs
-│       └── Handlers/
-│           ├── TestVersionsHandler.cs
-│           ├── TestCredentialsHandler.cs
-│           ├── TestLocationsHandler.cs
-│           └── ...
+│       ├── SimulatorExtensions.cs
+│       ├── Endpoints/
+│       │   ├── AuthHelper.cs
+│       │   ├── VersionsHandler.cs
+│       │   ├── CredentialsHandler.cs
+│       │   ├── LocationsHandler.cs
+│       │   ├── SessionsHandler.cs
+│       │   ├── CdrsHandler.cs
+│       │   ├── TariffsHandler.cs
+│       │   ├── TokensHandler.cs
+│       │   ├── CommandsHandler.cs
+│       │   ├── ChargingProfilesHandler.cs
+│       │   ├── FailureInjectionHelper.cs
+│       │   └── RequestRecordingMiddleware.cs
+│       ├── Charging/
+│       │   ├── ChargingProfileSpec.cs
+│       │   ├── ChargingSimulation.cs
+│       │   └── EvseStateMachine.cs
+│       ├── Infrastructure/
+│       │   ├── EndpointFailureConfig.cs
+│       │   ├── OcpiResponseWriter.cs
+│       │   ├── RecordedRequest.cs
+│       │   └── SsrfGuard.cs
+│       ├── Models/
+│       │   ├── ConnectorProfile.cs
+│       │   ├── LocationSpec.cs
+│       │   ├── TariffSpec.cs
+│       │   └── VersionModelBuilder.cs
+│       ├── Push/
+│       │   └── PushEngine.cs
+│       └── State/
+│           ├── ConnectionState.cs
+│           ├── EvseState.cs
+│           ├── ReservationState.cs
+│           ├── SessionState.cs
+│           └── SimulatorState.cs
 │
 ├── tests/
 │   ├── DotOcpi.Tests/                    # Unit tests for core library
 │   ├── DotOcpi.Client.Tests/             # Unit tests for client
 │   ├── DotOcpi.AspNetCore.Tests/         # Unit + integration for server
 │   ├── DotOcpi.Integration.Tests/        # Full pipeline integration tests
-│   └── DotOcpi.Simulator.Tests/            # Tests for the testing package
+│   └── DotOcpi.Simulator.Tests/          # Tests for the testing package
 │
 ├── samples/
 │   └── DotOcpi.Sample/
