@@ -508,37 +508,40 @@ internal static class CommandsHandler
                         // Build cdr_location from actual config data
                         var cdrLocData = BuildLegacyCdrLocation(config.Locations, locationId, evseUid);
 
-                        config.Cdrs.Add(
-                            new
-                            {
-                                country_code = config.CpoIdentity.CountryCode,
-                                party_id = config.CpoIdentity.PartyId,
-                                id = $"CDR-{sessionId}",
-                                start_date_time = startTime,
-                                end_date_time = OcpiDateTime.Format(now),
-                                session_id = sessionId,
-                                auth_method = "COMMAND",
-                                cdr_location = cdrLocData,
-                                currency = config.CpoCurrency,
-                                charging_periods = new[]
+                        lock (config.Cdrs)
+                        {
+                            config.Cdrs.Add(
+                                new
                                 {
-                                    new
+                                    country_code = config.CpoIdentity.CountryCode,
+                                    party_id = config.CpoIdentity.PartyId,
+                                    id = $"CDR-{sessionId}",
+                                    start_date_time = startTime,
+                                    end_date_time = OcpiDateTime.Format(now),
+                                    session_id = sessionId,
+                                    auth_method = "COMMAND",
+                                    cdr_location = cdrLocData,
+                                    currency = config.CpoCurrency,
+                                    charging_periods = new[]
                                     {
-                                        start_date_time = startTime,
-                                        dimensions = new object[]
+                                        new
                                         {
-                                            new { type = "ENERGY", volume = kwh },
-                                            new { type = "TIME", volume = Math.Round(durationHours, 4) },
+                                            start_date_time = startTime,
+                                            dimensions = new object[]
+                                            {
+                                                new { type = "ENERGY", volume = kwh },
+                                                new { type = "TIME", volume = Math.Round(durationHours, 4) },
+                                            },
                                         },
                                     },
-                                },
-                                total_cost = new { excl_vat = costExcl, incl_vat = costIncl },
-                                total_energy = kwh,
-                                total_time = Math.Round(durationHours, 4),
-                                total_energy_cost = new { excl_vat = costExcl },
-                                last_updated = OcpiDateTime.Format(now),
-                            }
-                        );
+                                    total_cost = new { excl_vat = costExcl, incl_vat = costIncl },
+                                    total_energy = kwh,
+                                    total_time = Math.Round(durationHours, 4),
+                                    total_energy_cost = new { excl_vat = costExcl },
+                                    last_updated = OcpiDateTime.Format(now),
+                                }
+                            );
+                        }
                     }
                     else
                     {
@@ -591,44 +594,47 @@ internal static class CommandsHandler
                             last_updated = OcpiDateTime.Format(now),
                         };
 
-                        config.Cdrs.Add(
-                            new
-                            {
-                                id = $"CDR-{sessionId}",
-                                start_date_time = startTime,
-                                end_date_time = OcpiDateTime.Format(now),
-                                auth_id = $"{config.EmspIdentity.CountryCode}-{config.EmspIdentity.PartyId}-000001",
-                                auth_method = "AUTH_REQUEST",
-                                location = cdrLocation
-                                    ?? (object)
+                        lock (config.Cdrs)
+                        {
+                            config.Cdrs.Add(
+                                new
+                                {
+                                    id = $"CDR-{sessionId}",
+                                    start_date_time = startTime,
+                                    end_date_time = OcpiDateTime.Format(now),
+                                    auth_id = $"{config.EmspIdentity.CountryCode}-{config.EmspIdentity.PartyId}-000001",
+                                    auth_method = "AUTH_REQUEST",
+                                    location = cdrLocation
+                                        ?? (object)
+                                            new
+                                            {
+                                                id = locationId ?? "LOC1",
+                                                address = "Unknown",
+                                                city = "Unknown",
+                                                postal_code = "00000",
+                                                country = "UNK",
+                                                coordinates = new { latitude = "0.0", longitude = "0.0" },
+                                            },
+                                    currency = config.CpoCurrency,
+                                    charging_periods = new[]
+                                    {
                                         new
                                         {
-                                            id = locationId ?? "LOC1",
-                                            address = "Unknown",
-                                            city = "Unknown",
-                                            postal_code = "00000",
-                                            country = "UNK",
-                                            coordinates = new { latitude = "0.0", longitude = "0.0" },
-                                        },
-                                currency = config.CpoCurrency,
-                                charging_periods = new[]
-                                {
-                                    new
-                                    {
-                                        start_date_time = startTime,
-                                        dimensions = new object[]
-                                        {
-                                            new { type = "ENERGY", volume = kwh },
-                                            new { type = "TIME", volume = Math.Round(actualDurationHours, 4) },
+                                            start_date_time = startTime,
+                                            dimensions = new object[]
+                                            {
+                                                new { type = "ENERGY", volume = kwh },
+                                                new { type = "TIME", volume = Math.Round(actualDurationHours, 4) },
+                                            },
                                         },
                                     },
-                                },
-                                total_cost = costExcl,
-                                total_energy = kwh,
-                                total_time = Math.Round(actualDurationHours, 4),
-                                last_updated = OcpiDateTime.Format(now),
-                            }
-                        );
+                                    total_cost = costExcl,
+                                    total_energy = kwh,
+                                    total_time = Math.Round(actualDurationHours, 4),
+                                    last_updated = OcpiDateTime.Format(now),
+                                }
+                            );
+                        }
                     }
 
                     return;
