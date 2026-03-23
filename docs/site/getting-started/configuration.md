@@ -52,7 +52,7 @@ builder.Services.AddDotOcpi(options =>
 | `SupportedVersions` | `IReadOnlyList<OcpiVersion>` | — | OCPI versions your eMSP supports |
 | `DefaultEmspIdentity` | `PartyIdentity?` | — | Default country_code/party_id |
 | `BaseUrl` | `Uri?` | — | Public base URL for OCPI endpoints |
-| `EnableHealthMonitoring` | `bool` | `false` | Enable background CPO health probing |
+| `EnableHealthMonitoring` | `bool` | `true` | Enable background CPO health probing |
 | `HealthMonitoringInterval` | `TimeSpan` | 5 min | How often to probe stale connections |
 | `StaleConnectionThreshold` | `TimeSpan` | 24 hours | Mark connections stale after this idle time |
 
@@ -153,7 +153,7 @@ After building the app, map OCPI endpoints:
 
 ```csharp
 var app = builder.Build();
-app.MapOcpiEndpoints();
+app.MapAllOcpiEndpoints();
 app.Run();
 ```
 

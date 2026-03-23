@@ -59,7 +59,7 @@ builder.Services.AddSingleton<ITariffsReceiver, MyTariffsReceiver>();
 var app = builder.Build();
 
 // Map OCPI endpoints
-app.MapOcpiEndpoints();
+app.MapAllOcpiEndpoints();
 
 app.Run();
 ```

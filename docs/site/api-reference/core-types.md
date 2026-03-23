@@ -161,7 +161,7 @@ Console.WriteLine(error.IsClientError); // true
 Discriminated result types for OCPI operations. No exceptions for expected OCPI errors.
 
 ```csharp
-public sealed record OcpiResult
+public sealed class OcpiResult
 {
     public bool IsSuccess { get; }
     public OcpiStatusCode StatusCode { get; }
@@ -171,7 +171,7 @@ public sealed record OcpiResult
     public static OcpiResult Failure(OcpiStatusCode code, string message);
 }
 
-public sealed record OcpiResult<T>
+public sealed class OcpiResult<T>
 {
     public bool IsSuccess { get; }
     public T? Data { get; }
@@ -213,7 +213,7 @@ else
 Wire envelope for OCPI HTTP responses.
 
 ```csharp
-public sealed record OcpiResponse<T>
+public sealed class OcpiResponse<T>
 {
     public T? Data { get; }
     public int StatusCode { get; }
@@ -240,22 +240,25 @@ Every OCPI HTTP response is wrapped in this envelope:
 Result for paginated list endpoints.
 
 ```csharp
-public sealed record PaginatedResult<T>(
-    IReadOnlyList<T> Items,
-    int TotalCount,
-    int Offset,
-    int Limit
-);
+public sealed class PaginatedResult<T>
+{
+    public required IReadOnlyList<T> Items { get; init; }
+    public required int TotalCount { get; init; }
+    public required int Offset { get; init; }
+    public required int Limit { get; init; }
+}
 ```
 
 ### Usage
 
 ```csharp
-return new PaginatedResult<object>(
-    Items: tokens.ToList(),
-    TotalCount: 150,
-    Offset: 0,
-    Limit: 50);
+return new PaginatedResult<object>
+{
+    Items = tokens.ToList(),
+    TotalCount = 150,
+    Offset = 0,
+    Limit = 50,
+};
 // DotOcpi sets X-Total-Count: 150, X-Limit: 50, Link: <next-page-url>
 ```
 
@@ -266,7 +269,7 @@ return new PaginatedResult<object>(
 Context passed to every module handler with request details.
 
 ```csharp
-public sealed record OcpiRequestContext
+public sealed class OcpiRequestContext
 {
     public CpoConnection Connection { get; }
     public string RequestId { get; }            // X-Request-ID

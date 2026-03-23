@@ -120,7 +120,7 @@ builder.Services.AddSingleton<ITokensAuthorizer, MyTokensAuthorizer>();
 builder.Services.AddSingleton<ICommandsCallback, MyCommandsCallback>();
 
 var app = builder.Build();
-app.MapOcpiEndpoints();
+app.MapAllOcpiEndpoints();
 app.Run();
 ```
 
@@ -129,13 +129,18 @@ app.Run();
 After building the application, map OCPI endpoints:
 
 ```csharp
-app.MapOcpiEndpoints();
+// Maps all module endpoints in one call
+app.MapAllOcpiEndpoints();
+
+// Or use MapOcpiEndpoints() for selective module registration:
+var group = app.MapOcpiEndpoints();   // Middleware + auth only (no modules)
+group.MapLocationsEndpoints();         // Add only the modules you need
+group.MapSessionsEndpoints();
 ```
 
-This registers:
-- `/ocpi/versions` — Version discovery
-- `/ocpi/versions/{id}` — Version detail
-- `/ocpi/credentials` — Credentials endpoint (POST/PUT/DELETE/GET)
+`MapAllOcpiEndpoints()` registers:
+- Middleware pipeline (request IDs, security headers, exception handling)
+- Auth + rate limiting + metrics filters
 - Module endpoints for all registered handlers (locations, sessions, CDRs, tariffs, tokens, commands, charging profiles)
 
 Both URL patterns are registered:
@@ -148,9 +153,9 @@ After calling `AddDotOcpi()`, these services are available via DI:
 
 | Service | Lifetime | Description |
 |:--------|:---------|:------------|
-| `IRegistrationClient` | Scoped | Full registration orchestrator |
+| `IRegistrationClient` | Singleton | Full registration orchestrator |
 | `IVersionDiscovery` | Singleton | Version discovery |
-| `ICredentialsClient` | Scoped | Low-level credentials operations |
+| `ICredentialsClient` | Singleton | Low-level credentials operations |
 | `ICpoRegistry` | Singleton | CPO connection registry |
 | `ITokenStore` | Singleton | Token hash storage |
 | `IOutboundTokenProvider` | *Consumer-provided* | Retrieves raw Token B for outbound CPO requests. Consumers must register their own implementation. |
