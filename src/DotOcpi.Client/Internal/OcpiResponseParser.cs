@@ -19,7 +19,7 @@ internal static partial class OcpiResponseParser
         CancellationToken cancellationToken
     )
     {
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
@@ -180,11 +180,11 @@ internal static partial class OcpiResponseParser
     {
         try
         {
+            await using var errorStream = await response
+                .Content.ReadAsStreamAsync(cancellationToken)
+                .ConfigureAwait(false);
             using var doc = await JsonDocument
-                .ParseAsync(
-                    await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
-                    cancellationToken: cancellationToken
-                )
+                .ParseAsync(errorStream, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
             var root = doc.RootElement;
