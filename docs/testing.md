@@ -35,7 +35,7 @@ How the library itself is tested, and how consumers test their integrations.
 | **xUnit** | Test framework |
 | **FluentAssertions** | Assertion library |
 | **NSubstitute** | Mocking (interfaces only) |
-| **WebApplicationFactory** | In-memory ASP.NET Core server for integration tests |
+| **OcpiCpoSimulator** | In-memory CPO server for integration tests |
 | **BenchmarkDotNet** | Performance benchmarks (separate project, not in CI) |
 
 ### Test Naming Convention
@@ -82,51 +82,105 @@ public async Task HandlePut_ValidLocation_InvokesConsumerAndReturns1000()
 tests/
 ├── DotOcpi.Tests/                    # Unit tests for core library
 │   ├── DotOcpi.Tests.csproj
-│   ├── Models/
-│   │   ├── V2_0/                     # Per-version model tests
-│   │   ├── V2_1_1/
-│   │   ├── V2_2/
-│   │   └── V2_2_1/
-│   ├── Serialization/
-│   │   ├── SerializationTests.cs     # Per-version JSON round-trip
-│   │   ├── EnumSerializationTests.cs
-│   │   └── CiStringTests.cs
-│   ├── TokenManagement/
-│   │   ├── TokenGeneratorTests.cs
-│   │   ├── TokenValidatorTests.cs
-│   │   ├── TokenHasherTests.cs
-│   │   └── InMemoryTokenStoreTests.cs
-│   ├── CpoRegistry/
-│   │   ├── InMemoryCpoRegistryTests.cs
-│   │   ├── PartyIdentityTests.cs
-│   │   └── CpoConnectionTests.cs
-│   ├── Registration/
-│   │   └── RegistrationOrchestratorTests.cs
-│   ├── Validation/
-│   │   ├── LocationValidatorTests.cs
-│   │   ├── SessionValidatorTests.cs
-│   │   └── ...
+│   ├── CiStringTests.cs
+│   ├── GeoLocationTests.cs
 │   ├── OcpiResultTests.cs
-│   ├── OcpiStatusCodeTests.cs
 │   ├── OcpiSentinelTests.cs
+│   ├── OcpiStatusCodeTests.cs
+│   ├── OcpiVersionTests.cs
+│   ├── PartyIdentityTests.cs
+│   ├── Configuration/
+│   │   ├── DotOcpiBuilderTests.cs
+│   │   └── DotOcpiOptionsTests.cs
+│   ├── Models/
+│   │   └── V2_2_1/
+│   │       └── LocationTests.cs
+│   ├── Observability/
+│   │   └── OcpiMetricsTests.cs
+│   ├── Registration/
+│   │   ├── CredentialRotationTests.cs
+│   │   ├── CredentialsClientTests.cs
+│   │   ├── RegistrationOrchestratorTests.cs
+│   │   ├── TestCredentials.cs
+│   │   ├── VersionDiscoveryTests.cs
+│   │   └── VersionNegotiatorTests.cs
+│   ├── Registry/
+│   │   ├── CpoConnectionTests.cs
+│   │   ├── CpoHealthMonitorTests.cs
+│   │   └── InMemoryCpoRegistryTests.cs
+│   ├── Security/
+│   │   ├── AuthorizationHeaderParserTests.cs
+│   │   ├── InMemoryTokenStoreTests.cs
+│   │   ├── OcpiTokenValidatorTests.cs
+│   │   ├── TokenGeneratorTests.cs
+│   │   └── TokenHasherTests.cs
+│   ├── Serialization/
+│   │   ├── ConverterTests.cs
+│   │   ├── EnumSerializationTests.cs
+│   │   ├── FixtureDeserializationTests.cs
+│   │   ├── NullHandlingTests.cs
+│   │   ├── OcpiJsonOptionsTests.cs
+│   │   ├── SerializationRoundTripTests.cs
+│   │   └── SnakeCaseTests.cs
+│   ├── Validation/
+│   │   ├── CdrValidatorTests.cs
+│   │   ├── ChargingProfileValidatorTests.cs
+│   │   ├── CommandValidatorTests.cs
+│   │   ├── CredentialsValidatorTests.cs
+│   │   ├── LocationValidatorTests.cs
+│   │   ├── PatchValidatorTests.cs
+│   │   ├── SessionValidatorTests.cs
+│   │   ├── TariffValidatorTests.cs
+│   │   ├── TokenValidatorTests.cs
+│   │   └── ValidationResultTests.cs
 │   └── Fixtures/
-│       └── TestData.cs               # Shared test data factories
+│       ├── FakeHttpHandler.cs
+│       ├── TestData.cs               # Shared test data factories
+│       ├── TestMeterFactory.cs
+│       └── Json/                     # JSON fixture files per version
+│           ├── connector-v2_2_1.json
+│           ├── location-v2_2_1.json
+│           ├── session-v2_2_1.json
+│           ├── tariff-v2_2_1.json
+│           └── token-v2_2_1.json
 │
 ├── DotOcpi.Client.Tests/             # Unit tests for client library
 │   ├── DotOcpi.Client.Tests.csproj
-│   ├── LocationsClientTests.cs
-│   ├── TokensClientTests.cs
+│   ├── CdrsClientTests.cs
+│   ├── ChargingProfilesClientTests.cs
 │   ├── CommandsClientTests.cs
-│   ├── PaginationHandlerTests.cs
-│   ├── OcpiResponseParserTests.cs
-│   └── HttpRequestBuilderTests.cs
+│   ├── LocationsClientTests.cs
+│   ├── PullClientTestHelper.cs
+│   ├── SessionsClientTests.cs
+│   ├── TariffsClientTests.cs
+│   ├── TestJsonData.cs
+│   ├── TokensClientTests.cs
+│   ├── Fixtures/
+│   │   └── FakeTimeProvider.cs
+│   ├── Internal/
+│   │   ├── CpoConnectionContextProviderTests.cs
+│   │   ├── InMemoryCallbackStoreTests.cs
+│   │   ├── InvalidatingRegistrationClientTests.cs
+│   │   ├── MockHttpMessageHandler.cs
+│   │   ├── OcpiHttpRequestBuilderTests.cs
+│   │   ├── OcpiResponseParserTests.cs
+│   │   ├── PaginationHandlerTests.cs
+│   │   └── SsrfGuardTests.cs
+│   └── Sync/
+│       ├── InMemorySyncStateStoreTests.cs
+│       ├── OcpiPullSyncBackgroundServiceTests.cs
+│       ├── OcpiSyncServiceTests.cs
+│       ├── PullSyncOptionsResolverTests.cs
+│       └── PullSyncOptionsValidatorTests.cs
 │
 ├── DotOcpi.AspNetCore.Tests/         # Unit + integration for server
 │   ├── DotOcpi.AspNetCore.Tests.csproj
-│   ├── Middleware/
+│   ├── OcpiHttpContextExtensionsTests.cs
+│   ├── Filters/
 │   │   ├── OcpiAuthFilterTests.cs
-│   │   ├── OcpiRequestIdFilterTests.cs  # Tests OcpiRequestIdMiddleware (replacement for removed filter)
-│   │   └── OcpiExceptionMiddlewareTests.cs
+│   │   ├── OcpiBodySizeLimitFilterTests.cs
+│   │   ├── OcpiRequestIdFilterTests.cs
+│   │   └── OcpiValidationFilterTests.cs
 │   ├── Handlers/
 │   │   ├── OcpiEndpointTestHelper.cs   # Shared test infrastructure
 │   │   ├── Locations/LocationsEndpointsTests.cs
@@ -137,29 +191,33 @@ tests/
 │   │   ├── Commands/CommandsEndpointsTests.cs
 │   │   ├── ChargingProfiles/ChargingProfilesEndpointsTests.cs
 │   │   └── Credentials/CredentialsEndpointsTests.cs
+│   ├── HealthChecks/
+│   │   ├── OcpiCpoHealthCheckTests.cs
+│   │   ├── OcpiRegistryHealthCheckTests.cs
+│   │   └── OcpiTokenStoreHealthCheckTests.cs
+│   ├── Middleware/
+│   │   ├── OcpiExceptionMiddlewareTests.cs
+│   │   └── OcpiRateLimitingMiddlewareTests.cs
 │   └── Routing/
-│       └── OcpiVersionRouterTests.cs
+│       └── OcpiEndpointRouteBuilderExtensionsTests.cs
 │
 ├── DotOcpi.Integration.Tests/        # Full pipeline integration tests
 │   ├── DotOcpi.Integration.Tests.csproj
+│   ├── ModuleDataFlowTests.cs
+│   ├── OcpiStatusCodeTests.cs
 │   ├── RegistrationFlowTests.cs
-│   ├── LocationPushFlowTests.cs
-│   ├── SessionPushFlowTests.cs
-│   ├── CdrPushFlowTests.cs
-│   ├── TokenPullFlowTests.cs
-│   ├── CommandFlowTests.cs
-│   ├── ChargingProfileFlowTests.cs
-│   ├── PaginationFlowTests.cs
-│   ├── MultiVersionFlowTests.cs
-│   ├── MultiPartyFlowTests.cs
+│   ├── SecurityFlowTests.cs
 │   └── Fixtures/
+│       ├── CapturingLocationsReceiver.cs
 │       ├── IntegrationTestBase.cs
-│       └── TestEmspApplication.cs
+│       └── TestCredentialsHelper.cs
 │
-└── DotOcpi.Simulator.Tests/            # Tests for the testing package itself
+└── DotOcpi.Simulator.Tests/          # Tests for the simulator package
     ├── DotOcpi.Simulator.Tests.csproj
+    ├── ChargingSimulationTests.cs
+    ├── EvseStateMachineTests.cs
     ├── OcpiCpoSimulatorTests.cs
-    └── FailureInjectionTests.cs
+    └── TypedModeTests.cs
 ```
 
 ### Test Project Dependencies
@@ -201,7 +259,7 @@ graph TD
 ### What Does NOT Get Unit Tested
 
 - ASP.NET Core pipeline behavior (tested in integration tests)
-- Real HTTP calls (tested via `WebApplicationFactory`)
+- Real HTTP calls (tested via `OcpiCpoSimulator` in integration tests)
 - Real cryptographic randomness quality (verified by security audits)
 
 ### Mocking Guidelines
@@ -331,7 +389,7 @@ This mapping must be tested — it was a post-audit addition and is critical for
 
 ## 5. Integration Testing Strategy
 
-Integration tests verify the full pipeline — from HTTP request to consumer handler invocation and back. They use `WebApplicationFactory` with the in-memory test server.
+Integration tests verify end-to-end flows against an in-memory `OcpiCpoSimulator`. The `IntegrationTestBase` wraps the simulator and provides `CreateHttpClient()` helpers — it does **not** use `WebApplicationFactory`.
 
 ### Test Architecture
 
@@ -339,106 +397,64 @@ Integration tests verify the full pipeline — from HTTP request to consumer han
 graph TD
     subgraph "Integration Test"
         Test["xUnit Test Method"]
-        Factory["WebApplicationFactory&lt;Program&gt;"]
+        Base["IntegrationTestBase"]
         TestCpo["OcpiCpoSimulator<br/>(in-memory CPO)"]
     end
 
-    subgraph "In-Memory eMSP"
-        Pipeline["ASP.NET Core Pipeline"]
-        Auth["Auth Filter"]
-        Handlers["Module Handlers"]
-        Consumer["Test Consumer Implementation"]
-    end
-
-    Test -->|"HTTP client"| Factory
-    Factory --> Pipeline --> Auth --> Handlers --> Consumer
-    Factory -->|"IOcpiClient"| TestCpo
-    TestCpo -->|"Returns test data"| Factory
+    Test --> Base
+    Base -->|"CreateAsync"| TestCpo
+    Base -->|"CreateHttpClient()"| TestCpo
+    TestCpo -->|"HTTP responses"| Test
 ```
 
 ### What Gets Integration Tested
 
-| Scenario | Verifies |
+The four integration test files cover:
+
+| Test File | Scenarios |
 |---|---|
-| **Full registration handshake** | Version discovery → POST credentials → token exchange → registry entry created |
-| **Location push (PUT)** | Auth → deserialization → validation → consumer invoked → OCPI response envelope |
-| **Location push (PATCH)** | PATCH validation → consumer receives `JsonElement` → correct response |
-| **Session push** | Per-version model deserialization → consumer invoked |
-| **CDR push (POST)** | Location header returned → duplicate detection |
-| **Token pull (GET)** | Pagination headers → correct data returned |
-| **Real-time authorize** | POST `/tokens/{uid}/authorize` → consumer `ITokensAuthorizer` invoked |
-| **Command flow** | Client sends command → sync response → async callback at `response_url` |
-| **Auth rejection** | Missing token → 401, invalid token → 401 with OCPI 2002 |
-| **Request ID propagation** | X-Request-ID and X-Correlation-ID echoed in response |
-| **Multi-version** | Two CPOs with different versions → correct handlers selected |
-| **Multi-party** | Two CPOs with different eMSP identities → correct context passed |
-| **Credential rotation** | PUT /credentials → tokens swapped → old tokens rejected |
-| **Unregistration** | DELETE /credentials → CPO removed → subsequent requests rejected |
+| **RegistrationFlowTests** | Version discovery, credential handshake, token exchange, registry entry creation |
+| **SecurityFlowTests** | Auth rejection (missing/invalid tokens), HTTPS enforcement, SSRF prevention, credential rotation, token lifecycle security |
+| **ModuleDataFlowTests** | Module data push/pull flows (locations, sessions, CDRs, tariffs, tokens), pagination, multi-version dispatch |
+| **OcpiStatusCodeTests** | OCPI status code mapping, error response envelope correctness |
 
 ### Integration Test Base Class
+
+`IntegrationTestBase` is a lightweight wrapper around `OcpiCpoSimulator`. It creates a fresh simulator per test class and provides `CreateHttpClient()` helpers for making HTTP requests against it.
 
 ```csharp
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
-    protected OcpiCpoSimulator TestCpo { get; private set; } = null!;
-    protected WebApplicationFactory<Program> Factory { get; private set; } = null!;
-    protected HttpClient HttpClient { get; private set; } = null!;
-    protected IOcpiClient OcpiClient { get; private set; } = null!;
+    private OcpiCpoSimulator? _server;
 
-    // Captured data from consumer handlers
-    protected List<object> ReceivedLocations { get; } = [];
-    protected List<object> ReceivedSessions { get; } = [];
-    protected List<object> ReceivedCdrs { get; } = [];
+    /// The test CPO server instance. Available after InitializeAsync.
+    protected OcpiCpoSimulator Server => _server!;
 
-    public virtual async Task InitializeAsync()
+    /// Override to customize the test CPO server configuration.
+    protected virtual void ConfigureServer(CpoSimulatorConfiguration config) { }
+
+    /// Creates an HttpClient configured with the server's base address.
+    protected HttpClient CreateHttpClient() =>
+        new HttpClient { BaseAddress = Server.BaseUrl };
+
+    /// Creates an HttpClient with the given token in the Authorization header.
+    protected HttpClient CreateHttpClient(string token)
     {
-        TestCpo = OcpiCpoSimulator.Create(ConfigureTestCpo);
-
-        Factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureServices(services =>
-                {
-                    services.AddDotOcpi(ConfigureDotOcpi)
-                        .AddAspNetCoreServer()
-                        .AddClient()
-                        .AddTestCpoServer(TestCpo)
-                        .AddInMemoryTokenStore()
-                        .AddInMemoryCpoRegistry();
-
-                    // Register test consumer handlers that capture data
-                    services.AddScoped<ILocationsReceiver>(
-                        _ => new CapturingLocationsReceiver(ReceivedLocations));
-                    services.AddScoped<ISessionsReceiver>(
-                        _ => new CapturingSessionsReceiver(ReceivedSessions));
-                    services.AddScoped<ICdrsReceiver>(
-                        _ => new CapturingCdrsReceiver(ReceivedCdrs));
-                });
-            });
-
-        HttpClient = Factory.CreateClient();
-        OcpiClient = Factory.Services.GetRequiredService<IOcpiClient>();
-
-        // Register with test CPO
-        await OcpiClient.Registration.RegisterAsync(
-            TestCpo.BaseUrl, TestCpo.TokenA);
+        var client = CreateHttpClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Token", token);
+        return client;
     }
 
-    protected virtual void ConfigureTestCpo(CpoSimulatorConfiguration config)
+    public async Task InitializeAsync()
     {
-        config.SupportedVersions = [OcpiVersion.V2_2_1];
-    }
-
-    protected virtual void ConfigureDotOcpi(DotOcpiOptions options)
-    {
-        options.SupportedVersions = [OcpiVersion.V2_2_1];
+        _server = await OcpiCpoSimulator.CreateAsync(ConfigureServer);
     }
 
     public async Task DisposeAsync()
     {
-        HttpClient.Dispose();
-        await Factory.DisposeAsync();
-        await TestCpo.DisposeAsync();
+        if (_server is not null)
+            await _server.DisposeAsync();
     }
 }
 ```
@@ -446,48 +462,19 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 ### Example Integration Test
 
 ```csharp
-public class LocationPushFlowTests : IntegrationTestBase
+public class RegistrationFlowTests : IntegrationTestBase
 {
     [Fact]
-    public async Task CpoPushesLocation_ConsumerReceivesCorrectModel()
+    public async Task VersionDiscovery_ReturnsVersionEndpoints()
     {
-        // Arrange — CPO pushes a location to the eMSP
-        var location = TestData.CreateLocationV221();
-        var tokenB = TestCpo.GetIssuedTokenB();
+        // Arrange
+        using var client = CreateHttpClient(Server.TokenA);
 
-        // Act — simulate CPO PUT request
-        var request = new HttpRequestMessage(HttpMethod.Put,
-            "/ocpi/emsp/2.2.1/locations/DE/CPO/LOC001");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Token",
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(tokenB)));
-        request.Headers.Add("X-Request-ID", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Correlation-ID", Guid.NewGuid().ToString());
-        request.Content = JsonContent.Create(location,
-            OcpiJsonContext_V2_2_1.Default.Location);
-
-        var response = await HttpClient.SendAsync(request);
+        // Act — discover versions from the test CPO
+        var response = await client.GetAsync("/ocpi/versions");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var ocpiResponse = await response.Content
-            .ReadFromJsonAsync<OcpiResponse<object>>();
-        ocpiResponse!.StatusCode.Should().Be(1000);
-
-        ReceivedLocations.Should().HaveCount(1);
-        ReceivedLocations[0].Should().BeOfType<V2_2_1.Location>();
-    }
-
-    [Fact]
-    public async Task CpoPushesLocation_MissingAuthHeader_Returns401()
-    {
-        var request = new HttpRequestMessage(HttpMethod.Put,
-            "/ocpi/emsp/2.2.1/locations/DE/CPO/LOC001");
-        // No Authorization header
-
-        var response = await HttpClient.SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }
 ```
@@ -496,32 +483,21 @@ public class LocationPushFlowTests : IntegrationTestBase
 
 ## 6. Multi-Version Test Matrix
 
-Every version-dependent behavior must be tested across all supported versions. Use xUnit `[Theory]` with `[MemberData]` to parameterize.
+Every version-dependent behavior must be tested across all supported versions. Tests use `[Theory]` with `[InlineData]` per version, or separate `[Fact]` methods when test logic differs significantly between versions. `OcpiEndpointTestHelper.AllVersions` is defined in the handler test infrastructure but is not currently used with `[MemberData]` — handler tests use explicit `[InlineData]` or per-version `[Fact]` methods instead.
 
 ### Version-Parameterized Tests
 
 ```csharp
-public class LocationSerializationTests
+public class OcpiVersionTests
 {
-    public static IEnumerable<object[]> AllVersions =>
-    [
-        [OcpiVersion.V2_0],
-        [OcpiVersion.V2_1_1],
-        [OcpiVersion.V2_2],
-        [OcpiVersion.V2_2_1],
-    ];
-
     [Theory]
-    [MemberData(nameof(AllVersions))]
-    public void Serialize_Location_RoundTrips(OcpiVersion version)
+    [InlineData(OcpiVersion.V2_0, "2.0")]
+    [InlineData(OcpiVersion.V2_1_1, "2.1.1")]
+    [InlineData(OcpiVersion.V2_2, "2.2")]
+    [InlineData(OcpiVersion.V2_2_1, "2.2.1")]
+    public void ToVersionString_ReturnsCorrectValue(OcpiVersion version, string expected)
     {
-        var location = TestData.CreateLocation(version);
-        var options = OcpiJsonOptions.GetOptions(version);
-
-        var json = JsonSerializer.Serialize(location, location.GetType(), options);
-        var deserialized = JsonSerializer.Deserialize(json, location.GetType(), options);
-
-        deserialized.Should().BeEquivalentTo(location);
+        version.ToVersionString().Should().Be(expected);
     }
 }
 ```
@@ -546,41 +522,9 @@ public class LocationSerializationTests
 | CommandResponse vs CommandResult split | 2.1.1 vs 2.2+ | Commands |
 | Enum values per version (ConnectorType, etc.) | All | Validation |
 
-### Multi-Version Integration Tests
+### Multi-Version Coverage
 
-```csharp
-public class MultiVersionFlowTests : IAsyncLifetime
-{
-    private OcpiCpoSimulator _cpo211 = null!;
-    private OcpiCpoSimulator _cpo221 = null!;
-
-    public async Task InitializeAsync()
-    {
-        _cpo211 = OcpiCpoSimulator.Create(c =>
-            c.SupportedVersions = [OcpiVersion.V2_1_1]);
-        _cpo221 = OcpiCpoSimulator.Create(c =>
-            c.SupportedVersions = [OcpiVersion.V2_2_1]);
-
-        // Register both
-        await _client.Registration.RegisterAsync(_cpo211.BaseUrl, _cpo211.TokenA);
-        await _client.Registration.RegisterAsync(_cpo221.BaseUrl, _cpo221.TokenA);
-    }
-
-    [Fact]
-    public async Task PullLocations_V211Cpo_ReturnsV211Models()
-    {
-        var result = await _client.Locations.GetAllAsync("DE_CPO1");
-        // Result contains V2_1_1.Location objects
-    }
-
-    [Fact]
-    public async Task PullLocations_V221Cpo_ReturnsV221Models()
-    {
-        var result = await _client.Locations.GetAllAsync("DE_CPO2");
-        // Result contains V2_2_1.Location objects with country_code/party_id
-    }
-}
-```
+Multi-version behaviors are currently tested within `ModuleDataFlowTests` and version-specific handler endpoint tests, rather than a dedicated `MultiVersionFlowTests` class. Handler tests cover version dispatch by testing each module against each version separately.
 
 ---
 
@@ -667,39 +611,7 @@ public static class TestData
 
 ### Edge Case Test Data
 
-```csharp
-public static class EdgeCaseData
-{
-    // #NA sentinel
-    public static string LocationWithNAPostalCode => """
-        {"id": "LOC001", "address": "Main St", "city": "Berlin",
-         "postal_code": "#NA", "country": "DEU", ...}
-        """;
-
-    // Maximum field lengths
-    public static V2_2_1.Location LocationWithMaxLengths => new()
-    {
-        Id = new string('A', 36),           // CiString(36) max
-        Address = new string('X', 45),       // string(45) max
-        City = new string('Y', 45),          // string(45) max
-        // ...
-    };
-
-    // Unicode in string fields
-    public static V2_2_1.Location LocationWithUnicode => new()
-    {
-        Address = "日本語の住所 123",
-        City = "München",
-        // ...
-    };
-
-    // Empty optional collections
-    public static V2_2_1.Location LocationMinimal => new()
-    {
-        // Only required fields, no optional arrays
-    };
-}
-```
+Edge cases (sentinel values, max-length fields, unicode, minimal objects) are tested inline within individual test methods rather than via a shared `EdgeCaseData` class. Each test constructs the specific invalid or boundary-condition data it needs directly in its Arrange section.
 
 ---
 
@@ -792,18 +704,18 @@ Serialization is tested per OCPI version with round-trip and fixture-based tests
 
 ### Round-Trip Tests
 
-Every model type in every version must round-trip through JSON serialization:
+Every model type must round-trip through JSON serialization. Round-trip tests live in `SerializationRoundTripTests.cs` and use per-version `[Fact]` methods:
 
 ```csharp
-[Theory]
-[MemberData(nameof(AllVersions))]
-public void Location_RoundTrip_PreservesAllFields(OcpiVersion version)
+[Fact]
+public void Location_V221_RoundTrip_PreservesAllFields()
 {
-    var original = TestData.CreateLocation(version);
-    var typeInfo = OcpiTypeInfoResolver.GetLocationTypeInfo(version);
+    var original = TestData.CreateLocationV221();
 
-    var json = JsonSerializer.Serialize(original, original.GetType(), typeInfo.Options);
-    var deserialized = JsonSerializer.Deserialize(json, original.GetType(), typeInfo.Options);
+    var json = JsonSerializer.Serialize(original,
+        OcpiJsonContext_V2_2_1.Default.Location);
+    var deserialized = JsonSerializer.Deserialize(json,
+        OcpiJsonContext_V2_2_1.Default.Location);
 
     deserialized.Should().BeEquivalentTo(original);
 }
@@ -811,13 +723,13 @@ public void Location_RoundTrip_PreservesAllFields(OcpiVersion version)
 
 ### Fixture-Based Tests (What a Real CPO Sends)
 
-Test deserialization against known-good JSON from the OCPI specification examples:
+Test deserialization against known-good JSON fixtures stored in `tests/DotOcpi.Tests/Fixtures/Json/`. Files follow the naming convention `{model}-v{version}.json` (e.g., `location-v2_2_1.json`, `session-v2_2_1.json`, `tariff-v2_2_1.json`). These are tested via `FixtureDeserializationTests.cs`:
 
 ```csharp
 [Fact]
-public void Deserialize_SpecExampleLocation_V221_Succeeds()
+public void Deserialize_LocationFixture_V221_Succeeds()
 {
-    var json = File.ReadAllText("Fixtures/ocpi-spec-location-2.2.1.json");
+    var json = File.ReadAllText("Fixtures/Json/location-v2_2_1.json");
 
     var location = JsonSerializer.Deserialize<V2_2_1.Location>(json,
         OcpiJsonContext_V2_2_1.Default.Location);
@@ -912,12 +824,10 @@ The `DotOcpi.Simulator` package enables consumers to test their own integrations
 ### Testing the Testing Package Itself
 
 The `DotOcpi.Simulator.Tests` project verifies:
-- `OcpiCpoSimulator` responds correctly to version discovery
-- Handshake simulation produces valid Token B/C
-- Configured locations/tariffs are returned via GET
-- Failure injection produces the expected errors
-- Command callback simulation works with configurable delays
-- Multi-version test CPO serves correct endpoints per version
+- `OcpiCpoSimulator` responds correctly to version discovery and handshake (`OcpiCpoSimulatorTests`)
+- Charging session lifecycle simulation (`ChargingSimulationTests`)
+- EVSE state machine transitions (`EvseStateMachineTests`)
+- Typed mode configuration and behavior (`TypedModeTests`)
 
 ---
 
@@ -936,44 +846,62 @@ Tests for the pull-sync subsystem (`DotOcpi.Client.Sync`) cover scheduling, opti
 
 ## 12. CI/CD Pipeline
 
-### Test Execution Order
+### CI Jobs
 
 ```mermaid
 graph LR
-    Build["dotnet build"] --> Unit["Unit Tests<br/>(DotOcpi.Tests,<br/>Client.Tests,<br/>AspNetCore.Tests)"]
-    Unit --> Integration["Integration Tests<br/>(Integration.Tests)"]
-    Integration --> TestPkg["Testing Package Tests<br/>(Testing.Tests)"]
-    TestPkg --> Coverage["Coverage Report"]
+    subgraph "build-and-test (matrix: os × dotnet)"
+        Build["dotnet build -warnaserror"] --> Test["dotnet test<br/>(all projects, per framework)"]
+        Test --> Coverage["Upload coverage<br/>(ubuntu + net8.0 only)"]
+    end
+
+    FormatCheck["format-check<br/>(CSharpier)"]
+    AotCheck["aot-check<br/>(trim analyzer)"]
 ```
+
+The CI pipeline (`.github/workflows/ci.yml`) has three jobs:
+
+1. **build-and-test** — matrix of `{ubuntu-latest, windows-latest}` × `{8.0.x, 10.0.x}`. Builds with `-warnaserror`, runs all tests for the matching framework (`--framework net8.0` or `--framework net10.0`), and uploads code coverage on ubuntu/net8.0.
+2. **format-check** — runs `csharpier check src/ tests/` to enforce formatting.
+3. **aot-check** — builds `DotOcpi.csproj` with `IsTrimmable=true` and `EnableTrimAnalyzer=true` to catch trimming/AOT issues.
+
+All tests run together in a single `dotnet test` invocation per framework — there is no trait-based filtering in CI.
 
 ### CI Configuration
 
 ```yaml
-# .github/workflows/ci.yml (conceptual)
+# .github/workflows/ci.yml
 jobs:
-  test:
+  build-and-test:
     strategy:
       matrix:
-        dotnet: ['8.0.x', '10.0.x']
         os: [ubuntu-latest, windows-latest]
+        dotnet: ['8.0.x', '10.0.x']
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ matrix.dotnet }}
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - run: dotnet build --no-restore -warnaserror
+      - name: Test (net8.0)
+        if: startsWith(matrix.dotnet, '8')
+        run: dotnet test --no-build --framework net8.0 --collect:"XPlat Code Coverage"
+      - name: Test (net10.0)
+        if: startsWith(matrix.dotnet, '10')
+        run: dotnet test --no-build --framework net10.0 --collect:"XPlat Code Coverage"
 
-      - run: dotnet build --configuration Release
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: csharpier check src/ tests/
 
-      - run: dotnet test --configuration Release
-               --collect:"XPlat Code Coverage"
-               --results-directory ./coverage
-               --logger "trx"
-
-      - name: Check coverage threshold
-        run: |
-          # Verify 80% minimum line coverage on:
-          # - DotOcpi
-          # - DotOcpi.Client
-          # - DotOcpi.AspNetCore
+  aot-check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: dotnet build src/DotOcpi/DotOcpi.csproj -warnaserror /p:IsTrimmable=true /p:EnableTrimAnalyzer=true
 ```
 
 ### Coverage Requirements
@@ -985,23 +913,16 @@ jobs:
 | `DotOcpi.AspNetCore` | 80% line | Middleware, endpoints, routing |
 | `DotOcpi.Simulator` | 70% line | Test infrastructure (lower bar acceptable) |
 
-### Test Traits for CI Filtering
+### Test Traits
+
+The only trait used is `[Trait("Category", "Security")]`, applied to all security-sensitive test classes (token generation, hashing, validation, SSRF, auth filters, etc.). CI does not use trait-based filtering — all tests run together on every build.
 
 ```csharp
-[Trait("Category", "Unit")]        // Fast, no I/O
-[Trait("Category", "Integration")] // WebApplicationFactory, in-memory HTTP
-[Trait("Category", "Security")]    // Security-specific tests (always run)
-[Trait("Category", "Slow")]        // Tests that take > 1 second (run in CI, skip locally)
+[Trait("Category", "Security")]    // Security-specific tests
 ```
 
 ```bash
-# Run only unit tests (fast local feedback)
-dotnet test --filter "Category=Unit"
-
-# Run everything except slow tests
-dotnet test --filter "Category!=Slow"
-
-# Run only security tests
+# Run only security tests locally
 dotnet test --filter "Category=Security"
 ```
 
