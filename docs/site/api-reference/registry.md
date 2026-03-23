@@ -1,0 +1,235 @@
+---
+title: CPO Registry
+layout: default
+parent: API Reference
+nav_order: 6
+---
+
+# CPO Registry
+{: .no_toc }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+## Overview
+
+The CPO Registry is DotOcpi's in-memory store of connected CPOs. It tracks each CPO's negotiated version, module endpoints, credential state, and connection status.
+
+## CpoConnection
+
+The central data model for a CPO connection.
+
+```csharp
+public sealed record CpoConnection
+{
+    public string CpoCountryCode { get; }
+    public string CpoPartyId { get; }
+    public string EmspCountryCode { get; }
+    public string EmspPartyId { get; }
+    public OcpiVersion Version { get; }
+    public IReadOnlyDictionary<string, string> ModuleEndpoints { get; }
+    public string TokenBHash { get; }
+    public ConnectionStatus Status { get; }
+    public DateTimeOffset CreatedAt { get; }
+    public DateTimeOffset UpdatedAt { get; }
+    public string? CpoVersionsUrl { get; }
+    public string? EmspVersionsUrl { get; }
+    public DateTimeOffset? LastHealthCheckAt { get; }
+    public long ConcurrencyVersion { get; }
+
+    // Computed property
+    public string ConnectionKey { get; }  // "{CpoCountryCode}:{CpoPartyId}"
+}
+```
+
+### ConnectionStatus
+
+```csharp
+public enum ConnectionStatus
+{
+    Pending,       // Registration in progress
+    Connected,     // Active and healthy
+    Offline,       // Health check failures
+    Unregistered,  // Disconnected
+    Suspended,     // Admin-suspended
+}
+```
+
+## ICpoRegistry
+
+Three-index lookup for CPO connections.
+
+```csharp
+public interface ICpoRegistry
+{
+    CpoConnection? FindByConnectionKey(string connectionKey);
+    CpoConnection? FindByTokenHash(string tokenBHash);
+    IReadOnlyList<CpoConnection> FindByEmspIdentity(string emspCountryCode, string emspPartyId);
+    IReadOnlyList<CpoConnection> GetAll();
+    bool AddOrUpdate(CpoConnection connection);
+    bool Remove(string connectionKey);
+}
+```
+
+### Lookup Paths
+
+| Path | Use Case | Performance |
+|:-----|:---------|:------------|
+| `FindByConnectionKey("DE:CPO")` | Outbound requests — look up CPO by ID | O(1) dictionary lookup |
+| `FindByTokenHash(hash)` | Inbound auth — find CPO by token hash | O(1) dictionary lookup |
+| `FindByEmspIdentity("NL", "MSP")` | Multi-party — find all CPOs for an eMSP identity | O(1) dictionary lookup |
+
+### Usage
+
+```csharp
+// Look up by connection key
+var connection = registry.FindByConnectionKey("DE:CPO");
+if (connection is not null)
+{
+    Console.WriteLine($"Version: {connection.Version}");
+    Console.WriteLine($"Status: {connection.Status}");
+    Console.WriteLine($"Endpoints: {string.Join(", ", connection.ModuleEndpoints.Keys)}");
+}
+
+// Find all CPOs connected to a specific eMSP identity
+var connections = registry.FindByEmspIdentity("NL", "MSP");
+foreach (var conn in connections)
+{
+    Console.WriteLine($"CPO: {conn.ConnectionKey} on {conn.Version}");
+}
+```
+
+### Optimistic Concurrency
+
+The registry uses optimistic concurrency via `ConcurrencyVersion`:
+
+```csharp
+var connection = registry.FindByConnectionKey("DE:CPO");
+// Modify and save — if another thread modified it, AddOrUpdate returns false
+var updated = connection with { Status = ConnectionStatus.Offline };
+var success = registry.AddOrUpdate(updated);
+if (!success)
+{
+    // Retry with fresh data
+}
+```
+
+## ICpoRegistryStore
+
+Persistent backing for the CPO registry. Implement this for production deployments:
+
+```csharp
+public interface ICpoRegistryStore
+{
+    Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct);
+    Task SaveAsync(CpoConnection connection, CancellationToken ct);
+    Task RemoveAsync(string connectionKey, CancellationToken ct);
+}
+```
+
+### Usage
+
+```csharp
+dotOcpiBuilder.AddCpoRegistryStore<SqlCpoRegistryStore>();
+
+public class SqlCpoRegistryStore : ICpoRegistryStore
+{
+    private readonly MyDbContext _db;
+
+    public SqlCpoRegistryStore(MyDbContext db) => _db = db;
+
+    public async Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct)
+    {
+        return await _db.CpoConnections.ToListAsync(ct);
+    }
+
+    public async Task SaveAsync(CpoConnection connection, CancellationToken ct)
+    {
+        _db.CpoConnections.Update(connection);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task RemoveAsync(string connectionKey, CancellationToken ct)
+    {
+        var entity = await _db.CpoConnections.FindAsync(connectionKey, ct);
+        if (entity is not null)
+        {
+            _db.CpoConnections.Remove(entity);
+            await _db.SaveChangesAsync(ct);
+        }
+    }
+}
+```
+
+## Multi-Instance Support
+
+For deployments with multiple application instances:
+
+### ICacheInvalidationNotifier
+
+Notify other instances when the registry changes:
+
+```csharp
+public interface ICacheInvalidationNotifier
+{
+    Task NotifyChangedAsync(string connectionKey, CancellationToken ct);
+    Task NotifyRemovedAsync(string connectionKey, CancellationToken ct);
+}
+```
+
+### IDistributedLockProvider
+
+Prevent concurrent registration handshakes:
+
+```csharp
+public interface IDistributedLockProvider
+{
+    Task<IAsyncDisposable> AcquireAsync(
+        string resourceKey, TimeSpan timeout, CancellationToken ct);
+}
+```
+
+### Example: Redis-Backed
+
+```csharp
+public class RedisCacheInvalidationNotifier : ICacheInvalidationNotifier
+{
+    private readonly IConnectionMultiplexer _redis;
+
+    public async Task NotifyChangedAsync(string connectionKey, CancellationToken ct)
+    {
+        await _redis.GetSubscriber()
+            .PublishAsync("ocpi:registry:changed", connectionKey);
+    }
+
+    public async Task NotifyRemovedAsync(string connectionKey, CancellationToken ct)
+    {
+        await _redis.GetSubscriber()
+            .PublishAsync("ocpi:registry:removed", connectionKey);
+    }
+}
+```
+
+## Health Monitoring
+
+Enable background health probing for stale connections:
+
+```csharp
+builder.Services.AddDotOcpi(options =>
+{
+    options.EnableHealthMonitoring = true;
+    options.HealthMonitoringInterval = TimeSpan.FromMinutes(5);
+    options.StaleConnectionThreshold = TimeSpan.FromHours(24);
+});
+```
+
+The `CpoHealthMonitor` background service:
+1. Checks for connections with no activity for `StaleConnectionThreshold`
+2. Probes the CPO's versions endpoint
+3. Marks unresponsive connections as `Offline`
+4. Marks recovered connections as `Connected`
