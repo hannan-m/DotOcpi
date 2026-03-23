@@ -175,19 +175,29 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
             )
             .ConfigureAwait(false);
 
-        // Store new token hash, remove old
+        // Store new hash first (brief dual-validity window: both old and new hashes are valid)
         var partyId = $"{existing.EmspCountryCode}:{existing.EmspPartyId}";
         await _tokenStore.StoreAsync(tokenCHash, TokenPurpose.TokenB, partyId, cancellationToken).ConfigureAwait(false);
-        await _tokenStore.RemoveAsync(existing.TokenBHash, cancellationToken).ConfigureAwait(false);
 
-        var updated = existing with { TokenBHash = tokenCHash, UpdatedAt = _timeProvider.GetUtcNow() };
+        // Update registry before removing the old hash — prevents a zero-validity window
+        // where FindByTokenHash(newHash) returns null because the registry still maps the old hash
+        var updated = existing with
+        {
+            TokenBHash = tokenCHash,
+            UpdatedAt = _timeProvider.GetUtcNow(),
+        };
 
         if (!_registry.AddOrUpdate(updated))
         {
+            // Rollback: remove orphaned new hash since registry update failed
+            await _tokenStore.RemoveAsync(tokenCHash, cancellationToken).ConfigureAwait(false);
             throw new OcpiRegistrationException(
                 $"Failed to update CPO connection {request.ConnectionKey} due to concurrency conflict."
             );
         }
+
+        // Safe to remove old hash now — registry points to the new one
+        await _tokenStore.RemoveAsync(existing.TokenBHash, cancellationToken).ConfigureAwait(false);
 
         return new RegistrationResult(updated, cpoResponse.Token);
     }

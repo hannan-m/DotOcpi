@@ -58,6 +58,10 @@ internal sealed class PaginationHandler
             if (page.NextLink is null)
                 yield break;
 
+            // Prevent token leakage: only follow Link headers to the same origin
+            if (!IsSameOrigin(request.RequestUri!, page.NextLink))
+                yield break;
+
             request = OcpiHttpRequestBuilder.BuildForUrl(HttpMethod.Get, page.NextLink, cpoToken);
         }
     }
@@ -96,7 +100,26 @@ internal sealed class PaginationHandler
             if (page.NextLink is null)
                 yield break;
 
+            // Prevent token leakage: only follow Link headers to the same origin
+            if (!IsSameOrigin(request.RequestUri!, page.NextLink))
+                yield break;
+
             request = OcpiHttpRequestBuilder.BuildForUrl(HttpMethod.Get, page.NextLink, cpoToken);
         }
+    }
+
+    /// <summary>
+    /// Validates that the next-page URL points to the same origin (scheme, host, port)
+    /// as the current request. A malicious CPO could return a Link header pointing to
+    /// an attacker-controlled server, causing the auth token to be sent there.
+    /// </summary>
+    private static bool IsSameOrigin(Uri current, string nextLink)
+    {
+        if (!Uri.TryCreate(nextLink, UriKind.Absolute, out var nextUri))
+            return false;
+
+        return string.Equals(current.Scheme, nextUri.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(current.Host, nextUri.Host, StringComparison.OrdinalIgnoreCase)
+            && current.Port == nextUri.Port;
     }
 }

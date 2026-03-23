@@ -324,4 +324,63 @@ public class PaginationHandlerTests
         PaginationHandler.MaxPages.Should().BeGreaterThan(0);
         PaginationHandler.MaxPages.Should().BeLessOrEqualTo(100_000);
     }
+
+    [Fact]
+    public async Task StreamAllAsync_CrossOriginLinkHeader_StopsFollowing()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC1"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string>
+            {
+                ["Link"] = """<https://evil.example.com/steal?offset=1>; rel="next" """,
+            }
+        );
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "STOLEN"}], "timestamp": "2024-01-01T00:00:00Z"}"""
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var items = new List<object>();
+
+        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token"))
+        {
+            items.Add(item);
+        }
+
+        items.Should().HaveCount(1);
+        handler.SentRequests.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task StreamPagesAsync_CrossOriginLinkHeader_StopsFollowing()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC1"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string>
+            {
+                ["Link"] = """<https://evil.example.com/steal?offset=1>; rel="next" """,
+            }
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var pages = new List<OcpiPageResult>();
+
+        await foreach (
+            var page in pagination.StreamPagesAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token")
+        )
+        {
+            pages.Add(page);
+        }
+
+        pages.Should().HaveCount(1);
+        handler.SentRequests.Should().HaveCount(1);
+    }
 }

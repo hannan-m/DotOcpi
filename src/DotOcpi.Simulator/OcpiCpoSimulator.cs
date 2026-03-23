@@ -447,30 +447,46 @@ public sealed class OcpiCpoSimulator : IAsyncDisposable
                 _config.ChargingTickInterval
             );
 
-            // Push session update
+            // Build model under the session lock to prevent torn reads after Tick releases it
             if (_config.PushEnabled && _config.PushSessionUpdates)
             {
                 var conn = _state.DefaultConnection;
                 var version = conn?.NegotiatedVersion ?? _config.SupportedVersions[0];
                 var loc = _state.FindLocation(session.LocationId) ?? LocationSpec.Default;
-                var model = VersionModelBuilder.BuildSession(
-                    version,
-                    session,
-                    _config.CpoIdentity,
-                    _config.EmspIdentity,
-                    loc,
-                    _config.CpoCurrency
+                var model = session.WithLock(_ =>
+                    VersionModelBuilder.BuildSession(
+                        version,
+                        session,
+                        _config.CpoIdentity,
+                        _config.EmspIdentity,
+                        loc,
+                        _config.CpoCurrency
+                    )
                 );
                 _pushEngine.EnqueueSessionPush(session.SessionId, model, "PATCH");
             }
 
             if (reachedTarget && _config.AutoStopOnTargetKwh)
             {
-                session.WithLock(s =>
+                // Build CDR model and finalize session under a single lock acquisition
+                var cdrConn = _state.DefaultConnection;
+                var cdrVersion = cdrConn?.NegotiatedVersion ?? _config.SupportedVersions[0];
+                var cdrLoc = _state.FindLocation(session.LocationId) ?? LocationSpec.Default;
+                var cdr = session.WithLock(s =>
                 {
                     s.Phase = SessionPhase.Completed;
                     s.EndTime = DateTimeOffset.UtcNow;
                     s.LastUpdated = DateTimeOffset.UtcNow;
+
+                    return VersionModelBuilder.BuildCdr(
+                        cdrVersion,
+                        session,
+                        _config.CpoIdentity,
+                        _config.EmspIdentity,
+                        cdrLoc,
+                        _config.CpoCurrency,
+                        _config.DefaultVatRate
+                    );
                 });
 
                 var evseKey = $"{session.LocationId}:{session.EvseUid}";
@@ -479,19 +495,6 @@ public sealed class OcpiCpoSimulator : IAsyncDisposable
                     evseState.ClearSession(EvseStatus.Available);
                 }
 
-                // Generate CDR for auto-stopped session
-                var cdrConn = _state.DefaultConnection;
-                var cdrVersion = cdrConn?.NegotiatedVersion ?? _config.SupportedVersions[0];
-                var cdrLoc = _state.FindLocation(session.LocationId) ?? LocationSpec.Default;
-                var cdr = VersionModelBuilder.BuildCdr(
-                    cdrVersion,
-                    session,
-                    _config.CpoIdentity,
-                    _config.EmspIdentity,
-                    cdrLoc,
-                    _config.CpoCurrency,
-                    _config.DefaultVatRate
-                );
                 lock (_config.Cdrs)
                 {
                     _config.Cdrs.Add(cdr);
