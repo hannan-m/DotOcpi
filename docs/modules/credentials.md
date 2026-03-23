@@ -27,27 +27,32 @@ For the full handshake sequence diagrams, see [architecture.md — Credentials &
 
 ## Credentials Object
 
-### Version 2.0 (flat structure, no party identity)
+### Version 2.0 (flat structure)
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | token | string(64) | Yes | Token for the receiving party to use |
 | url | URL | Yes | Sender's versions endpoint URL |
-| business_details | BusinessDetails | Yes | Company information |
+| business_name | string(100) | Yes | Company name (flat field, not nested BusinessDetails) |
+| party_id | string(3) | Yes | Sender's party ID |
+| country_code | string(2) | Yes | Sender's country code |
+| website | URL | No | Company website |
 
-> In OCPI 2.0, the Credentials object does not include `party_id` or `country_code`. Party identification relies on out-of-band knowledge or the business details.
+> In OCPI 2.0, business information uses flat fields (`business_name`, `website`) rather than a nested `BusinessDetails` object. There is no `business_logo` field.
 
-### Version 2.1.1 (flat structure, with party identity)
+### Version 2.1.1 (flat structure)
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | token | string(64) | Yes | Token for the receiving party to use |
 | url | URL | Yes | Sender's versions endpoint URL |
-| business_details | BusinessDetails | Yes | Company information |
-| **party_id** | string(3) | Yes | **Added: Sender's party ID** |
-| **country_code** | string(2) | Yes | **Added: Sender's country code** |
+| business_name | string(100) | Yes | Company name (flat field, not nested BusinessDetails) |
+| party_id | string(3) | Yes | Sender's party ID |
+| country_code | string(2) | Yes | Sender's country code |
+| business_logo | Image | No | Company logo (**added in 2.1.1**) |
+| website | URL | No | Company website |
 
-Single role per connection. The `party_id`, `country_code`, and `business_details` are top-level fields.
+Single role per connection. The `party_id`, `country_code`, and business fields are top-level (flat), not nested inside a `BusinessDetails` or `CredentialsRole` object.
 
 ### Version 2.2 / 2.2.1 (roles array)
 
@@ -99,35 +104,24 @@ Returns a list of supported OCPI versions:
 
 Returns module endpoints for a specific version.
 
-#### Version 2.0 / 2.1.1
+#### All Versions
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | version | VersionNumber | Yes | Version identifier |
 | endpoints | Endpoint[] | Yes (1+) | Module endpoints |
 
-**Endpoint (2.0/2.1.1):**
+**Endpoint (all versions):**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | identifier | ModuleID | Yes | Module name |
+| role | InterfaceRole | Yes | SENDER or RECEIVER |
 | url | URL | Yes | Endpoint URL |
 
-> No `role` field — single endpoint per module.
+> The `role` field is present in all versions, enabling separate SENDER/RECEIVER endpoints for the same module.
 
-#### Version 2.2 / 2.2.1
-
-**Endpoint (2.2+):**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| identifier | ModuleID | Yes | Module name |
-| **role** | InterfaceRole | Yes | **Added: SENDER or RECEIVER** |
-| url | URL | Yes | Endpoint URL |
-
-> `role` field enables separate SENDER/RECEIVER endpoints for the same module.
-
-### InterfaceRole (2.2+ only)
+### InterfaceRole (all versions)
 
 | Value | Description |
 |---|---|
@@ -140,7 +134,7 @@ Returns module endpoints for a specific version.
 |---|:---:|:---:|:---:|:---:|
 | cdrs | Y | Y | Y | Y |
 | chargingprofiles | - | - | Y | Y |
-| commands | - | Y | Y | Y |
+| commands | Y | Y | Y | Y |
 | credentials | Y | Y | Y | Y |
 | hubclientinfo | - | - | Y | Y |
 | locations | Y | Y | Y | Y |

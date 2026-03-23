@@ -37,12 +37,12 @@ The Locations module allows CPOs to share their charging infrastructure data wit
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| id | string(15) | Yes | Unique ID within CPO |
-| type | LocationType | Yes | ON_STREET, PARKING_GARAGE, etc. |
+| id | string(39) | Yes | Unique ID within CPO |
 | name | string(255) | No | Display name |
 | address | string(45) | Yes | Street address |
 | city | string(45) | Yes | City |
 | postal_code | string(10) | Yes | Postal code |
+| state | string(20) | No | State/province |
 | country | string(3) | Yes | ISO 3166-1 alpha-3 |
 | coordinates | GeoLocation | Yes | Latitude/longitude |
 | related_locations | AdditionalGeoLocation[] | No | Related locations (e.g., entrance) |
@@ -50,8 +50,8 @@ The Locations module allows CPOs to share their charging infrastructure data wit
 | directions | DisplayText[] | No | Human-readable directions |
 | operator | BusinessDetails | No | Operator information |
 | suboperator | BusinessDetails | No | Suboperator information |
+| owner | BusinessDetails | No | Owner information |
 | opening_times | Hours | No | Operating hours |
-| charging_when_closed | boolean | No | Whether charging is possible when closed |
 | images | Image[] | No | Photos of the location |
 
 ### Version 2.1.1
@@ -80,7 +80,7 @@ The Locations module allows CPOs to share their charging infrastructure data wit
 | **energy_mix** | EnergyMix | No | **Added: Energy source mix** |
 | **last_updated** | DateTime | Yes | **Added: Last modification timestamp** |
 
-**Changes from 2.0:** Added `owner`, `facilities`, `time_zone`, `energy_mix`, `last_updated`. ID expanded from string(15) to string(39).
+**Changes from 2.0:** Added `type` (LocationType), `facilities`, `time_zone`, `energy_mix`, `charging_when_closed`, `last_updated`.
 
 ### Version 2.2 / 2.2.1
 
@@ -123,7 +123,7 @@ The Locations module allows CPOs to share their charging infrastructure data wit
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| uid | string(15) | Yes | Unique ID within CPO (not the EVSE ID printed on the unit) |
+| uid | string(36) | Yes | Unique ID within CPO (not the EVSE ID printed on the unit) |
 | evse_id | string(48) | No | Compliant EVSE ID (DIN/ISO) |
 | status | Status | Yes | Current status |
 | status_schedule | StatusSchedule[] | No | Planned status changes |
@@ -138,11 +138,11 @@ The Locations module allows CPOs to share their charging infrastructure data wit
 
 ### Version 2.1.1
 
-Same as 2.0 with: `uid` expanded to string(39), **`last_updated` (DateTime, required) added**.
+Same as 2.0 with: **`last_updated` (DateTime, required) added**.
 
 ### Version 2.2 / 2.2.1
 
-Same as 2.1.1 with: `uid` uses CiString(36), `evse_id` uses CiString(48). Removed `status_schedule` and `directions` from EVSE (moved to Location level or removed). `images` is retained on the EVSE object.
+Same as 2.1.1 with: `uid` uses CiString(36), `evse_id` uses CiString(48). `status_schedule`, `directions`, and `images` are all retained on the EVSE object.
 
 ---
 
@@ -152,14 +152,12 @@ Same as 2.1.1 with: `uid` uses CiString(36), `evse_id` uses CiString(48). Remove
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| id | string(15) | Yes | Unique ID within EVSE |
-| status | Status | Yes | Current status |
+| id | string(36) | Yes | Unique ID within EVSE |
 | standard | ConnectorType | Yes | Connector standard |
 | format | ConnectorFormat | Yes | SOCKET or CABLE |
 | power_type | PowerType | Yes | AC_1_PHASE, AC_3_PHASE, DC |
 | voltage | int | Yes | Voltage |
 | amperage | int | Yes | Amperage |
-| tariff_id | string(15) | No | Applicable tariff ID |
 | terms_and_conditions | URL | No | T&C URL |
 
 ### Version 2.1.1
@@ -176,7 +174,7 @@ Same as 2.1.1 with: `uid` uses CiString(36), `evse_id` uses CiString(48). Remove
 | terms_and_conditions | URL | No | T&C URL |
 | **last_updated** | DateTime | Yes | **Added** |
 
-**Removed `status` from Connector** (status stays on EVSE only).
+**Added `tariff_id` and `last_updated`.**
 
 ### Version 2.2 / 2.2.1
 

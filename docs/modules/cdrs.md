@@ -35,10 +35,10 @@ CDRs are the billing records for completed charging sessions. As an eMSP, DotOcp
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| id | string(15) | Yes | Unique CDR ID |
+| id | string(39) | Yes | Unique CDR ID |
 | start_date_time | DateTime | Yes | Session start |
-| stop_date_time | DateTime | No | Session end |
-| auth_id | string(32) | Yes | Token auth ID |
+| end_date_time | DateTime | Yes | Session end |
+| auth_id | string(36) | Yes | Token auth ID |
 | auth_method | AuthMethod | Yes | Authorization method |
 | location | Location | Yes | Full Location object (embedded) |
 | meter_id | string(255) | No | Meter identification |
@@ -46,7 +46,9 @@ CDRs are the billing records for completed charging sessions. As an eMSP, DotOcp
 | tariffs | Tariff[] | No | Applied tariffs |
 | charging_periods | ChargingPeriod[] | Yes (1+) | Period breakdown |
 | total_cost | decimal | Yes | Total cost |
-| total_usage | CdrDimension[] | No | Usage breakdown |
+| total_energy | decimal | Yes | Total energy in kWh |
+| total_time | decimal | Yes | Total time in hours |
+| total_parking_time | decimal | No | Total parking time in hours |
 | remark | string(255) | No | Additional info |
 
 ### Version 2.1.1
@@ -55,7 +57,7 @@ CDRs are the billing records for completed charging sessions. As an eMSP, DotOcp
 |---|---|---|---|
 | id | string(36) | Yes | Unique CDR ID |
 | start_date_time | DateTime | Yes | Session start |
-| stop_date_time | DateTime | **Yes** | Session end **(now required)** |
+| stop_date_time | DateTime | Yes | Session end |
 | auth_id | string(36) | Yes | Token auth ID |
 | auth_method | AuthMethod | Yes | Authorization method |
 | location | Location | Yes | Full Location object |
@@ -64,13 +66,13 @@ CDRs are the billing records for completed charging sessions. As an eMSP, DotOcp
 | tariffs | Tariff[] | No | Applied tariffs |
 | charging_periods | ChargingPeriod[] | Yes (1+) | Period breakdown |
 | total_cost | number | Yes | Total cost |
-| **total_energy** | number | Yes | **Added: Total energy in kWh** |
-| **total_time** | number | Yes | **Added: Total time in hours** |
-| **total_parking_time** | number | No | **Added: Total parking time in hours** |
+| total_energy | number | Yes | Total energy in kWh |
+| total_time | number | Yes | Total time in hours |
+| total_parking_time | number | No | Total parking time in hours |
 | remark | string(255) | No | Additional info |
 | **last_updated** | DateTime | Yes | **Added** |
 
-**Removed `total_usage`**. Added `total_energy`, `total_time`, `total_parking_time`, `last_updated`. Made `stop_date_time` required.
+ID changed from string(39) to string(36). Added `last_updated`.
 
 ### Version 2.2 / 2.2.1
 
@@ -235,8 +237,8 @@ public interface ICdrsReceiver
 - `end_date_time` / `stop_date_time` must be after `start_date_time`
 - `charging_periods` must have at least 1 entry, each with at least 1 dimension
 - `total_cost` must be >= 0
-- `total_energy` (2.1.1+) must be >= 0
-- `total_time` (2.1.1+) must be >= 0
+- `total_energy` must be >= 0
+- `total_time` must be >= 0
 - `currency` must be valid ISO 4217
 - `cdr_token` (2.2+) must have valid fields
 - `cdr_location` (2.2+) must have valid coordinates

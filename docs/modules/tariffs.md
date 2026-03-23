@@ -37,7 +37,7 @@ The Tariffs module allows CPOs to share pricing information with eMSPs. As an eM
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| id | string(15) | Yes | Unique tariff ID |
+| id | string(36) | Yes | Unique tariff ID |
 | currency | string(3) | Yes | ISO 4217 currency code |
 | tariff_alt_text | DisplayText[] | No | Human-readable tariff description |
 | tariff_alt_url | URL | No | URL with tariff information |

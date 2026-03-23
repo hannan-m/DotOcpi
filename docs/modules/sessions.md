@@ -36,17 +36,16 @@ The Sessions module allows CPOs to share charging session data with eMSPs. As an
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| id | string(15) | Yes | Unique session ID |
+| id | string(36) | Yes | Unique session ID |
 | start_datetime | DateTime | Yes | Session start time |
 | end_datetime | DateTime | No | Session end time (null while active) |
 | kwh | decimal | Yes | Energy delivered in kWh |
-| auth_id | string(32) | Yes | Token used for authorization |
+| auth_id | string(36) | Yes | Token used for authorization |
 | auth_method | AuthMethod | Yes | How the session was authorized |
 | location | Location | Yes | Full Location object (embedded) |
 | meter_id | string(255) | No | Meter identification |
 | currency | string(3) | Yes | ISO 4217 currency code |
 | charging_periods | ChargingPeriod[] | No | Charging period breakdown |
-| total_cost | decimal | Yes | Total cost (required in 2.0) |
 | status | SessionStatus | Yes | Current session status |
 
 ### Version 2.1.1
@@ -63,7 +62,7 @@ The Sessions module allows CPOs to share charging session data with eMSPs. As an
 | meter_id | string(255) | No | Meter identification |
 | currency | string(3) | Yes | ISO 4217 currency code |
 | charging_periods | ChargingPeriod[] | No | Charging period breakdown |
-| total_cost | number | **No** | Total cost **(changed to optional)** |
+| total_cost | number | No | **Added: Total cost (optional)** |
 | status | SessionStatus | Yes | Current session status |
 | **last_updated** | DateTime | Yes | **Added** |
 

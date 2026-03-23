@@ -1,6 +1,6 @@
 # Commands Module
 
-The Commands module allows eMSPs to send commands to CPOs (start/stop charging, reserve, unlock). Available from OCPI 2.1+ (not in 2.0). As an eMSP, DotOcpi acts as a **Sender** — it sends commands and receives async results.
+The Commands module allows eMSPs to send commands to CPOs (start/stop charging, reserve, unlock). Available from OCPI 2.0+. As an eMSP, DotOcpi acts as a **Sender** — it sends commands and receives async results.
 
 ## eMSP Role Summary
 
@@ -41,7 +41,7 @@ sequenceDiagram
 
 | Version | Method | URL Pattern |
 |---|---|---|
-| 2.1.1+ | POST | `{cpo_commands_url}/{command_type}` |
+| 2.0+ | POST | `{cpo_commands_url}/{command_type}` |
 
 `{command_type}` is one of: `START_SESSION`, `STOP_SESSION`, `RESERVE_NOW`, `UNLOCK_CONNECTOR`, `CANCEL_RESERVATION` (2.2+)
 
@@ -49,7 +49,7 @@ sequenceDiagram
 
 | Version | Method | URL Pattern |
 |---|---|---|
-| 2.1.1+ | POST | `{base}/commands/{correlation_id}` (eMSP-defined, included in response_url) |
+| 2.0+ | POST | `{base}/commands/{correlation_id}` (eMSP-defined, included in response_url) |
 
 ---
 
@@ -57,43 +57,43 @@ sequenceDiagram
 
 ### StartSession
 
-| Field | Type | 2.1.1 | 2.2/2.2.1 | Description |
-|---|---|:---:|:---:|---|
-| response_url | URL | Yes | Yes | Callback URL for async result |
-| token | Token | Yes | Yes | Token to authorize |
-| location_id | string(39) / CiString(36) | Yes | Yes | Target location |
-| evse_uid | string(39) / CiString(36) | No | No | Target EVSE (optional) |
-| connector_id | CiString(36) | - | No (2.2.1) | **Added in 2.2.1** |
-| authorization_reference | CiString(36) | - | No | **Added in 2.2** |
+| Field | Type | 2.0 | 2.1.1 | 2.2/2.2.1 | Description |
+|---|---|:---:|:---:|:---:|---|
+| response_url | URL | Yes | Yes | Yes | Callback URL for async result |
+| token | Token | Yes | Yes | Yes | Token to authorize |
+| location_id | string(36) / CiString(36) | Yes | Yes | Yes | Target location |
+| evse_uid | string(36) / CiString(36) | No | No | No | Target EVSE (optional) |
+| connector_id | CiString(36) | - | - | No (2.2.1) | **Added in 2.2.1** |
+| authorization_reference | CiString(36) | - | - | No | **Added in 2.2** |
 
 ### StopSession
 
-| Field | Type | 2.1.1 | 2.2/2.2.1 | Description |
-|---|---|:---:|:---:|---|
-| response_url | URL | Yes | Yes | Callback URL |
-| session_id | string(36) / CiString(36) | Yes | Yes | Session to stop |
+| Field | Type | 2.0 | 2.1.1 | 2.2/2.2.1 | Description |
+|---|---|:---:|:---:|:---:|---|
+| response_url | URL | Yes | Yes | Yes | Callback URL |
+| session_id | string(36) / CiString(36) | Yes | Yes | Yes | Session to stop |
 
 ### ReserveNow
 
-| Field | Type | 2.1.1 | 2.2/2.2.1 | Description |
-|---|---|:---:|:---:|---|
-| response_url | URL | Yes | Yes | Callback URL |
-| token | Token | Yes | Yes | Token for reservation |
-| expiry_date | DateTime | Yes | Yes | Reservation expiry |
-| reservation_id | **int** (2.1.1) / **CiString(36)** (2.2+) | Yes | Yes | **Type changed** |
-| location_id | string(39) / CiString(36) | Yes | Yes | Target location |
-| evse_uid | string(39) / CiString(36) | No | No | Target EVSE |
-| authorization_reference | CiString(36) | - | No | **Added in 2.2** |
+| Field | Type | 2.0 | 2.1.1 | 2.2/2.2.1 | Description |
+|---|---|:---:|:---:|:---:|---|
+| response_url | URL | Yes | Yes | Yes | Callback URL |
+| token | Token | Yes | Yes | Yes | Token for reservation |
+| expiry_date | DateTime | Yes | Yes | Yes | Reservation expiry |
+| reservation_id | **int** (2.0/2.1.1) / **CiString(36)** (2.2+) | Yes | Yes | Yes | **Type changed in 2.2** |
+| location_id | string(36) / CiString(36) | Yes | Yes | Yes | Target location |
+| evse_uid | string(36) / CiString(36) | No | No | No | Target EVSE |
+| authorization_reference | CiString(36) | - | - | No | **Added in 2.2** |
 
-> `reservation_id` changed from `int` in 2.1.1 to `CiString(36)` in 2.2+.
+> `reservation_id` is `int` in 2.0 and 2.1.1, changed to `CiString(36)` in 2.2+.
 
 ### UnlockConnector (all versions)
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | response_url | URL | Yes | Callback URL |
-| location_id | string(39) / CiString(36) | Yes | Target location |
-| evse_uid | string(39) / CiString(36) | Yes | Target EVSE |
+| location_id | string(36) / CiString(36) | Yes | Target location |
+| evse_uid | string(36) / CiString(36) | Yes | Target EVSE |
 | connector_id | string(36) / CiString(36) | Yes | Target connector |
 
 ### CancelReservation (2.2+ only)
@@ -109,11 +109,11 @@ sequenceDiagram
 
 ### CommandResponse (synchronous)
 
-| Field | Type | 2.1.1 | 2.2/2.2.1 | Description |
-|---|---|:---:|:---:|---|
-| result | CommandResponseType | Yes | Yes | Sync acknowledgement |
-| timeout | int | - | Yes | **Added: Seconds to wait for async result** |
-| message | DisplayText[] | - | No | **Added: Human-readable message** |
+| Field | Type | 2.0 | 2.1.1 | 2.2/2.2.1 | Description |
+|---|---|:---:|:---:|:---:|---|
+| result | CommandResponseType | Yes | Yes | Yes | Sync acknowledgement |
+| timeout | int | Yes | - | Yes | Seconds to wait for async result (present in 2.0 and 2.2+) |
+| message | DisplayText[] | - | - | No | **Added in 2.2: Human-readable message** |
 
 ### CommandResult (async callback — 2.2+ only)
 
@@ -126,13 +126,13 @@ sequenceDiagram
 
 ### CommandResponseType
 
-| Value | 2.1.1 | 2.2/2.2.1 | Description |
-|---|:---:|:---:|---|
-| NOT_SUPPORTED | Y | Y | Command not supported |
-| REJECTED | Y | Y | Command rejected |
-| ACCEPTED | Y | Y | Command accepted, awaiting async result |
-| TIMEOUT | Y | - | **Removed in 2.2** (moved to CommandResultType) |
-| UNKNOWN_SESSION | Y | Y | Session ID not found |
+| Value | 2.0 | 2.1.1 | 2.2/2.2.1 | Description |
+|---|:---:|:---:|:---:|---|
+| NOT_SUPPORTED | Y | Y | Y | Command not supported |
+| REJECTED | Y | Y | Y | Command rejected |
+| ACCEPTED | Y | Y | Y | Command accepted, awaiting async result |
+| TIMEOUT | Y | Y | - | **Removed in 2.2** (moved to CommandResultType) |
+| UNKNOWN_SESSION | Y | Y | Y | Session ID not found |
 
 ### CommandResultType (2.2+ only)
 
@@ -175,4 +175,4 @@ public interface ICommandsCallback
 - `expiry_date` (ReserveNow) must be in the future
 - `session_id` (StopSession) must not be empty
 - `connector_id` (UnlockConnector) must not be empty
-- `reservation_id` type must match version (int for 2.1.1, string for 2.2+)
+- `reservation_id` type must match version (int for 2.0/2.1.1, string for 2.2+)

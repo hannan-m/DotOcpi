@@ -42,13 +42,13 @@ The Tokens module manages EV driver authorization tokens. As an eMSP, DotOcpi ac
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| uid | string(15) | Yes | Unique token ID (e.g., RFID UID) |
+| uid | string(36) | Yes | Unique token ID (e.g., RFID UID) |
 | type | TokenType | Yes | RFID or OTHER |
-| auth_id | string(32) | Yes | Authorization ID (contract reference) |
-| visual_number | string(64) | Yes | Number printed on the token |
+| auth_id | string(36) | Yes | Authorization ID (contract reference) |
+| visual_number | string(64) | No | Number printed on the token |
 | issuer | string(64) | Yes | Token issuer name |
 | valid | boolean | Yes | Whether the token is currently valid |
-| allow_whitelist | boolean | No | Whether CPO may whitelist this token |
+| language | string(2) | No | Preferred language (ISO 639-1) |
 
 ### Version 2.1.1
 
@@ -57,11 +57,11 @@ The Tokens module manages EV driver authorization tokens. As an eMSP, DotOcpi ac
 | uid | string(36) | Yes | Unique token ID |
 | type | TokenType | Yes | RFID or OTHER |
 | auth_id | string(36) | Yes | Authorization ID |
-| visual_number | string(64) | **No** | **Changed to optional** |
+| visual_number | string(64) | No | Number printed on the token |
 | issuer | string(64) | Yes | Token issuer |
 | valid | boolean | Yes | Whether valid |
-| **whitelist** | WhitelistType | Yes | **Replaces `allow_whitelist` boolean** |
-| **language** | string(2) | No | **Added: Preferred language (ISO 639-1)** |
+| **whitelist** | WhitelistType | Yes | **Added: Whitelist behavior** |
+| language | string(2) | No | Preferred language (ISO 639-1) |
 | **last_updated** | DateTime | Yes | **Added** |
 
 ### Version 2.2 / 2.2.1
