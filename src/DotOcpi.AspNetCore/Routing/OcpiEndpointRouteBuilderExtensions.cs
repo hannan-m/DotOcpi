@@ -55,7 +55,10 @@ public static class OcpiEndpointRouteBuilderExtensions
 
         if (rateLimitOptions is not null)
         {
-            group.AddEndpointFilter(new OcpiRateLimitFilter(rateLimitOptions));
+            var filter = new OcpiRateLimitFilter(rateLimitOptions);
+            group.AddEndpointFilter(filter);
+            // Dispose the PartitionedRateLimiter's timers on application shutdown
+            app.Lifetime.ApplicationStopping.Register(filter.Dispose);
         }
 
         group.AddEndpointFilter<OcpiMetricsFilter>();
