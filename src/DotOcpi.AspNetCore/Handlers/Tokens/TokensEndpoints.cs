@@ -70,9 +70,9 @@ public static class TokensEndpoints
             var basePath = httpContext.Request.PathBase + httpContext.Request.Path;
             var linkQuery = $"offset={nextOffset}&limit={limit}";
             if (httpContext.Request.Query.ContainsKey("date_from"))
-                linkQuery += $"&date_from={httpContext.Request.Query["date_from"]}";
+                linkQuery += $"&date_from={Uri.EscapeDataString(httpContext.Request.Query["date_from"].ToString())}";
             if (httpContext.Request.Query.ContainsKey("date_to"))
-                linkQuery += $"&date_to={httpContext.Request.Query["date_to"]}";
+                linkQuery += $"&date_to={Uri.EscapeDataString(httpContext.Request.Query["date_to"].ToString())}";
             httpContext.Response.Headers["Link"] = $"<{basePath}?{linkQuery}>; rel=\"next\"";
         }
 
