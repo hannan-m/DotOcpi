@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using DotOcpi.Client.Internal;
 
 namespace DotOcpi.Client;
@@ -9,44 +8,23 @@ namespace DotOcpi.Client;
 internal sealed class TariffsClient : ITariffsClient
 {
     private readonly HttpClient _httpClient;
-    private readonly OcpiHttpRequestBuilder _requestBuilder;
-    private readonly IOutboundTokenProvider _tokenProvider;
+    private readonly ICpoConnectionContextProvider _contextProvider;
+    private readonly PaginationHandler _pagination;
 
-    internal TariffsClient(
-        HttpClient httpClient,
-        OcpiHttpRequestBuilder requestBuilder,
-        IOutboundTokenProvider tokenProvider
-    )
+    internal TariffsClient(HttpClient httpClient, ICpoConnectionContextProvider contextProvider)
     {
         _httpClient = httpClient;
-        _requestBuilder = requestBuilder;
-        _tokenProvider = tokenProvider;
+        _contextProvider = contextProvider;
+        _pagination = new PaginationHandler(httpClient);
     }
 
-    public async IAsyncEnumerable<object> GetAllTariffsAsync(
+    public IAsyncEnumerable<object> GetAllTariffsAsync(
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        var token = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var modelType = OcpiModelTypeMap.GetTariffType(connection.Version);
-
-        var query = QueryStringBuilder.BuildDateFilter(dateFrom, dateTo);
-        var request = query is not null
-            ? _requestBuilder.BuildWithQuery(HttpMethod.Get, cpoId, "tariffs", query, token)
-            : _requestBuilder.Build(HttpMethod.Get, cpoId, "tariffs", null, token);
-
-        var pagination = new PaginationHandler(_httpClient);
-        await foreach (
-            var item in pagination
-                .StreamAllAsync(request, connection.Version, modelType, token, cancellationToken)
-                .ConfigureAwait(false)
-        )
-        {
-            yield return item;
-        }
-    }
+        CancellationToken cancellationToken = default
+    ) => PullClientHelper.StreamAllAsync(
+        _contextProvider, _pagination,
+        cpoId, "tariffs", OcpiModelTypeMap.GetTariffType,
+        dateFrom, dateTo, cancellationToken);
 }

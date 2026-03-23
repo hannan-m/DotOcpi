@@ -1,24 +1,24 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace DotOcpi.Testing;
+namespace DotOcpi.Simulator;
 
 /// <summary>
-/// Extension methods for registering <see cref="OcpiTestCpoServer"/> with DI.
+/// Extension methods for registering <see cref="OcpiCpoSimulator"/> with DI.
 /// </summary>
-public static class TestingExtensions
+public static class SimulatorExtensions
 {
     /// <summary>
-    /// Registers a singleton <see cref="OcpiTestCpoServer"/> that is started and stopped
+    /// Registers a singleton <see cref="OcpiCpoSimulator"/> that is started and stopped
     /// with the host lifetime. Intended for integration test fixtures.
     /// </summary>
     public static IServiceCollection AddTestCpoServer(
         this IServiceCollection services,
-        Action<TestCpoConfiguration>? configure = null
+        Action<CpoSimulatorConfiguration>? configure = null
     )
     {
         services.AddSingleton(sp =>
         {
-            var server = OcpiTestCpoServer.CreateAsync(configure).GetAwaiter().GetResult();
+            var server = OcpiCpoSimulator.CreateAsync(configure).GetAwaiter().GetResult();
             return server;
         });
 

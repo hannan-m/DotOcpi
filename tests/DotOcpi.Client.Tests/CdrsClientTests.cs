@@ -13,11 +13,7 @@ public class CdrsClientTests
         handler.EnqueueResponse(TestJsonData.WrapList(TestJsonData.Cdr, TestJsonData.Cdr2));
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new CdrsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new CdrsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var items = new List<object>();
         await foreach (var item in client.GetAllCdrsAsync("DE:ALL"))
@@ -46,11 +42,7 @@ public class CdrsClientTests
         );
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new CdrsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new CdrsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var items = new List<object>();
         await foreach (var item in client.GetAllCdrsAsync("DE:ALL"))
@@ -69,11 +61,7 @@ public class CdrsClientTests
         handler.EnqueueResponse(TestJsonData.WrapEmpty());
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new CdrsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new CdrsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         await foreach (
             var _ in client.GetAllCdrsAsync(
@@ -95,11 +83,7 @@ public class CdrsClientTests
         handler.EnqueueResponse(TestJsonData.WrapError(), System.Net.HttpStatusCode.InternalServerError);
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new CdrsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new CdrsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var items = new List<object>();
         await foreach (var item in client.GetAllCdrsAsync("DE:ALL"))
@@ -117,11 +101,7 @@ public class CdrsClientTests
         handler.EnqueueResponse(TestJsonData.WrapEmpty());
 
         var connection = PullClientTestHelper.CreateConnection();
-        var client = new CdrsClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new CdrsClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         await foreach (var _ in client.GetAllCdrsAsync("DE:ALL")) { }
 

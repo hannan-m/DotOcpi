@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using DotOcpi.AspNetCore.Filters;
 using DotOcpi.Modules;
 using Microsoft.AspNetCore.Builder;
@@ -13,6 +12,12 @@ namespace DotOcpi.AspNetCore.Handlers.Tokens;
 /// Maps OCPI Tokens module endpoints for all supported versions.
 /// eMSP is the Sender: serves token list via GET and handles POST authorize.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
 public static class TokensEndpoints
 {
     private const int DefaultLimit = 50;
@@ -27,6 +32,7 @@ public static class TokensEndpoints
         {
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/tokens");
             module.AddEndpointFilter(new OcpiContextFilter("tokens"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(8 * 1024));
 
             module.MapGet("", HandleTokensGet);
 
@@ -71,35 +77,20 @@ public static class TokensEndpoints
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleTokenAuthorize(HttpContext httpContext)
+    internal static async Task HandleTokenAuthorize(string tokenUid, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var tokenUid = (string)httpContext.GetRouteValue("tokenUid")!;
 
         // Body is optional — LocationReferences may be null for authorization without location filter
         object? locationReferences = null;
         if (httpContext.Request.ContentLength > 0 || httpContext.Request.ContentType is not null)
         {
-            try
-            {
-                var handler = ModuleHandlerFactory.LocationReferences(ctx.NegotiatedVersion);
-                locationReferences = await handler
-                    .DeserializeAsync(httpContext.Request.Body, httpContext.RequestAborted)
-                    .ConfigureAwait(false);
-            }
-            catch (JsonException)
-            {
-                await OcpiResponseWriter
-                    .WriteErrorAsync(
-                        httpContext,
-                        400,
-                        OcpiStatusCode.InvalidParameters.Value,
-                        "Request body contains invalid JSON.",
-                        httpContext.RequestAborted
-                    )
-                    .ConfigureAwait(false);
+            var handler = ModuleHandlerFactory.LocationReferences(ctx.NegotiatedVersion);
+            locationReferences = await EndpointHelper
+                .DeserializeOrRejectAsync(httpContext, handler)
+                .ConfigureAwait(false);
+            if (locationReferences is null)
                 return;
-            }
         }
 
         var authorizer = httpContext.RequestServices.GetRequiredService<ITokensAuthorizer>();
@@ -113,7 +104,12 @@ public static class TokensEndpoints
     }
 
     private static DateTimeOffset? ParseDateTimeOffset(string? value) =>
-        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var result)
+        DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var result
+        )
             ? result
             : null;
 

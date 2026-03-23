@@ -39,7 +39,7 @@ public class CredentialsClientTests
             "https://cpo.example.com/ocpi/2.2.1/credentials",
             "token-a",
             OcpiVersion.V2_2_1,
-            new { token = "our-token-b", url = "https://emsp.example.com/ocpi/versions" }
+            TestCredentials.V2_2_1("our-token-b")
         );
 
         result.Token.Should().Be("cpo-token-b");
@@ -73,7 +73,7 @@ public class CredentialsClientTests
             "https://cpo.example.com/ocpi/2.1.1/credentials",
             "token-a",
             OcpiVersion.V2_1_1,
-            new { token = "our-token-b", url = "https://emsp.example.com/ocpi/versions" }
+            TestCredentials.V2_1_1("our-token-b")
         );
 
         result.Token.Should().Be("cpo-token-b");
@@ -106,7 +106,7 @@ public class CredentialsClientTests
             "https://cpo.example.com/ocpi/2.0/credentials",
             "token-a",
             OcpiVersion.V2_0,
-            new { token = "our-token-b", url = "https://emsp.example.com/ocpi/versions" }
+            TestCredentials.V2_0("our-token-b")
         );
 
         result.Token.Should().Be("cpo-token-b");
@@ -133,7 +133,7 @@ public class CredentialsClientTests
                 "https://cpo.example.com/ocpi/2.2.1/credentials",
                 "token-a",
                 OcpiVersion.V2_2_1,
-                new { }
+                TestCredentials.V2_2_1()
             );
 
         await act.Should().ThrowAsync<OcpiRegistrationException>().WithMessage("*missing data*");
@@ -162,7 +162,7 @@ public class CredentialsClientTests
                 "https://cpo.example.com/ocpi/2.2.1/credentials",
                 "token-a",
                 OcpiVersion.V2_2_1,
-                new { }
+                TestCredentials.V2_2_1()
             );
 
         await act.Should().ThrowAsync<OcpiRegistrationException>().WithMessage("*missing roles*");
@@ -193,7 +193,7 @@ public class CredentialsClientTests
                 "https://cpo.example.com/ocpi/2.1.1/credentials",
                 "token-a",
                 OcpiVersion.V2_1_1,
-                new { }
+                TestCredentials.V2_1_1()
             );
 
         await act.Should().ThrowAsync<OcpiRegistrationException>().WithMessage("*missing required field 'token'*");
@@ -229,7 +229,7 @@ public class CredentialsClientTests
             "https://cpo.example.com/ocpi/2.2.1/credentials",
             "token-b",
             OcpiVersion.V2_2_1,
-            new { }
+            TestCredentials.V2_2_1()
         );
 
         result.Token.Should().Be("cpo-token-c");
@@ -288,7 +288,7 @@ public class CredentialsClientTests
             "https://cpo.example.com/ocpi/2.1.1/credentials",
             "my-token-a",
             OcpiVersion.V2_1_1,
-            new { }
+            TestCredentials.V2_1_1()
         );
 
         handler.LastRequest!.Method.Should().Be(HttpMethod.Post);

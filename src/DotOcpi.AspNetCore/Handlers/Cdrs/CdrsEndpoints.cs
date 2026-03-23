@@ -12,6 +12,12 @@ namespace DotOcpi.AspNetCore.Handlers.Cdrs;
 /// CDRs use POST (not PUT) and return a Location header for the created resource.
 /// Duplicate POSTs return the existing CDR for idempotency.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
 public static class CdrsEndpoints
 {
     /// <summary>
@@ -23,6 +29,7 @@ public static class CdrsEndpoints
         {
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/cdrs");
             module.AddEndpointFilter(new OcpiContextFilter("cdrs"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(1024 * 1024));
 
             module.MapPost("", HandleCdrPost);
 
@@ -65,9 +72,7 @@ public static class CdrsEndpoints
                 httpContext.Response.StatusCode = StatusCodes.Status201Created;
             }
 
-            await OcpiResponseWriter
-                .WriteSuccessAsync<object?>(httpContext, null, ctx.NegotiatedVersion)
-                .ConfigureAwait(false);
+            await OcpiResponseWriter.WriteSuccessNoDataAsync(httpContext).ConfigureAwait(false);
         }
         else
         {
@@ -83,10 +88,9 @@ public static class CdrsEndpoints
         }
     }
 
-    internal static async Task HandleCdrGet(HttpContext httpContext)
+    internal static async Task HandleCdrGet(string cdrId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var cdrId = (string)httpContext.GetRouteValue("cdrId")!;
 
         var receiver = httpContext.RequestServices.GetRequiredService<ICdrsReceiver>();
         var result = await receiver.GetCdrAsync(ctx, cdrId, httpContext.RequestAborted).ConfigureAwait(false);

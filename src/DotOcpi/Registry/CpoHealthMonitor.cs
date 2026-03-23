@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -6,35 +7,47 @@ namespace DotOcpi.Registry;
 /// <summary>
 /// Background service that periodically checks the health of connected CPOs
 /// by verifying their versions endpoint is reachable. Marks connections as
-/// Offline after repeated failures and Suspended after prolonged outage.
+/// Offline after repeated failures.
 /// </summary>
 public sealed partial class CpoHealthMonitor : BackgroundService
 {
     private readonly ICpoRegistry _registry;
+    private readonly HttpClient _httpClient;
     private readonly ILogger<CpoHealthMonitor> _logger;
     private readonly TimeSpan _interval;
+    private readonly int _maxFailures;
+    private readonly TimeSpan _timeout;
+    private readonly ConcurrentDictionary<string, int> _failureCounts = new();
 
     /// <summary>
     /// Creates a new CpoHealthMonitor.
     /// </summary>
-    /// <param name="registry">The CPO registry to monitor.</param>
-    /// <param name="logger">Logger instance.</param>
-    /// <param name="interval">How often to run health checks. Defaults to 5 minutes.</param>
-    public CpoHealthMonitor(ICpoRegistry registry, ILogger<CpoHealthMonitor> logger, TimeSpan? interval = null)
+    public CpoHealthMonitor(
+        ICpoRegistry registry,
+        HttpClient httpClient,
+        ILogger<CpoHealthMonitor> logger,
+        TimeSpan? interval = null,
+        int maxConsecutiveFailures = 3,
+        TimeSpan? healthCheckTimeout = null)
     {
         _registry = registry;
+        _httpClient = httpClient;
         _logger = logger;
         _interval = interval ?? TimeSpan.FromMinutes(5);
+        _maxFailures = maxConsecutiveFailures;
+        _timeout = healthCheckTimeout ?? TimeSpan.FromSeconds(10);
     }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        using var timer = new PeriodicTimer(_interval);
+
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
             try
             {
-                CheckAllConnections(stoppingToken);
+                await CheckAllConnectionsAsync(stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -44,35 +57,106 @@ public sealed partial class CpoHealthMonitor : BackgroundService
             {
                 LogHealthCheckCycleFailed(_logger, ex);
             }
-
-            await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
         }
     }
 
-    private void CheckAllConnections(CancellationToken cancellationToken)
+    private async Task CheckAllConnectionsAsync(CancellationToken cancellationToken)
     {
         var connections = _registry.GetAll();
 
         foreach (var connection in connections)
         {
             if (cancellationToken.IsCancellationRequested)
-            {
                 break;
-            }
 
             if (connection.Status is ConnectionStatus.Unregistered or ConnectionStatus.Pending)
-            {
                 continue;
-            }
 
-            // Health check implementation will be added when the HTTP client is available (Phase 11).
-            LogHealthCheck(_logger, connection.ConnectionKey, connection.Version);
+            var healthy = await CheckCpoHealthAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            if (healthy)
+            {
+                _failureCounts.TryRemove(connection.ConnectionKey, out _);
+
+                if (connection.Status == ConnectionStatus.Offline)
+                {
+                    var restored = connection with
+                    {
+                        Status = ConnectionStatus.Connected,
+                        LastHealthCheckAt = DateTimeOffset.UtcNow,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                    };
+                    _registry.AddOrUpdate(restored);
+                    LogHealthRestored(_logger, connection.ConnectionKey);
+                }
+                else
+                {
+                    var updated = connection with
+                    {
+                        LastHealthCheckAt = DateTimeOffset.UtcNow,
+                    };
+                    _registry.AddOrUpdate(updated);
+                }
+
+                LogHealthCheck(_logger, connection.ConnectionKey, connection.Version);
+            }
+            else
+            {
+                var failures = _failureCounts.AddOrUpdate(connection.ConnectionKey, 1, (_, c) => c + 1);
+                LogHealthCheckFailed(_logger, connection.ConnectionKey, failures, _maxFailures);
+
+                if (failures >= _maxFailures && connection.Status == ConnectionStatus.Connected)
+                {
+                    var offline = connection with
+                    {
+                        Status = ConnectionStatus.Offline,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                    };
+                    _registry.AddOrUpdate(offline);
+                    LogCpoMarkedOffline(_logger, connection.ConnectionKey, failures);
+                }
+            }
+        }
+    }
+
+    private async Task<bool> CheckCpoHealthAsync(CpoConnection connection, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(connection.CpoVersionsUrl))
+            return true; // No URL to check — assume healthy
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(_timeout);
+
+            using var response = await _httpClient
+                .GetAsync(connection.CpoVersionsUrl, cts.Token)
+                .ConfigureAwait(false);
+
+            return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false; // Timeout
+        }
+        catch (HttpRequestException)
+        {
+            return false;
         }
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "CPO health check cycle failed")]
     private static partial void LogHealthCheckCycleFailed(ILogger logger, Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Health check for CPO {ConnectionKey} (version {Version})")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Health check passed for {ConnectionKey} ({Version})")]
     private static partial void LogHealthCheck(ILogger logger, string connectionKey, OcpiVersion version);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Health check failed for {ConnectionKey} ({Failures}/{MaxFailures})")]
+    private static partial void LogHealthCheckFailed(ILogger logger, string connectionKey, int failures, int maxFailures);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "CPO {ConnectionKey} marked Offline after {Failures} consecutive failures")]
+    private static partial void LogCpoMarkedOffline(ILogger logger, string connectionKey, int failures);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "CPO {ConnectionKey} restored to Connected")]
+    private static partial void LogHealthRestored(ILogger logger, string connectionKey);
 }

@@ -1,4 +1,4 @@
-using DotOcpi.Testing;
+using DotOcpi.Simulator;
 using Xunit;
 
 namespace DotOcpi.Integration.Tests.Fixtures;
@@ -9,17 +9,17 @@ namespace DotOcpi.Integration.Tests.Fixtures;
 /// </summary>
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
-    private OcpiTestCpoServer? _server;
+    private OcpiCpoSimulator? _server;
 
     /// <summary>
     /// The test CPO server instance. Available after <see cref="InitializeAsync"/>.
     /// </summary>
-    protected OcpiTestCpoServer Server => _server!;
+    protected OcpiCpoSimulator Server => _server!;
 
     /// <summary>
     /// Override to customize the test CPO server configuration.
     /// </summary>
-    protected virtual void ConfigureServer(TestCpoConfiguration config) { }
+    protected virtual void ConfigureServer(CpoSimulatorConfiguration config) { }
 
     /// <summary>
     /// Creates an <see cref="HttpClient"/> configured with the server's base address.
@@ -44,7 +44,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _server = await OcpiTestCpoServer.CreateAsync(ConfigureServer);
+        _server = await OcpiCpoSimulator.CreateAsync(ConfigureServer);
     }
 
     public async Task DisposeAsync()

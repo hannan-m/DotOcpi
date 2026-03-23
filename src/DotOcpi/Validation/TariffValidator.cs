@@ -1,99 +1,214 @@
-using DotOcpi.Models.V2_2_1;
-
 namespace DotOcpi.Validation;
 
 /// <summary>
-/// Validates Tariff models against OCPI 2.2.1 protocol rules.
+/// Validates Tariff models against OCPI protocol rules across all supported versions.
+/// V2_0/V2_1_1: currency, elements with price components.
+/// V2_2/V2_2_1: all of the above plus time range and min/max price consistency.
 /// </summary>
-public sealed class TariffValidator : IOcpiValidator<Tariff>
+public sealed class TariffValidator
+    : IOcpiValidator<Models.V2_0.Tariff>,
+        IOcpiValidator<Models.V2_1_1.Tariff>,
+        IOcpiValidator<Models.V2_2.Tariff>,
+        IOcpiValidator<Models.V2_2_1.Tariff>
 {
     /// <inheritdoc />
-    public OcpiValidationResult Validate(Tariff model)
+    public OcpiValidationResult Validate(Models.V2_0.Tariff model)
     {
         var errors = new List<OcpiValidationError>();
 
-        ValidateCurrency(model, errors);
-        ValidateElements(model, errors);
-        ValidateTimeRange(model, errors);
-        ValidateMinMaxPrice(model, errors);
+        ValidationHelpers.ValidateCurrency(model.Currency, "TARIFF_INVALID_CURRENCY", errors);
+        ValidateElements(model.Elements, errors);
 
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateCurrency(Tariff model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_1_1.Tariff model)
     {
-        if (model.Currency.Length != 3 || !model.Currency.All(char.IsLetter))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "TARIFF_INVALID_CURRENCY",
-                    $"Currency '{model.Currency}' is not a valid ISO 4217 code.",
-                    "Provide a 3-letter ISO 4217 currency code (e.g. 'EUR', 'USD')."
-                )
-                {
-                    PropertyPath = "Currency",
-                }
-            );
-        }
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCurrency(model.Currency, "TARIFF_INVALID_CURRENCY", errors);
+        ValidateElements(model.Elements, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateElements(Tariff model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2.Tariff model)
     {
-        if (model.Elements.Count == 0)
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCurrency(model.Currency, "TARIFF_INVALID_CURRENCY", errors);
+        ValidateElements(model.Elements, errors);
+        ValidateTimeRange(model.StartDateTime, model.EndDateTime, errors);
+        ValidateMinMaxPrice(model.MinPrice, model.MaxPrice, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2_1.Tariff model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCurrency(model.Currency, "TARIFF_INVALID_CURRENCY", errors);
+        ValidateElements(model.Elements, errors);
+        ValidateTimeRange(model.StartDateTime, model.EndDateTime, errors);
+        ValidateMinMaxPrice(model.MinPrice, model.MaxPrice, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    OcpiValidationResult IOcpiValidator.Validate(object model) =>
+        model switch
         {
-            errors.Add(
-                new OcpiValidationError(
-                    "TARIFF_NO_ELEMENTS",
-                    "Tariff has no elements.",
-                    "A Tariff must have at least one TariffElement."
-                )
-                {
-                    PropertyPath = "Elements",
-                }
-            );
+            Models.V2_0.Tariff m => Validate(m),
+            Models.V2_1_1.Tariff m => Validate(m),
+            Models.V2_2.Tariff m => Validate(m),
+            Models.V2_2_1.Tariff m => Validate(m),
+            _ => throw new ArgumentException($"Unsupported Tariff type: {model.GetType().Name}", nameof(model)),
+        };
+
+    private static void ValidateElements(
+        IReadOnlyList<Models.V2_0.TariffElement> elements,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (elements.Count == 0)
+        {
+            AddNoElementsError(errors);
             return;
         }
 
-        for (var i = 0; i < model.Elements.Count; i++)
+        for (var i = 0; i < elements.Count; i++)
         {
-            var element = model.Elements[i];
-            if (element.PriceComponents.Count == 0)
-            {
-                errors.Add(
-                    new OcpiValidationError(
-                        "TARIFF_ELEMENT_NO_PRICE_COMPONENTS",
-                        $"TariffElement at index {i} has no price components.",
-                        "Each TariffElement must have at least one PriceComponent."
-                    )
-                    {
-                        PropertyPath = $"Elements[{i}].PriceComponents",
-                    }
-                );
-            }
+            var element = elements[i];
+            ValidatePriceComponents(element.PriceComponents.Count, i, errors);
 
             for (var j = 0; j < element.PriceComponents.Count; j++)
-            {
-                var component = element.PriceComponents[j];
-                if (component.StepSize <= 0)
-                {
-                    errors.Add(
-                        new OcpiValidationError(
-                            "TARIFF_INVALID_STEP_SIZE",
-                            $"PriceComponent step_size {component.StepSize} must be greater than 0.",
-                            "Set step_size to a positive integer."
-                        )
-                        {
-                            PropertyPath = $"Elements[{i}].PriceComponents[{j}].StepSize",
-                        }
-                    );
-                }
-            }
+                ValidateStepSize(element.PriceComponents[j].StepSize, i, j, errors);
         }
     }
 
-    private static void ValidateTimeRange(Tariff model, List<OcpiValidationError> errors)
+    private static void ValidateElements(
+        IReadOnlyList<Models.V2_1_1.TariffElement> elements,
+        List<OcpiValidationError> errors
+    )
     {
-        if (model.StartDateTime is { } start && model.EndDateTime is { } end && end < start)
+        if (elements.Count == 0)
+        {
+            AddNoElementsError(errors);
+            return;
+        }
+
+        for (var i = 0; i < elements.Count; i++)
+        {
+            var element = elements[i];
+            ValidatePriceComponents(element.PriceComponents.Count, i, errors);
+
+            for (var j = 0; j < element.PriceComponents.Count; j++)
+                ValidateStepSize(element.PriceComponents[j].StepSize, i, j, errors);
+        }
+    }
+
+    private static void ValidateElements(
+        IReadOnlyList<Models.V2_2.TariffElement> elements,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (elements.Count == 0)
+        {
+            AddNoElementsError(errors);
+            return;
+        }
+
+        for (var i = 0; i < elements.Count; i++)
+        {
+            var element = elements[i];
+            ValidatePriceComponents(element.PriceComponents.Count, i, errors);
+
+            for (var j = 0; j < element.PriceComponents.Count; j++)
+                ValidateStepSize(element.PriceComponents[j].StepSize, i, j, errors);
+        }
+    }
+
+    private static void ValidateElements(
+        IReadOnlyList<Models.V2_2_1.TariffElement> elements,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (elements.Count == 0)
+        {
+            AddNoElementsError(errors);
+            return;
+        }
+
+        for (var i = 0; i < elements.Count; i++)
+        {
+            var element = elements[i];
+            ValidatePriceComponents(element.PriceComponents.Count, i, errors);
+
+            for (var j = 0; j < element.PriceComponents.Count; j++)
+                ValidateStepSize(element.PriceComponents[j].StepSize, i, j, errors);
+        }
+    }
+
+    private static void AddNoElementsError(List<OcpiValidationError> errors)
+    {
+        errors.Add(
+            new OcpiValidationError(
+                "TARIFF_NO_ELEMENTS",
+                "Tariff has no elements.",
+                "A Tariff must have at least one TariffElement."
+            )
+            {
+                PropertyPath = "Elements",
+            }
+        );
+    }
+
+    private static void ValidatePriceComponents(int count, int elementIndex, List<OcpiValidationError> errors)
+    {
+        if (count == 0)
+        {
+            errors.Add(
+                new OcpiValidationError(
+                    "TARIFF_ELEMENT_NO_PRICE_COMPONENTS",
+                    $"TariffElement at index {elementIndex} has no price components.",
+                    "Each TariffElement must have at least one PriceComponent."
+                )
+                {
+                    PropertyPath = $"Elements[{elementIndex}].PriceComponents",
+                }
+            );
+        }
+    }
+
+    private static void ValidateStepSize(
+        int stepSize,
+        int elementIndex,
+        int componentIndex,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (stepSize <= 0)
+        {
+            errors.Add(
+                new OcpiValidationError(
+                    "TARIFF_INVALID_STEP_SIZE",
+                    $"PriceComponent step_size {stepSize} must be greater than 0.",
+                    "Set step_size to a positive integer."
+                )
+                {
+                    PropertyPath = $"Elements[{elementIndex}].PriceComponents[{componentIndex}].StepSize",
+                }
+            );
+        }
+    }
+
+    private static void ValidateTimeRange(DateTimeOffset? start, DateTimeOffset? end, List<OcpiValidationError> errors)
+    {
+        if (start is { } s && end is { } e && e < s)
         {
             errors.Add(
                 new OcpiValidationError(
@@ -108,20 +223,37 @@ public sealed class TariffValidator : IOcpiValidator<Tariff>
         }
     }
 
-    private static void ValidateMinMaxPrice(Tariff model, List<OcpiValidationError> errors)
+    private static void ValidateMinMaxPrice(
+        Models.V2_2.Price? minPrice,
+        Models.V2_2.Price? maxPrice,
+        List<OcpiValidationError> errors
+    )
     {
-        if (model.MinPrice is { } minPrice && model.MaxPrice is { } maxPrice && minPrice.ExclVat > maxPrice.ExclVat)
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "TARIFF_MIN_EXCEEDS_MAX",
-                    "MinPrice.ExclVat exceeds MaxPrice.ExclVat.",
-                    "MinPrice must be less than or equal to MaxPrice."
-                )
-                {
-                    PropertyPath = "MinPrice",
-                }
-            );
-        }
+        if (minPrice is { } min && maxPrice is { } max && min.ExclVat > max.ExclVat)
+            AddMinExceedsMaxError(errors);
+    }
+
+    private static void ValidateMinMaxPrice(
+        Models.V2_2_1.Price? minPrice,
+        Models.V2_2_1.Price? maxPrice,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (minPrice is { } min && maxPrice is { } max && min.ExclVat > max.ExclVat)
+            AddMinExceedsMaxError(errors);
+    }
+
+    private static void AddMinExceedsMaxError(List<OcpiValidationError> errors)
+    {
+        errors.Add(
+            new OcpiValidationError(
+                "TARIFF_MIN_EXCEEDS_MAX",
+                "MinPrice.ExclVat exceeds MaxPrice.ExclVat.",
+                "MinPrice must be less than or equal to MaxPrice."
+            )
+            {
+                PropertyPath = "MinPrice",
+            }
+        );
     }
 }

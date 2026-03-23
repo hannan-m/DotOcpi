@@ -89,7 +89,7 @@ public sealed class CredentialsClient : ICredentialsClient
 
         using var request = new HttpRequestMessage(method, credentialsUrl);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Token", token);
-        request.Content = JsonContent.Create(ourCredentials, ourCredentials.GetType(), options: options);
+        request.Content = JsonContent.Create(ourCredentials, options.GetTypeInfo(ourCredentials.GetType()));
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

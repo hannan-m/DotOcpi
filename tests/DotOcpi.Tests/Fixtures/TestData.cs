@@ -16,7 +16,8 @@ public static class TestData
         ConnectorFormat format = ConnectorFormat.SOCKET,
         PowerType powerType = PowerType.AC_3_PHASE,
         int maxVoltage = 230,
-        int maxAmperage = 32) =>
+        int maxAmperage = 32
+    ) =>
         new()
         {
             Id = id,
@@ -28,10 +29,7 @@ public static class TestData
             LastUpdated = DefaultTimestamp,
         };
 
-    public static Evse CreateEvse(
-        string uid = "3256",
-        Status status = Status.AVAILABLE,
-        Connector? connector = null) =>
+    public static Evse CreateEvse(string uid = "3256", Status status = Status.AVAILABLE, Connector? connector = null) =>
         new()
         {
             Uid = uid,
@@ -45,7 +43,8 @@ public static class TestData
         string partyId = "TNM",
         string id = "LOC1",
         bool publish = true,
-        Evse? evse = null) =>
+        Evse? evse = null
+    ) =>
         new()
         {
             CountryCode = countryCode,
@@ -61,9 +60,7 @@ public static class TestData
             LastUpdated = DefaultTimestamp,
         };
 
-    public static CdrToken CreateCdrToken(
-        string uid = "TOKEN-001",
-        TokenType type = TokenType.RFID) =>
+    public static CdrToken CreateCdrToken(string uid = "TOKEN-001", TokenType type = TokenType.RFID) =>
         new()
         {
             CountryCode = "NL",
@@ -73,9 +70,7 @@ public static class TestData
             ContractId = "NL-TNM-C00001",
         };
 
-    public static Session CreateSession(
-        string id = "SES-001",
-        SessionStatus status = SessionStatus.ACTIVE) =>
+    public static Session CreateSession(string id = "SES-001", SessionStatus status = SessionStatus.ACTIVE) =>
         new()
         {
             CountryCode = "NL",
@@ -138,7 +133,8 @@ public static class TestData
     public static PriceComponent CreatePriceComponent(
         TariffDimensionType type = TariffDimensionType.ENERGY,
         decimal price = 0.25m,
-        int stepSize = 1) =>
+        int stepSize = 1
+    ) =>
         new()
         {
             Type = type,
@@ -153,20 +149,11 @@ public static class TestData
             PartyId = "TNM",
             Id = id,
             Currency = "EUR",
-            Elements =
-            [
-                new TariffElement
-                {
-                    PriceComponents = [CreatePriceComponent()],
-                },
-            ],
+            Elements = [new TariffElement { PriceComponents = [CreatePriceComponent()] }],
             LastUpdated = DefaultTimestamp,
         };
 
-    public static Token CreateToken(
-        string uid = "TOKEN-001",
-        TokenType type = TokenType.RFID,
-        bool valid = true) =>
+    public static Token CreateToken(string uid = "TOKEN-001", TokenType type = TokenType.RFID, bool valid = true) =>
         new()
         {
             CountryCode = "NL",

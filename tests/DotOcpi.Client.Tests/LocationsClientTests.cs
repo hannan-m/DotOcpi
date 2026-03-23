@@ -15,8 +15,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.GetLocationAsync("DE:ALL", "LOC1");
@@ -35,8 +34,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.GetLocationAsync("DE:ALL", "LOC1");
@@ -54,8 +52,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await client.GetLocationAsync("DE:ALL", "LOC1");
@@ -76,8 +73,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await client.GetLocationAsync("DE:ALL", "LOC1");
@@ -101,8 +97,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var items = new List<object>();
@@ -134,8 +129,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var items = new List<object>();
@@ -157,8 +151,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await foreach (
@@ -180,8 +173,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await foreach (
@@ -206,8 +198,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         await foreach (var _ in client.GetAllLocationsAsync("DE:ALL")) { }
@@ -224,8 +215,7 @@ public class LocationsClientTests
         var connection = PullClientTestHelper.CreateConnection();
         var client = new LocationsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var result = await client.GetLocationAsync("DE:ALL", "LOC1");

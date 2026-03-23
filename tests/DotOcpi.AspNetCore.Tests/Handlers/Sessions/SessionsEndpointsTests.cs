@@ -62,9 +62,7 @@ public class SessionsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, SessionJsonV221);
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionPut(httpContext);
+        await SessionsEndpoints.HandleSessionPut("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -94,9 +92,7 @@ public class SessionsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_0, SessionJsonV20);
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionPut(httpContext);
+        await SessionsEndpoints.HandleSessionPut("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -115,9 +111,7 @@ public class SessionsEndpointsTests
         var receiver = Substitute.For<ISessionsReceiver>();
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionPut(httpContext);
+        await SessionsEndpoints.HandleSessionPut("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
     }
@@ -136,9 +130,7 @@ public class SessionsEndpointsTests
             .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Invalid session"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, SessionJsonV221);
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionPut(httpContext);
+        await SessionsEndpoints.HandleSessionPut("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -159,9 +151,7 @@ public class SessionsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, """{"kwh": 20.0}""");
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionPatch(httpContext);
+        await SessionsEndpoints.HandleSessionPatch("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -179,9 +169,7 @@ public class SessionsEndpointsTests
     {
         var receiver = Substitute.For<ISessionsReceiver>();
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, """[1, 2, 3]""");
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionPatch(httpContext);
+        await SessionsEndpoints.HandleSessionPatch("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
     }
@@ -225,9 +213,7 @@ public class SessionsEndpointsTests
             .Returns(OcpiResult<object>.Success(sessionData));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await SessionsEndpoints.HandleSessionGet(httpContext);
+        await SessionsEndpoints.HandleSessionGet("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -244,9 +230,7 @@ public class SessionsEndpointsTests
             .Returns(OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Session not found"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["sessionId"] = "UNKNOWN";
-
-        await SessionsEndpoints.HandleSessionGet(httpContext);
+        await SessionsEndpoints.HandleSessionGet("UNKNOWN", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);

@@ -4,8 +4,9 @@ using System.Text.Json.Serialization;
 namespace DotOcpi.Serialization;
 
 /// <summary>
-/// Provides pre-configured JsonSerializerOptions per OCPI version.
-/// Options are cached and made read-only after first use.
+/// Provides pre-configured JsonSerializerOptions per OCPI version,
+/// wired to the corresponding source-generated <see cref="JsonSerializerContext"/>
+/// for AOT-safe, zero-reflection serialization of all declared model types.
 /// </summary>
 public static class OcpiJsonOptions
 {
@@ -28,18 +29,18 @@ public static class OcpiJsonOptions
         };
 
     /// <summary>Options configured for OCPI 2.2.1.</summary>
-    public static JsonSerializerOptions V2_2_1 => _v2_2_1 ??= CreateOptions();
+    public static JsonSerializerOptions V2_2_1 => _v2_2_1 ??= CreateOptions(OcpiJsonContext_V2_2_1.Default);
 
     /// <summary>Options configured for OCPI 2.2.</summary>
-    public static JsonSerializerOptions V2_2 => _v2_2 ??= CreateOptions();
+    public static JsonSerializerOptions V2_2 => _v2_2 ??= CreateOptions(OcpiJsonContext_V2_2.Default);
 
     /// <summary>Options configured for OCPI 2.1.1.</summary>
-    public static JsonSerializerOptions V2_1_1 => _v2_1_1 ??= CreateOptions();
+    public static JsonSerializerOptions V2_1_1 => _v2_1_1 ??= CreateOptions(OcpiJsonContext_V2_1_1.Default);
 
     /// <summary>Options configured for OCPI 2.0.</summary>
-    public static JsonSerializerOptions V2_0 => _v2_0 ??= CreateOptions();
+    public static JsonSerializerOptions V2_0 => _v2_0 ??= CreateOptions(OcpiJsonContext_V2_0.Default);
 
-    private static JsonSerializerOptions CreateOptions()
+    private static JsonSerializerOptions CreateOptions(JsonSerializerContext context)
     {
         var options = new JsonSerializerOptions
         {
@@ -49,14 +50,13 @@ public static class OcpiJsonOptions
             WriteIndented = false,
         };
 
-        options.Converters.Add(new OcpiDateTimeConverter());
-        options.Converters.Add(new OcpiNullableDateTimeConverter());
-        options.Converters.Add(new CiStringConverter());
-        options.Converters.Add(new NullableCiStringConverter());
-        options.Converters.Add(new GeoLocationConverter());
-        options.Converters.Add(new OcpiEnumConverterFactory());
+        options.TypeInfoResolverChain.Add(context);
 
-        options.MakeReadOnly(populateMissingResolver: true);
+        options.Converters.Add(new OcpiDateTimeConverter());
+        options.Converters.Add(new CiStringConverter());
+        options.Converters.Add(new GeoLocationConverter());
+
+        options.MakeReadOnly();
         return options;
     }
 }

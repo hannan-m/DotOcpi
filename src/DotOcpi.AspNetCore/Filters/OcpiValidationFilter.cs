@@ -43,21 +43,6 @@ public sealed class OcpiValidationFilter<T> : IEndpointFilter
             return await next(context).ConfigureAwait(false);
         }
 
-        return Results.Json(
-            new
-            {
-                status_code = 2001,
-                status_message = "Invalid or missing parameters.",
-                data = result.Errors.Select(static e => new
-                {
-                    code = e.Code,
-                    message = e.Message,
-                    property_path = e.PropertyPath,
-                }),
-                timestamp = DateTimeOffset.UtcNow,
-            },
-            statusCode: StatusCodes.Status400BadRequest,
-            contentType: "application/json"
-        );
+        return OcpiResponseWriter.ValidationErrorResult(result.Errors);
     }
 }

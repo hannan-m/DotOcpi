@@ -12,7 +12,15 @@ public readonly record struct PartyIdentity(string CountryCode, string PartyId)
     /// Returns a composite identifier in the format "{CC}_{PID}" (uppercased).
     /// Deterministic and suitable for dictionary keys and registry lookups.
     /// </summary>
-    public string ToCompositeId() => $"{CountryCode}_{PartyId}".ToUpperInvariant();
+    public string ToCompositeId() => string.Create(
+        CountryCode.Length + 1 + PartyId.Length,
+        (CountryCode, PartyId),
+        static (span, state) =>
+        {
+            state.CountryCode.AsSpan().ToUpperInvariant(span);
+            span[state.CountryCode.Length] = '_';
+            state.PartyId.AsSpan().ToUpperInvariant(span[(state.CountryCode.Length + 1)..]);
+        });
 
     /// <inheritdoc/>
     public override string ToString() => ToCompositeId();

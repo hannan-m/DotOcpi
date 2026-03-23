@@ -5,7 +5,7 @@ using System.Text.Json;
 using DotOcpi.Integration.Tests.Fixtures;
 using DotOcpi.Registration;
 using DotOcpi.Security;
-using DotOcpi.Testing;
+using DotOcpi.Simulator;
 using FluentAssertions;
 using Xunit;
 
@@ -182,21 +182,7 @@ public class SecurityFlowTests : IntegrationTestBase
             $"{Server.BaseUrl}ocpi/credentials",
             Server.TokenA,
             OcpiVersion.V2_2_1,
-            new
-            {
-                token = TokenGenerator.Generate(),
-                url = "https://emsp.example.com/ocpi/versions",
-                roles = new[]
-                {
-                    new
-                    {
-                        role = "EMSP",
-                        business_details = new { name = "Test eMSP" },
-                        party_id = "MSP",
-                        country_code = "NL",
-                    },
-                },
-            }
+            TestCredentialsHelper.V2_2_1(TokenGenerator.Generate())
         );
     }
 }

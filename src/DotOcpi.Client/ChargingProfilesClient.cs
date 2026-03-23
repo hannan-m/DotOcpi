@@ -8,18 +8,12 @@ namespace DotOcpi.Client;
 internal sealed class ChargingProfilesClient : IChargingProfilesClient
 {
     private readonly HttpClient _httpClient;
-    private readonly OcpiHttpRequestBuilder _requestBuilder;
-    private readonly IOutboundTokenProvider _tokenProvider;
+    private readonly ICpoConnectionContextProvider _contextProvider;
 
-    internal ChargingProfilesClient(
-        HttpClient httpClient,
-        OcpiHttpRequestBuilder requestBuilder,
-        IOutboundTokenProvider tokenProvider
-    )
+    internal ChargingProfilesClient(HttpClient httpClient, ICpoConnectionContextProvider contextProvider)
     {
         _httpClient = httpClient;
-        _requestBuilder = requestBuilder;
-        _tokenProvider = tokenProvider;
+        _contextProvider = contextProvider;
     }
 
     public async Task<OcpiResult<object>> SetChargingProfileAsync(
@@ -29,25 +23,24 @@ internal sealed class ChargingProfilesClient : IChargingProfilesClient
         CancellationToken cancellationToken = default
     )
     {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        if (connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        if (context.Connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
         {
             return OcpiResult<object>.Failure(
                 OcpiStatusCode.GenericClientError,
-                $"Charging profiles are not supported in OCPI {connection.Version.ToVersionString()}."
+                $"Charging profiles are not supported in OCPI {context.Connection.Version.ToVersionString()}."
             );
         }
 
-        var cpoToken = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var request = _requestBuilder.Build(HttpMethod.Put, cpoId, "chargingprofiles", sessionId, cpoToken, profile);
+        var request = OcpiHttpRequestBuilder.Build(HttpMethod.Put, context, "chargingprofiles", sessionId, profile);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         return await OcpiResponseParser
             .ParseVersionedObjectAsync(
                 response,
-                connection.Version,
-                OcpiModelTypeMap.GetChargingProfileResponseType(connection.Version),
+                context.Connection.Version,
+                OcpiModelTypeMap.GetChargingProfileResponseType(context.Connection.Version),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -59,25 +52,24 @@ internal sealed class ChargingProfilesClient : IChargingProfilesClient
         CancellationToken cancellationToken = default
     )
     {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        if (connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        if (context.Connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
         {
             return OcpiResult<object>.Failure(
                 OcpiStatusCode.GenericClientError,
-                $"Charging profiles are not supported in OCPI {connection.Version.ToVersionString()}."
+                $"Charging profiles are not supported in OCPI {context.Connection.Version.ToVersionString()}."
             );
         }
 
-        var cpoToken = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var request = _requestBuilder.Build(HttpMethod.Delete, cpoId, "chargingprofiles", sessionId, cpoToken);
+        var request = OcpiHttpRequestBuilder.Build(HttpMethod.Delete, context, "chargingprofiles", sessionId);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         return await OcpiResponseParser
             .ParseVersionedObjectAsync(
                 response,
-                connection.Version,
-                OcpiModelTypeMap.GetChargingProfileResponseType(connection.Version),
+                context.Connection.Version,
+                OcpiModelTypeMap.GetChargingProfileResponseType(context.Connection.Version),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -89,25 +81,24 @@ internal sealed class ChargingProfilesClient : IChargingProfilesClient
         CancellationToken cancellationToken = default
     )
     {
-        var connection = _requestBuilder.GetConnection(cpoId);
-        if (connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
+        var context = await _contextProvider.ResolveAsync(cpoId, cancellationToken).ConfigureAwait(false);
+        if (context.Connection.Version is OcpiVersion.V2_0 or OcpiVersion.V2_1_1)
         {
             return OcpiResult<object>.Failure(
                 OcpiStatusCode.GenericClientError,
-                $"Charging profiles are not supported in OCPI {connection.Version.ToVersionString()}."
+                $"Charging profiles are not supported in OCPI {context.Connection.Version.ToVersionString()}."
             );
         }
 
-        var cpoToken = await _tokenProvider.GetTokenAsync(cpoId, cancellationToken).ConfigureAwait(false);
-        var request = _requestBuilder.Build(HttpMethod.Get, cpoId, "chargingprofiles", sessionId, cpoToken);
+        var request = OcpiHttpRequestBuilder.Build(HttpMethod.Get, context, "chargingprofiles", sessionId);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
         return await OcpiResponseParser
             .ParseVersionedObjectAsync(
                 response,
-                connection.Version,
-                OcpiModelTypeMap.GetChargingProfileResponseType(connection.Version),
+                context.Connection.Version,
+                OcpiModelTypeMap.GetChargingProfileResponseType(context.Connection.Version),
                 cancellationToken
             )
             .ConfigureAwait(false);

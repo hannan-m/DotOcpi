@@ -29,11 +29,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 1000, "timestamp": "2024-01-01T00:00:00Z"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var token = new Models.V2_2_1.Token
         {
@@ -67,11 +63,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 2001, "status_message": "Invalid token format"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var result = await client.PushTokenAsync("DE:ALL", "012345678", new object());
 
@@ -86,11 +78,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 1000, "timestamp": "2024-01-01T00:00:00Z"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         await client.PushTokenAsync("DE:ALL", "012345678", new object());
 
@@ -107,11 +95,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 1000, "timestamp": "2024-01-01T00:00:00Z"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var token = new Models.V2_2_1.Token
         {
@@ -140,11 +124,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 1000, "timestamp": "2024-01-01T00:00:00Z"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var patch = JsonDocument.Parse("""{"valid": false}""").RootElement;
         var result = await client.PatchTokenAsync("DE:ALL", "012345678", patch);
@@ -161,11 +141,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 1000, "timestamp": "2024-01-01T00:00:00Z"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var patch = JsonDocument.Parse("""{"valid": false}""").RootElement;
         await client.PatchTokenAsync("DE:ALL", "012345678", patch);
@@ -182,11 +158,7 @@ public class TokensClientTests
         handler.EnqueueResponse("""{"status_code": 2003, "status_message": "Unknown token"}""");
 
         var connection = CreateConnection();
-        var client = new TokensClient(
-            new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
-        );
+        var client = new TokensClient(new HttpClient(handler), PullClientTestHelper.CreateContextProvider(connection));
 
         var patch = JsonDocument.Parse("""{"valid": false}""").RootElement;
         var result = await client.PatchTokenAsync("DE:ALL", "012345678", patch);

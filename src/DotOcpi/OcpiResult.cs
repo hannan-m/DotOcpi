@@ -7,7 +7,11 @@ namespace DotOcpi;
 /// Forces callers to handle success and failure explicitly.
 /// </summary>
 /// <typeparam name="T">The type of the data payload on success.</typeparam>
-[SuppressMessage("Design", "CA1000:Do not declare static members on generic types", Justification = "Factory methods are the standard pattern for result types")]
+[SuppressMessage(
+    "Design",
+    "CA1000:Do not declare static members on generic types",
+    Justification = "Factory methods are the standard pattern for result types"
+)]
 public sealed class OcpiResult<T>
 {
     private OcpiResult(bool isSuccess, T? data, OcpiStatusCode statusCode, string? statusMessage)
@@ -39,8 +43,7 @@ public sealed class OcpiResult<T>
     /// <summary>
     /// Creates a failure result with an error code and message.
     /// </summary>
-    public static OcpiResult<T> Failure(OcpiStatusCode code, string message) =>
-        new(false, default, code, message);
+    public static OcpiResult<T> Failure(OcpiStatusCode code, string message) => new(false, default, code, message);
 }
 
 /// <summary>
@@ -67,12 +70,10 @@ public sealed class OcpiResult
     /// <summary>
     /// Creates a successful result.
     /// </summary>
-    public static OcpiResult Success(string? message = null) =>
-        new(true, OcpiStatusCode.Success, message);
+    public static OcpiResult Success(string? message = null) => new(true, OcpiStatusCode.Success, message);
 
     /// <summary>
     /// Creates a failure result with an error code and message.
     /// </summary>
-    public static OcpiResult Failure(OcpiStatusCode code, string message) =>
-        new(false, code, message);
+    public static OcpiResult Failure(OcpiStatusCode code, string message) => new(false, code, message);
 }

@@ -13,6 +13,12 @@ namespace DotOcpi.AspNetCore.Handlers.Credentials;
 /// POST (initial registration), PUT (credential rotation),
 /// DELETE (unregistration), and GET (retrieve current credentials).
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
 public static class CredentialsEndpoints
 {
     /// <summary>
@@ -24,6 +30,7 @@ public static class CredentialsEndpoints
         {
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/credentials");
             module.AddEndpointFilter(new OcpiContextFilter("credentials"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(16 * 1024));
 
             module.MapPost("", HandleCredentialsPost);
             module.MapPut("", HandleCredentialsPut);
@@ -78,7 +85,7 @@ public static class CredentialsEndpoints
         var result = await handler.OnCredentialsDeleteAsync(ctx, httpContext.RequestAborted).ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 

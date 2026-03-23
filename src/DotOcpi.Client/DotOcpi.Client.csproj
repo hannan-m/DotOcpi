@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <Description>HttpClient-based OCPI client for calling CPO endpoints</Description>
     <PackageTags>ocpi;emsp;client;httpclient</PackageTags>
@@ -7,6 +6,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="DotOcpi.Client.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,5 +17,4 @@
   <ItemGroup>
     <ProjectReference Include="..\DotOcpi\DotOcpi.csproj" />
   </ItemGroup>
-
 </Project>

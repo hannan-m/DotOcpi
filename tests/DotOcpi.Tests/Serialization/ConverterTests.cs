@@ -11,9 +11,7 @@ public class ConverterTests
     {
         var options = new JsonSerializerOptions();
         options.Converters.Add(new OcpiDateTimeConverter());
-        options.Converters.Add(new OcpiNullableDateTimeConverter());
         options.Converters.Add(new CiStringConverter());
-        options.Converters.Add(new NullableCiStringConverter());
         options.Converters.Add(new GeoLocationConverter());
         return options;
     }

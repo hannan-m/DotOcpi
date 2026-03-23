@@ -18,5 +18,6 @@ public interface ICommandsCallback
         OcpiRequestContext context,
         string correlationId,
         object result,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 }

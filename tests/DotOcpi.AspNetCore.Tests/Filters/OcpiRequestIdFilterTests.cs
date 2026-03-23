@@ -1,53 +1,50 @@
 using DotOcpi.AspNetCore;
-using DotOcpi.AspNetCore.Filters;
+using DotOcpi.AspNetCore.Middleware;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using NSubstitute;
 using Xunit;
 
 namespace DotOcpi.AspNetCore.Tests.Filters;
 
-public class OcpiRequestIdFilterTests
+public class OcpiRequestIdMiddlewareTests
 {
-    private readonly OcpiRequestIdFilter _filter = new();
-
-    private static EndpointFilterInvocationContext CreateFilterContext(HttpContext httpContext)
+    private static OcpiRequestIdMiddleware CreateMiddleware(RequestDelegate? next = null)
     {
-        var ctx = Substitute.For<EndpointFilterInvocationContext>();
-        ctx.HttpContext.Returns(httpContext);
-        return ctx;
+        return new OcpiRequestIdMiddleware(next ?? (_ => Task.CompletedTask));
     }
 
     [Fact]
-    public async Task NoHeaders_GeneratesRequestId()
+    public async Task NoHeaders_UsesTraceIdentifier()
     {
+        var middleware = CreateMiddleware();
         var httpContext = new DefaultHttpContext();
-        var filterContext = CreateFilterContext(httpContext);
+        httpContext.TraceIdentifier = "trace-123";
 
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
+        await middleware.InvokeAsync(httpContext);
 
-        httpContext.GetRequestId().Should().NotBeNullOrWhiteSpace();
+        httpContext.GetRequestId().Should().Be("trace-123");
     }
 
     [Fact]
-    public async Task NoHeaders_GeneratesCorrelationId()
+    public async Task NoHeaders_UsesTraceIdentifierForCorrelationId()
     {
+        var middleware = CreateMiddleware();
         var httpContext = new DefaultHttpContext();
-        var filterContext = CreateFilterContext(httpContext);
+        httpContext.TraceIdentifier = "trace-456";
 
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
+        await middleware.InvokeAsync(httpContext);
 
-        httpContext.GetCorrelationId().Should().NotBeNullOrWhiteSpace();
+        httpContext.GetCorrelationId().Should().Be("trace-456");
     }
 
     [Fact]
     public async Task ExistingRequestId_PreservesIt()
     {
+        var middleware = CreateMiddleware();
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-Request-ID"] = "existing-req-id";
-        var filterContext = CreateFilterContext(httpContext);
 
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
+        await middleware.InvokeAsync(httpContext);
 
         httpContext.GetRequestId().Should().Be("existing-req-id");
     }
@@ -55,65 +52,27 @@ public class OcpiRequestIdFilterTests
     [Fact]
     public async Task ExistingCorrelationId_PreservesIt()
     {
+        var middleware = CreateMiddleware();
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-Correlation-ID"] = "existing-corr-id";
-        var filterContext = CreateFilterContext(httpContext);
 
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
+        await middleware.InvokeAsync(httpContext);
 
         httpContext.GetCorrelationId().Should().Be("existing-corr-id");
     }
 
     [Fact]
-    public async Task EchoesRequestIdInResponse()
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Request-ID"] = "echo-me";
-        var filterContext = CreateFilterContext(httpContext);
-
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
-
-        httpContext.Response.Headers["X-Request-ID"].ToString().Should().Be("echo-me");
-    }
-
-    [Fact]
-    public async Task EchoesCorrelationIdInResponse()
-    {
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Correlation-ID"] = "corr-echo";
-        var filterContext = CreateFilterContext(httpContext);
-
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
-
-        httpContext.Response.Headers["X-Correlation-ID"].ToString().Should().Be("corr-echo");
-    }
-
-    [Fact]
-    public async Task GeneratedIds_AreDifferent()
-    {
-        var httpContext = new DefaultHttpContext();
-        var filterContext = CreateFilterContext(httpContext);
-
-        await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
-
-        httpContext.GetRequestId().Should().NotBe(httpContext.GetCorrelationId());
-    }
-
-    [Fact]
     public async Task CallsNext()
     {
-        var httpContext = new DefaultHttpContext();
-        var filterContext = CreateFilterContext(httpContext);
         var nextCalled = false;
+        var middleware = CreateMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+        var httpContext = new DefaultHttpContext();
 
-        await _filter.InvokeAsync(
-            filterContext,
-            _ =>
-            {
-                nextCalled = true;
-                return ValueTask.FromResult<object?>("ok");
-            }
-        );
+        await middleware.InvokeAsync(httpContext);
 
         nextCalled.Should().BeTrue();
     }

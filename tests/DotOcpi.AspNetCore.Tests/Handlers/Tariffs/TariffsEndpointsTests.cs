@@ -42,9 +42,7 @@ public class TariffsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, TariffJsonV221);
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffPut(httpContext);
+        await TariffsEndpoints.HandleTariffPut("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -74,9 +72,7 @@ public class TariffsEndpointsTests
             .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Invalid tariff"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, TariffJsonV221);
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffPut(httpContext);
+        await TariffsEndpoints.HandleTariffPut("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -94,7 +90,7 @@ public class TariffsEndpointsTests
 
         httpContext.Response.StatusCode.Should().Be(405);
         var body = ReadResponseBody(httpContext);
-        body.Should().Contain("2000");
+        body.Should().Contain("2001");
         body.Should().Contain("PATCH is not supported");
     }
 
@@ -112,9 +108,7 @@ public class TariffsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_0, """{"currency": "USD"}""");
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffPatch(httpContext);
+        await TariffsEndpoints.HandleTariffPatch("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -139,9 +133,7 @@ public class TariffsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffDelete(httpContext);
+        await TariffsEndpoints.HandleTariffDelete("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -155,16 +147,14 @@ public class TariffsEndpointsTests
     [Fact]
     public async Task HandleTariffGet_ReturnsDataFromReceiver()
     {
-        var tariffData = new { id = "TAR1", currency = "EUR" };
+        var tariffData = JsonDocument.Parse("""{"id": "TAR1", "currency": "EUR"}""").RootElement;
         var receiver = Substitute.For<ITariffsReceiver>();
         receiver
             .GetTariffAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(OcpiResult<object>.Success(tariffData));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffGet(httpContext);
+        await TariffsEndpoints.HandleTariffGet("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -181,9 +171,7 @@ public class TariffsEndpointsTests
             .Returns(OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Not found"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffGet(httpContext);
+        await TariffsEndpoints.HandleTariffGet("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -196,9 +184,7 @@ public class TariffsEndpointsTests
         var receiver = Substitute.For<ITariffsReceiver>();
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
-        httpContext.Request.RouteValues["tariffId"] = "TAR1";
-
-        await TariffsEndpoints.HandleTariffPut(httpContext);
+        await TariffsEndpoints.HandleTariffPut("TAR1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
     }

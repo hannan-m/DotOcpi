@@ -11,6 +11,16 @@ namespace DotOcpi.AspNetCore.Handlers.Tariffs;
 /// Maps OCPI Tariffs module endpoints for all supported versions.
 /// PATCH is only supported for 2.0/2.1.1; 2.2+ rejects PATCH with 405.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT",
+    "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding."
+)]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT",
+    "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed."
+)]
 public static class TariffsEndpoints
 {
     /// <summary>
@@ -22,6 +32,7 @@ public static class TariffsEndpoints
         {
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/tariffs");
             module.AddEndpointFilter(new OcpiContextFilter("tariffs"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(256 * 1024));
             var prefix = version.UsesPartyIdInUrls() ? "{countryCode}/{partyId}/" : "";
 
             module.MapPut($"{prefix}{{tariffId}}", HandleTariffPut);
@@ -43,10 +54,9 @@ public static class TariffsEndpoints
         return ocpiGroup;
     }
 
-    internal static async Task HandleTariffPut(HttpContext httpContext)
+    internal static async Task HandleTariffPut(string tariffId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var tariffId = (string)httpContext.GetRouteValue("tariffId")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Tariff(ctx.NegotiatedVersion))
@@ -60,14 +70,13 @@ public static class TariffsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleTariffPatch(HttpContext httpContext)
+    internal static async Task HandleTariffPatch(string tariffId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var tariffId = (string)httpContext.GetRouteValue("tariffId")!;
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -79,7 +88,7 @@ public static class TariffsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
@@ -88,16 +97,15 @@ public static class TariffsEndpoints
         return OcpiResponseWriter.WriteErrorAsync(
             httpContext,
             StatusCodes.Status405MethodNotAllowed,
-            OcpiStatusCode.GenericClientError.Value,
+            OcpiStatusCode.InvalidParameters.Value,
             "PATCH is not supported for Tariffs in OCPI 2.2+. Use PUT to replace the full tariff.",
             httpContext.RequestAborted
         );
     }
 
-    internal static async Task HandleTariffDelete(HttpContext httpContext)
+    internal static async Task HandleTariffDelete(string tariffId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var tariffId = (string)httpContext.GetRouteValue("tariffId")!;
 
         var receiver = httpContext.RequestServices.GetRequiredService<ITariffsReceiver>();
         var result = await receiver
@@ -105,14 +113,13 @@ public static class TariffsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleTariffGet(HttpContext httpContext)
+    internal static async Task HandleTariffGet(string tariffId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var tariffId = (string)httpContext.GetRouteValue("tariffId")!;
 
         var receiver = httpContext.RequestServices.GetRequiredService<ITariffsReceiver>();
         var result = await receiver.GetTariffAsync(ctx, tariffId, httpContext.RequestAborted).ConfigureAwait(false);

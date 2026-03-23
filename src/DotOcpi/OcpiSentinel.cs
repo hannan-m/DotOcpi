@@ -15,6 +15,5 @@ public static class OcpiSentinel
     /// <summary>
     /// Returns true if the given value is the OCPI "not available" sentinel.
     /// </summary>
-    public static bool IsNotAvailable(string? value) =>
-        string.Equals(value, NotAvailable, StringComparison.Ordinal);
+    public static bool IsNotAvailable(string? value) => string.Equals(value, NotAvailable, StringComparison.Ordinal);
 }

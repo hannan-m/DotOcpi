@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <Description>ASP.NET Core server integration for DotOcpi: middleware, endpoint routing, OCPI auth pipeline</Description>
     <PackageTags>ocpi;emsp;aspnetcore;middleware</PackageTags>
@@ -16,5 +15,4 @@
   <ItemGroup>
     <InternalsVisibleTo Include="DotOcpi.AspNetCore.Tests" />
   </ItemGroup>
-
 </Project>

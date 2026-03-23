@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -42,19 +41,14 @@ public sealed partial class OcpiExceptionMiddleware
 
             if (!httpContext.Response.HasStarted)
             {
-                httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                httpContext.Response.ContentType = "application/json";
-
-                var body = JsonSerializer.Serialize(
-                    new
-                    {
-                        status_code = 3000,
-                        status_message = "Internal server error.",
-                        timestamp = DateTimeOffset.UtcNow,
-                    }
-                );
-
-                await httpContext.Response.WriteAsync(body).ConfigureAwait(false);
+                await OcpiResponseWriter
+                    .WriteErrorAsync(
+                        httpContext,
+                        StatusCodes.Status500InternalServerError,
+                        3000,
+                        "Internal server error."
+                    )
+                    .ConfigureAwait(false);
             }
         }
     }

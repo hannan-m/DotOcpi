@@ -30,9 +30,7 @@ public class CommandsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, """{"result": "ACCEPTED"}""");
-        httpContext.Request.RouteValues["correlationId"] = "cmd-123";
-
-        await CommandsEndpoints.HandleCommandCallback(httpContext);
+        await CommandsEndpoints.HandleCommandCallback("cmd-123", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -62,9 +60,7 @@ public class CommandsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_0, """{"result": "ACCEPTED", "timeout": 30}""");
-        httpContext.Request.RouteValues["correlationId"] = "cmd-456";
-
-        await CommandsEndpoints.HandleCommandCallback(httpContext);
+        await CommandsEndpoints.HandleCommandCallback("cmd-456", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await callback
@@ -83,9 +79,7 @@ public class CommandsEndpointsTests
         var callback = Substitute.For<ICommandsCallback>();
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1);
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
-        httpContext.Request.RouteValues["correlationId"] = "cmd-789";
-
-        await CommandsEndpoints.HandleCommandCallback(httpContext);
+        await CommandsEndpoints.HandleCommandCallback("cmd-789", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
     }
@@ -95,9 +89,7 @@ public class CommandsEndpointsTests
     {
         var callback = Substitute.For<ICommandsCallback>();
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, "not json{{{");
-        httpContext.Request.RouteValues["correlationId"] = "cmd-000";
-
-        await CommandsEndpoints.HandleCommandCallback(httpContext);
+        await CommandsEndpoints.HandleCommandCallback("cmd-000", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -118,9 +110,7 @@ public class CommandsEndpointsTests
             .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Unknown correlation ID"));
 
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, """{"result": "ACCEPTED"}""");
-        httpContext.Request.RouteValues["correlationId"] = "unknown-id";
-
-        await CommandsEndpoints.HandleCommandCallback(httpContext);
+        await CommandsEndpoints.HandleCommandCallback("unknown-id", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);

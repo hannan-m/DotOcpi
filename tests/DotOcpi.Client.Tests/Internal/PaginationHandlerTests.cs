@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DotOcpi.Client.Internal;
 using FluentAssertions;
 using Xunit;
@@ -21,7 +22,7 @@ public class PaginationHandlerTests
         var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
         var items = new List<object>();
 
-        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(TestItem), "token"))
+        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token"))
         {
             items.Add(item);
         }
@@ -61,7 +62,7 @@ public class PaginationHandlerTests
         var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
         var items = new List<object>();
 
-        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(TestItem), "token"))
+        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token"))
         {
             items.Add(item);
         }
@@ -89,7 +90,7 @@ public class PaginationHandlerTests
         var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
         request.Headers.Add("Authorization", "Token dG9rZW4=");
 
-        await foreach (var _ in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(TestItem), "my-token"))
+        await foreach (var _ in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "my-token"))
         { }
 
         handler.SentRequests.Should().HaveCount(2);
@@ -113,12 +114,77 @@ public class PaginationHandlerTests
         var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
         var items = new List<object>();
 
-        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(TestItem), "token"))
+        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token"))
         {
             items.Add(item);
         }
 
         items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StreamAllAsync_ErrorOnFollowUpPage_ReturnsFirstPageItems()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC1"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string>
+            {
+                ["Link"] = """<https://cpo.example.com/ocpi/2.2.1/cpo/locations?offset=1>; rel="next" """,
+            }
+        );
+        handler.EnqueueResponse(
+            """{"status_code": 3000, "status_message": "Internal error"}""",
+            System.Net.HttpStatusCode.InternalServerError
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var items = new List<object>();
+
+        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token"))
+        {
+            items.Add(item);
+        }
+
+        items.Should().HaveCount(1);
+        handler.SentRequests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task StreamPagesAsync_ErrorOnFollowUpPage_YieldsFirstPage()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC1"}, {"id": "LOC2"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string>
+            {
+                ["Link"] = """<https://cpo.example.com/ocpi/2.2.1/cpo/locations?offset=2>; rel="next" """,
+            }
+        );
+        handler.EnqueueResponse(
+            """{"status_code": 3000, "status_message": "Internal error"}""",
+            System.Net.HttpStatusCode.InternalServerError
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var pages = new List<OcpiPageResult>();
+
+        await foreach (
+            var page in pagination.StreamPagesAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token")
+        )
+        {
+            pages.Add(page);
+        }
+
+        pages.Should().HaveCount(1);
+        pages[0].Items.Should().HaveCount(2);
+        handler.SentRequests.Should().HaveCount(2);
     }
 
     [Fact]
@@ -133,7 +199,7 @@ public class PaginationHandlerTests
         var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
         var items = new List<object>();
 
-        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(TestItem), "token"))
+        await foreach (var item in pagination.StreamAllAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token"))
         {
             items.Add(item);
         }
@@ -141,8 +207,121 @@ public class PaginationHandlerTests
         items.Should().BeEmpty();
     }
 
-    private sealed class TestItem
+    [Fact]
+    public async Task StreamPagesAsync_SinglePage_YieldsOnePage()
     {
-        public string? Id { get; set; }
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC1"}, {"id": "LOC2"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string> { ["X-Total-Count"] = "2" }
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var pages = new List<OcpiPageResult>();
+
+        await foreach (
+            var page in pagination.StreamPagesAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token")
+        )
+        {
+            pages.Add(page);
+        }
+
+        pages.Should().HaveCount(1);
+        pages[0].Items.Should().HaveCount(2);
+        pages[0].TotalCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task StreamPagesAsync_MultiplePages_YieldsAllPages()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC1"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string>
+            {
+                ["X-Total-Count"] = "2",
+                ["Link"] = """<https://cpo.example.com/ocpi/2.2.1/cpo/locations?offset=1&limit=1>; rel="next" """,
+            }
+        );
+        handler.EnqueueResponse(
+            """{"status_code": 1000, "data": [{"id": "LOC2"}], "timestamp": "2024-01-01T00:00:00Z"}""",
+            headers: new Dictionary<string, string> { ["X-Total-Count"] = "2" }
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var pages = new List<OcpiPageResult>();
+
+        await foreach (
+            var page in pagination.StreamPagesAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token")
+        )
+        {
+            pages.Add(page);
+        }
+
+        pages.Should().HaveCount(2);
+        pages[0].Items.Should().HaveCount(1);
+        pages[1].Items.Should().HaveCount(1);
+        handler.SentRequests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task StreamPagesAsync_ErrorOnFirstPage_YieldsNothing()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse(
+            """{"status_code": 3000, "status_message": "Server error"}""",
+            System.Net.HttpStatusCode.InternalServerError
+        );
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var pages = new List<OcpiPageResult>();
+
+        await foreach (
+            var page in pagination.StreamPagesAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token")
+        )
+        {
+            pages.Add(page);
+        }
+
+        pages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StreamPagesAsync_EmptyDataArray_YieldsPageWithEmptyItems()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueResponse("""{"status_code": 1000, "data": [], "timestamp": "2024-01-01T00:00:00Z"}""");
+
+        var httpClient = new HttpClient(handler);
+        var pagination = new PaginationHandler(httpClient);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://cpo.example.com/ocpi/2.2.1/cpo/locations");
+        var pages = new List<OcpiPageResult>();
+
+        await foreach (
+            var page in pagination.StreamPagesAsync(request, OcpiVersion.V2_2_1, typeof(JsonElement), "token")
+        )
+        {
+            pages.Add(page);
+        }
+
+        pages.Should().HaveCount(1);
+        pages[0].Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MaxPages_IsReasonableUpperBound()
+    {
+        PaginationHandler.MaxPages.Should().BeGreaterThan(0);
+        PaginationHandler.MaxPages.Should().BeLessOrEqualTo(100_000);
     }
 }

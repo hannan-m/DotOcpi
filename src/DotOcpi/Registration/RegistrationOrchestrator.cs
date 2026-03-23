@@ -18,6 +18,7 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
     private readonly ICredentialsClient _credentialsClient;
     private readonly ICpoRegistry _registry;
     private readonly ITokenStore _tokenStore;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Initializes a new instance of <see cref="RegistrationOrchestrator"/>.
@@ -26,13 +27,15 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
         IVersionDiscovery versionDiscovery,
         ICredentialsClient credentialsClient,
         ICpoRegistry registry,
-        ITokenStore tokenStore
+        ITokenStore tokenStore,
+        TimeProvider timeProvider
     )
     {
         _versionDiscovery = versionDiscovery;
         _credentialsClient = credentialsClient;
         _registry = registry;
         _tokenStore = tokenStore;
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />
@@ -92,11 +95,9 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
         var partyId = $"{request.EmspCountryCode}:{request.EmspPartyId}";
         await _tokenStore.StoreAsync(tokenBHash, TokenPurpose.TokenB, partyId, cancellationToken).ConfigureAwait(false);
 
-        var moduleEndpoints = versionDetail
-            .Endpoints.Where(e => !string.Equals(e.Identifier, "credentials", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(e => e.Identifier, e => e.Url, StringComparer.OrdinalIgnoreCase);
+        var moduleEndpoints = ExtractAndValidateEndpoints(versionDetail);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var connection = new CpoConnection
         {
             CpoCountryCode = cpoResponse.CountryCode,
@@ -179,7 +180,7 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
         await _tokenStore.StoreAsync(tokenCHash, TokenPurpose.TokenB, partyId, cancellationToken).ConfigureAwait(false);
         await _tokenStore.RemoveAsync(existing.TokenBHash, cancellationToken).ConfigureAwait(false);
 
-        var updated = existing with { TokenBHash = tokenCHash, UpdatedAt = DateTimeOffset.UtcNow };
+        var updated = existing with { TokenBHash = tokenCHash, UpdatedAt = _timeProvider.GetUtcNow() };
 
         if (!_registry.AddOrUpdate(updated))
         {
@@ -235,35 +236,84 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
         string countryCode,
         string partyId,
         string businessName
-    )
-    {
-        if (version.UsesPartyIdInUrls())
+    ) =>
+        version switch
         {
-            return new
+            OcpiVersion.V2_2_1 => new Models.V2_2_1.Credentials
             {
-                token,
-                url = versionsUrl,
-                roles = new[]
-                {
-                    new
+                Token = token,
+                Url = versionsUrl,
+                Roles =
+                [
+                    new Models.V2_2_1.CredentialsRole
                     {
-                        role = "EMSP",
-                        business_details = new { name = businessName },
-                        party_id = partyId,
-                        country_code = countryCode,
+                        Role = Models.V2_2_1.Role.EMSP,
+                        BusinessDetails = new Models.V2_2_1.BusinessDetails { Name = businessName },
+                        PartyId = new CiString(partyId),
+                        CountryCode = new CiString(countryCode),
                     },
-                },
-            };
+                ],
+            },
+            OcpiVersion.V2_2 => new Models.V2_2.Credentials
+            {
+                Token = token,
+                Url = versionsUrl,
+                Roles =
+                [
+                    new Models.V2_2.CredentialsRole
+                    {
+                        Role = Models.V2_2.Role.EMSP,
+                        BusinessDetails = new Models.V2_2.BusinessDetails { Name = businessName },
+                        PartyId = new CiString(partyId),
+                        CountryCode = new CiString(countryCode),
+                    },
+                ],
+            },
+            OcpiVersion.V2_1_1 => new Models.V2_1_1.Credentials
+            {
+                Token = token,
+                Url = versionsUrl,
+                BusinessName = businessName,
+                PartyId = partyId,
+                CountryCode = countryCode,
+            },
+            OcpiVersion.V2_0 => new Models.V2_0.Credentials
+            {
+                Token = token,
+                Url = versionsUrl,
+                BusinessName = businessName,
+                PartyId = partyId,
+                CountryCode = countryCode,
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(version)),
+        };
+
+    /// <summary>
+    /// Extracts module endpoints from version detail, validating each URL uses HTTPS.
+    /// Rejects HTTP, non-absolute, or malformed URLs to prevent open-redirect and
+    /// ensure the client-side SSRF guard (which validates post-DNS-resolution) has
+    /// a valid HTTPS URL to work with.
+    /// </summary>
+    private static Dictionary<string, string> ExtractAndValidateEndpoints(VersionDetailInfo versionDetail)
+    {
+        var endpoints = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var ep in versionDetail.Endpoints)
+        {
+            if (string.Equals(ep.Identifier, "credentials", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!Uri.TryCreate(ep.Url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            {
+                throw new OcpiRegistrationException(
+                    $"CPO endpoint URL for module '{ep.Identifier}' must use HTTPS. Got: {ep.Url}"
+                );
+            }
+
+            endpoints[ep.Identifier] = ep.Url;
         }
 
-        return new
-        {
-            token,
-            url = versionsUrl,
-            business_name = businessName,
-            party_id = partyId,
-            country_code = countryCode,
-        };
+        return endpoints;
     }
 
     private static void ValidateHttps(string url, string name)

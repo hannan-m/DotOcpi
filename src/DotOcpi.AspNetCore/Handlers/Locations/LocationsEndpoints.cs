@@ -11,6 +11,12 @@ namespace DotOcpi.AspNetCore.Handlers.Locations;
 /// Maps OCPI Locations module endpoints for all supported versions.
 /// Registers both URL patterns: flat (2.0/2.1.1) and party-prefixed (2.2+).
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
 public static class LocationsEndpoints
 {
     /// <summary>
@@ -22,12 +28,19 @@ public static class LocationsEndpoints
         {
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/locations");
             module.AddEndpointFilter(new OcpiContextFilter("locations"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(256 * 1024));
             RegisterRoutes(module, version.UsesPartyIdInUrls());
         }
 
         return ocpiGroup;
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "AOT", "IL2026:RequiresUnreferencedCode",
+        Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+        "AOT", "IL3050:RequiresDynamicCode",
+        Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
     private static void RegisterRoutes(RouteGroupBuilder group, bool usesPartyId)
     {
         var prefix = usesPartyId ? "{countryCode}/{partyId}/" : "";
@@ -43,10 +56,9 @@ public static class LocationsEndpoints
         group.MapPatch($"{prefix}{{locationId}}/{{evseUid}}/{{connectorId}}", HandleConnectorPatch);
     }
 
-    internal static async Task HandleLocationPut(HttpContext httpContext)
+    internal static async Task HandleLocationPut(string locationId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Location(ctx.NegotiatedVersion))
@@ -60,14 +72,13 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleLocationPatch(HttpContext httpContext)
+    internal static async Task HandleLocationPatch(string locationId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -79,14 +90,13 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleLocationGet(HttpContext httpContext)
+    internal static async Task HandleLocationGet(string locationId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
 
         var receiver = httpContext.RequestServices.GetRequiredService<ILocationsReceiver>();
         var result = await receiver.GetLocationAsync(ctx, locationId, httpContext.RequestAborted).ConfigureAwait(false);
@@ -96,11 +106,9 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleEvsePut(HttpContext httpContext)
+    internal static async Task HandleEvsePut(string locationId, string evseUid, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
-        var evseUid = (string)httpContext.GetRouteValue("evseUid")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Evse(ctx.NegotiatedVersion))
@@ -114,15 +122,13 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleEvsePatch(HttpContext httpContext)
+    internal static async Task HandleEvsePatch(string locationId, string evseUid, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
-        var evseUid = (string)httpContext.GetRouteValue("evseUid")!;
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -134,16 +140,13 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleConnectorPut(HttpContext httpContext)
+    internal static async Task HandleConnectorPut(string locationId, string evseUid, string connectorId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
-        var evseUid = (string)httpContext.GetRouteValue("evseUid")!;
-        var connectorId = (string)httpContext.GetRouteValue("connectorId")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Connector(ctx.NegotiatedVersion))
@@ -157,16 +160,13 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleConnectorPatch(HttpContext httpContext)
+    internal static async Task HandleConnectorPatch(string locationId, string evseUid, string connectorId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var locationId = (string)httpContext.GetRouteValue("locationId")!;
-        var evseUid = (string)httpContext.GetRouteValue("evseUid")!;
-        var connectorId = (string)httpContext.GetRouteValue("connectorId")!;
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -178,7 +178,7 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 }

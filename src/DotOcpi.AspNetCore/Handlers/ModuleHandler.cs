@@ -18,6 +18,6 @@ internal sealed class ModuleHandler<T> : IModuleHandler
 
     public async ValueTask<object?> DeserializeAsync(Stream body, CancellationToken ct)
     {
-        return await JsonSerializer.DeserializeAsync<T>(body, _options, ct).ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync(body, _options.GetTypeInfo(typeof(T)), ct).ConfigureAwait(false);
     }
 }

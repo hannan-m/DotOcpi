@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -18,5 +17,4 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DotOcpi.AspNetCore\DotOcpi.AspNetCore.csproj" />
   </ItemGroup>
-
 </Project>

@@ -13,6 +13,7 @@ public class CpoHealthMonitorTests
         var registry = new InMemoryCpoRegistry();
         var monitor = new CpoHealthMonitor(
             registry,
+            new HttpClient(),
             NullLogger<CpoHealthMonitor>.Instance,
             interval: TimeSpan.FromMilliseconds(50)
         );
@@ -46,6 +47,7 @@ public class CpoHealthMonitorTests
 
         var monitor = new CpoHealthMonitor(
             registry,
+            new HttpClient(),
             NullLogger<CpoHealthMonitor>.Instance,
             interval: TimeSpan.FromMilliseconds(50)
         );
@@ -56,18 +58,20 @@ public class CpoHealthMonitorTests
         await Task.Delay(300);
         await monitor.StopAsync(CancellationToken.None);
 
-        // Should not throw or change status of unregistered connection
         var conn = registry.FindByConnectionKey("DE:ALL");
         conn!.Status.Should().Be(ConnectionStatus.Unregistered);
     }
 
     [Fact]
-    public void Constructor_DefaultInterval_IsFiveMinutes()
+    public void Constructor_WithDefaults_Succeeds()
     {
         var registry = new InMemoryCpoRegistry();
-        var monitor = new CpoHealthMonitor(registry, NullLogger<CpoHealthMonitor>.Instance);
+        var monitor = new CpoHealthMonitor(
+            registry,
+            new HttpClient(),
+            NullLogger<CpoHealthMonitor>.Instance
+        );
 
-        // We can't easily verify the interval, but we verify construction succeeds
         monitor.Should().NotBeNull();
     }
 }

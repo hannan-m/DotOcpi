@@ -8,7 +8,7 @@ namespace DotOcpi.Tests.Validation;
 
 public class CommandValidatorTests
 {
-    private readonly CommandValidator _validator = new();
+    private readonly CommandValidator _validator = new(TimeProvider.System);
 
     [Fact]
     public void Validate_StartSession_ValidUrl_ReturnsValid()

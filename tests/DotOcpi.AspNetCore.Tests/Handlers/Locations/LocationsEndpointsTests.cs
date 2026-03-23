@@ -83,9 +83,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, LocationJsonV221);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPut(httpContext);
+        await LocationsEndpoints.HandleLocationPut("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -115,9 +113,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_0, LocationJsonV20);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPut(httpContext);
+        await LocationsEndpoints.HandleLocationPut("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -136,9 +132,7 @@ public class LocationsEndpointsTests
         var receiver = Substitute.For<ILocationsReceiver>();
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPut(httpContext);
+        await LocationsEndpoints.HandleLocationPut("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -158,9 +152,7 @@ public class LocationsEndpointsTests
     {
         var receiver = Substitute.For<ILocationsReceiver>();
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, "not json{{{");
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPut(httpContext);
+        await LocationsEndpoints.HandleLocationPut("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -181,9 +173,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Bad data"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, LocationJsonV221);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPut(httpContext);
+        await LocationsEndpoints.HandleLocationPut("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -205,9 +195,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Failure(OcpiStatusCode.GenericServerError, "Internal failure"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, LocationJsonV221);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPut(httpContext);
+        await LocationsEndpoints.HandleLocationPut("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(500);
         var body = ReadResponseBody(httpContext);
@@ -229,9 +217,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, PatchJson);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationPatch(httpContext);
+        await LocationsEndpoints.HandleLocationPatch("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -270,9 +256,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult<object>.Success(locationData));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-
-        await LocationsEndpoints.HandleLocationGet(httpContext);
+        await LocationsEndpoints.HandleLocationGet("LOC1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -290,9 +274,7 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Location not found"));
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1);
-        httpContext.Request.RouteValues["locationId"] = "UNKNOWN";
-
-        await LocationsEndpoints.HandleLocationGet(httpContext);
+        await LocationsEndpoints.HandleLocationGet("UNKNOWN", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -314,10 +296,8 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, EvseJson);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
 
-        await LocationsEndpoints.HandleEvsePut(httpContext);
+        await LocationsEndpoints.HandleEvsePut("LOC1", "EVSE1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -346,10 +326,8 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, PatchJson);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
 
-        await LocationsEndpoints.HandleEvsePatch(httpContext);
+        await LocationsEndpoints.HandleEvsePatch("LOC1", "EVSE1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -379,11 +357,8 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, ConnectorJson);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
-        httpContext.Request.RouteValues["connectorId"] = "1";
 
-        await LocationsEndpoints.HandleConnectorPut(httpContext);
+        await LocationsEndpoints.HandleConnectorPut("LOC1", "EVSE1", "1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver
@@ -414,11 +389,8 @@ public class LocationsEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(receiver, OcpiVersion.V2_2_1, PatchJson);
-        httpContext.Request.RouteValues["locationId"] = "LOC1";
-        httpContext.Request.RouteValues["evseUid"] = "EVSE1";
-        httpContext.Request.RouteValues["connectorId"] = "1";
 
-        await LocationsEndpoints.HandleConnectorPatch(httpContext);
+        await LocationsEndpoints.HandleConnectorPatch("LOC1", "EVSE1", "1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         await receiver

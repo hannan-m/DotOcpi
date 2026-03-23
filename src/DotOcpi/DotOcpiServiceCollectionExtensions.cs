@@ -1,6 +1,7 @@
 using DotOcpi.Observability;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace DotOcpi;
@@ -36,6 +37,10 @@ public static class DotOcpiServiceCollectionExtensions
         // Core infrastructure — AddMetrics registers IMeterFactory
         services.AddMetrics();
         services.AddSingleton<OcpiMetrics>();
+
+        // TimeProvider enables deterministic time in tests. TryAdd so consumers
+        // can register FakeTimeProvider before calling AddDotOcpi.
+        services.TryAddSingleton(TimeProvider.System);
 
         return new DotOcpiBuilder(services);
     }

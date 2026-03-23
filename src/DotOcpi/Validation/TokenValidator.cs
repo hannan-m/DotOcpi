@@ -1,63 +1,89 @@
-using DotOcpi.Models.V2_2_1;
-
 namespace DotOcpi.Validation;
 
 /// <summary>
-/// Validates Token models against OCPI 2.2.1 protocol rules.
-/// This is model validation, not authentication token validation.
+/// Validates Token models against OCPI protocol rules across all supported versions.
+/// V2_0: language only (no whitelist, no country code on token).
+/// V2_1_1: language and whitelist consistency (no country code on token).
+/// V2_2/V2_2_1: language, whitelist consistency, and country code validation.
 /// </summary>
-public sealed class TokenValidator : IOcpiValidator<Token>
+public sealed class TokenValidator
+    : IOcpiValidator<Models.V2_0.Token>,
+        IOcpiValidator<Models.V2_1_1.Token>,
+        IOcpiValidator<Models.V2_2.Token>,
+        IOcpiValidator<Models.V2_2_1.Token>
 {
     /// <inheritdoc />
-    public OcpiValidationResult Validate(Token model)
+    public OcpiValidationResult Validate(Models.V2_0.Token model)
     {
         var errors = new List<OcpiValidationError>();
 
-        ValidateCountryCode(model, errors);
-        ValidateLanguage(model, errors);
-        ValidateWhitelistConsistency(model, errors);
+        ValidationHelpers.ValidateLanguage(model.Language, "TOKEN_INVALID_LANGUAGE", errors);
 
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateCountryCode(Token model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_1_1.Token model)
     {
-        var value = (string)model.CountryCode;
-        if (value.Length != 2 || !value.All(char.IsLetter))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "TOKEN_INVALID_COUNTRY_CODE",
-                    $"CountryCode '{value}' is not a valid ISO 3166-1 alpha-2 code.",
-                    "Provide a 2-letter country code (e.g. 'NL', 'DE')."
-                )
-                {
-                    PropertyPath = "CountryCode",
-                }
-            );
-        }
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateLanguage(model.Language, "TOKEN_INVALID_LANGUAGE", errors);
+        ValidateWhitelistConsistency(model.Valid, model.Whitelist.ToString(), errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateLanguage(Token model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2.Token model)
     {
-        if (model.Language is { } language && (language.Length != 2 || !language.All(char.IsLetter)))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "TOKEN_INVALID_LANGUAGE",
-                    $"Language '{language}' is not a valid ISO 639-1 code.",
-                    "Provide a 2-letter language code (e.g. 'en', 'nl')."
-                )
-                {
-                    PropertyPath = "Language",
-                }
-            );
-        }
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCountryAlpha2(
+            (string)model.CountryCode,
+            "TOKEN_INVALID_COUNTRY_CODE",
+            "CountryCode",
+            errors
+        );
+        ValidationHelpers.ValidateLanguage(model.Language, "TOKEN_INVALID_LANGUAGE", errors);
+        ValidateWhitelistConsistency(model.Valid, model.Whitelist.ToString(), errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateWhitelistConsistency(Token model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2_1.Token model)
     {
-        if (!model.Valid && model.Whitelist == WhitelistType.ALWAYS)
+        var errors = new List<OcpiValidationError>();
+
+        ValidationHelpers.ValidateCountryAlpha2(
+            (string)model.CountryCode,
+            "TOKEN_INVALID_COUNTRY_CODE",
+            "CountryCode",
+            errors
+        );
+        ValidationHelpers.ValidateLanguage(model.Language, "TOKEN_INVALID_LANGUAGE", errors);
+        ValidateWhitelistConsistency(model.Valid, model.Whitelist.ToString(), errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    OcpiValidationResult IOcpiValidator.Validate(object model) =>
+        model switch
+        {
+            Models.V2_0.Token m => Validate(m),
+            Models.V2_1_1.Token m => Validate(m),
+            Models.V2_2.Token m => Validate(m),
+            Models.V2_2_1.Token m => Validate(m),
+            _ => throw new ArgumentException($"Unsupported Token type: {model.GetType().Name}", nameof(model)),
+        };
+
+    private static void ValidateWhitelistConsistency(
+        bool valid,
+        string whitelistValue,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (!valid && whitelistValue == "ALWAYS")
         {
             errors.Add(
                 new OcpiValidationError(

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DotOcpi.Client.Tests.Internal;
 using DotOcpi.Registry;
 using FluentAssertions;
@@ -32,8 +33,7 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var command = new Models.V2_2_1.StartSession
@@ -70,8 +70,7 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var command = new Models.V2_2_1.StopSession
@@ -93,11 +92,11 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
-        await client.SendReserveNowAsync("DE:ALL", new { response_url = "https://emsp.example.com/cb" });
+        var command = JsonDocument.Parse("""{"response_url": "https://emsp.example.com/cb"}""").RootElement;
+        await client.SendReserveNowAsync("DE:ALL", command);
 
         handler.SentRequests[0].RequestUri!.ToString().Should().Contain("commands/RESERVE_NOW");
     }
@@ -111,11 +110,11 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
-        await client.SendUnlockConnectorAsync("DE:ALL", new { response_url = "https://emsp.example.com/cb" });
+        var command = JsonDocument.Parse("""{"response_url": "https://emsp.example.com/cb"}""").RootElement;
+        await client.SendUnlockConnectorAsync("DE:ALL", command);
 
         handler.SentRequests[0].RequestUri!.ToString().Should().Contain("commands/UNLOCK_CONNECTOR");
     }
@@ -129,11 +128,11 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
-        await client.SendCancelReservationAsync("DE:ALL", new { response_url = "https://emsp.example.com/cb" });
+        var command = JsonDocument.Parse("""{"response_url": "https://emsp.example.com/cb"}""").RootElement;
+        await client.SendCancelReservationAsync("DE:ALL", command);
 
         handler.SentRequests[0].RequestUri!.ToString().Should().Contain("commands/CANCEL_RESERVATION");
     }
@@ -147,11 +146,11 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
-        var result = await client.SendStartSessionAsync("DE:ALL", new object());
+        var command = JsonDocument.Parse("""{}""").RootElement;
+        var result = await client.SendStartSessionAsync("DE:ALL", command);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Value.Should().Be(2001);
@@ -166,11 +165,11 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
-        await client.SendStartSessionAsync("DE:ALL", new object());
+        var command = JsonDocument.Parse("""{}""").RootElement;
+        await client.SendStartSessionAsync("DE:ALL", command);
 
         var request = handler.SentRequests[0];
         request.Headers.Authorization.Should().NotBeNull();
@@ -186,8 +185,7 @@ public class CommandsClientTests
         var connection = CreateConnection();
         var client = new CommandsClient(
             new HttpClient(handler),
-            PullClientTestHelper.CreateBuilder(connection),
-            PullClientTestHelper.CreateTokenProvider()
+            PullClientTestHelper.CreateContextProvider(connection)
         );
 
         var command = new Models.V2_2_1.StopSession

@@ -19,7 +19,7 @@ public class CredentialRotationTests
     public CredentialRotationTests()
     {
         _registry.AddOrUpdate(Arg.Any<CpoConnection>()).Returns(true);
-        _orchestrator = new RegistrationOrchestrator(_discovery, _credentialsClient, _registry, _tokenStore);
+        _orchestrator = new RegistrationOrchestrator(_discovery, _credentialsClient, _registry, _tokenStore, TimeProvider.System);
     }
 
     private static CpoConnection CreateExistingConnection(

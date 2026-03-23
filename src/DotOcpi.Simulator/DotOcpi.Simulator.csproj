@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>In-memory OCPI-compliant test CPO server for consumer integration tests</Description>
-    <PackageTags>ocpi;emsp;testing;integration</PackageTags>
+    <Description>In-memory OCPI CPO simulator with session lifecycle, command handling, and multi-version support</Description>
+    <PackageTags>ocpi;emsp;cpo;simulator;testing</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DotOcpi.Simulator.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

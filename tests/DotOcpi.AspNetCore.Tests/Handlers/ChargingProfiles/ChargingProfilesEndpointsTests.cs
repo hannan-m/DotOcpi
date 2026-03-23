@@ -30,9 +30,8 @@ public class ChargingProfilesEndpointsTests
             .Returns(OcpiResult.Success());
 
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, """{"result": "ACCEPTED"}""");
-        httpContext.Request.RouteValues["correlationId"] = "cp-123";
 
-        await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
+        await ChargingProfilesEndpoints.HandleChargingProfileResult("cp-123", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -74,9 +73,7 @@ public class ChargingProfilesEndpointsTests
             }
             """
         );
-        httpContext.Request.RouteValues["sessionId"] = "SES1";
-
-        await ChargingProfilesEndpoints.HandleActiveChargingProfileUpdate(httpContext);
+        await ChargingProfilesEndpoints.HandleActiveChargingProfileUpdate("SES1", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(200);
         var body = ReadResponseBody(httpContext);
@@ -98,9 +95,8 @@ public class ChargingProfilesEndpointsTests
         var callback = Substitute.For<IChargingProfilesCallback>();
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1);
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
-        httpContext.Request.RouteValues["correlationId"] = "cp-789";
 
-        await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
+        await ChargingProfilesEndpoints.HandleChargingProfileResult("cp-789", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
     }
@@ -110,9 +106,8 @@ public class ChargingProfilesEndpointsTests
     {
         var callback = Substitute.For<IChargingProfilesCallback>();
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, "broken json{");
-        httpContext.Request.RouteValues["correlationId"] = "cp-000";
 
-        await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
+        await ChargingProfilesEndpoints.HandleChargingProfileResult("cp-000", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);
@@ -133,9 +128,8 @@ public class ChargingProfilesEndpointsTests
             .Returns(OcpiResult.Failure(OcpiStatusCode.GenericClientError, "Unknown correlation"));
 
         var httpContext = CreateHttpContext(callback, OcpiVersion.V2_2_1, """{"result": "ACCEPTED"}""");
-        httpContext.Request.RouteValues["correlationId"] = "unknown";
 
-        await ChargingProfilesEndpoints.HandleChargingProfileResult(httpContext);
+        await ChargingProfilesEndpoints.HandleChargingProfileResult("unknown", httpContext);
 
         httpContext.Response.StatusCode.Should().Be(400);
         var body = ReadResponseBody(httpContext);

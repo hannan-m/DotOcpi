@@ -11,6 +11,12 @@ namespace DotOcpi.AspNetCore.Handlers.Commands;
 /// Maps OCPI Commands module callback endpoints for all supported versions.
 /// The eMSP receives async command results from CPOs via POST to the response_url.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "AOT", "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
 public static class CommandsEndpoints
 {
     /// <summary>
@@ -22,6 +28,7 @@ public static class CommandsEndpoints
         {
             var module = ocpiGroup.MapGroup($"{version.ToVersionString()}/commands");
             module.AddEndpointFilter(new OcpiContextFilter("commands"));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(16 * 1024));
 
             module.MapPost("{correlationId}", HandleCommandCallback);
         }
@@ -29,10 +36,9 @@ public static class CommandsEndpoints
         return ocpiGroup;
     }
 
-    internal static async Task HandleCommandCallback(HttpContext httpContext)
+    internal static async Task HandleCommandCallback(string correlationId, HttpContext httpContext)
     {
         var ctx = httpContext.GetOcpiContext()!;
-        var correlationId = (string)httpContext.GetRouteValue("correlationId")!;
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.CommandResult(ctx.NegotiatedVersion))
@@ -46,7 +52,7 @@ public static class CommandsEndpoints
             .ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultAsync(httpContext, result, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 }

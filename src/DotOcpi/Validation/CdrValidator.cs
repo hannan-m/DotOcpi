@@ -1,31 +1,120 @@
-using DotOcpi.Models.V2_2_1;
-
 namespace DotOcpi.Validation;
 
 /// <summary>
-/// Validates CDR models against OCPI 2.2.1 protocol rules.
+/// Validates CDR models against OCPI protocol rules across all supported versions.
+/// V2_0/V2_1_1: time range, energy, time, currency, charging periods, total cost (decimal).
+/// V2_2/V2_2_1: all of the above plus credit consistency and total cost (Price object).
 /// </summary>
-public sealed class CdrValidator : IOcpiValidator<Cdr>
+public sealed class CdrValidator
+    : IOcpiValidator<Models.V2_0.Cdr>,
+        IOcpiValidator<Models.V2_1_1.Cdr>,
+        IOcpiValidator<Models.V2_2.Cdr>,
+        IOcpiValidator<Models.V2_2_1.Cdr>
 {
     /// <inheritdoc />
-    public OcpiValidationResult Validate(Cdr model)
+    public OcpiValidationResult Validate(Models.V2_0.Cdr model)
     {
         var errors = new List<OcpiValidationError>();
 
-        ValidateTimeRange(model, errors);
-        ValidateEnergy(model, errors);
-        ValidateTime(model, errors);
-        ValidateCurrency(model, errors);
-        ValidateChargingPeriods(model, errors);
-        ValidateCreditConsistency(model, errors);
-        ValidateTotalCost(model, errors);
+        ValidateCore(
+            model.StartDateTime,
+            model.EndDateTime,
+            model.TotalEnergy,
+            model.TotalTime,
+            model.TotalParkingTime,
+            model.Currency,
+            model.ChargingPeriods.Count,
+            errors
+        );
+        ValidateTotalCostDecimal(model.TotalCost, errors);
 
         return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
     }
 
-    private static void ValidateTimeRange(Cdr model, List<OcpiValidationError> errors)
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_1_1.Cdr model)
     {
-        if (model.EndDateTime < model.StartDateTime)
+        var errors = new List<OcpiValidationError>();
+
+        ValidateCore(
+            model.StartDateTime,
+            model.EndDateTime,
+            model.TotalEnergy,
+            model.TotalTime,
+            model.TotalParkingTime,
+            model.Currency,
+            model.ChargingPeriods.Count,
+            errors
+        );
+        ValidateTotalCostDecimal(model.TotalCost, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2.Cdr model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidateCore(
+            model.StartDateTime,
+            model.EndDateTime,
+            model.TotalEnergy,
+            model.TotalTime,
+            model.TotalParkingTime,
+            model.Currency,
+            model.ChargingPeriods.Count,
+            errors
+        );
+        ValidateCreditConsistency(model.Credit, model.CreditReferenceId is not null, errors);
+        ValidateTotalCostPrice(model.TotalCost.ExclVat, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    /// <inheritdoc />
+    public OcpiValidationResult Validate(Models.V2_2_1.Cdr model)
+    {
+        var errors = new List<OcpiValidationError>();
+
+        ValidateCore(
+            model.StartDateTime,
+            model.EndDateTime,
+            model.TotalEnergy,
+            model.TotalTime,
+            model.TotalParkingTime,
+            model.Currency,
+            model.ChargingPeriods.Count,
+            errors
+        );
+        ValidateCreditConsistency(model.Credit, model.CreditReferenceId is not null, errors);
+        ValidateTotalCostPrice(model.TotalCost.ExclVat, errors);
+
+        return errors.Count == 0 ? OcpiValidationResult.Valid() : OcpiValidationResult.Failed(errors);
+    }
+
+    OcpiValidationResult IOcpiValidator.Validate(object model) =>
+        model switch
+        {
+            Models.V2_0.Cdr m => Validate(m),
+            Models.V2_1_1.Cdr m => Validate(m),
+            Models.V2_2.Cdr m => Validate(m),
+            Models.V2_2_1.Cdr m => Validate(m),
+            _ => throw new ArgumentException($"Unsupported CDR type: {model.GetType().Name}", nameof(model)),
+        };
+
+    private static void ValidateCore(
+        DateTimeOffset startDateTime,
+        DateTimeOffset endDateTime,
+        decimal totalEnergy,
+        decimal totalTime,
+        decimal? totalParkingTime,
+        string currency,
+        int chargingPeriodCount,
+        List<OcpiValidationError> errors
+    )
+    {
+        if (endDateTime < startDateTime)
         {
             errors.Add(
                 new OcpiValidationError(
@@ -38,16 +127,13 @@ public sealed class CdrValidator : IOcpiValidator<Cdr>
                 }
             );
         }
-    }
 
-    private static void ValidateEnergy(Cdr model, List<OcpiValidationError> errors)
-    {
-        if (model.TotalEnergy < 0)
+        if (totalEnergy < 0)
         {
             errors.Add(
                 new OcpiValidationError(
                     "CDR_NEGATIVE_ENERGY",
-                    $"TotalEnergy value {model.TotalEnergy} is negative.",
+                    $"TotalEnergy value {totalEnergy} is negative.",
                     "Total energy must be zero or positive."
                 )
                 {
@@ -55,16 +141,13 @@ public sealed class CdrValidator : IOcpiValidator<Cdr>
                 }
             );
         }
-    }
 
-    private static void ValidateTime(Cdr model, List<OcpiValidationError> errors)
-    {
-        if (model.TotalTime < 0)
+        if (totalTime < 0)
         {
             errors.Add(
                 new OcpiValidationError(
                     "CDR_NEGATIVE_TIME",
-                    $"TotalTime value {model.TotalTime} is negative.",
+                    $"TotalTime value {totalTime} is negative.",
                     "Total time must be zero or positive."
                 )
                 {
@@ -73,7 +156,7 @@ public sealed class CdrValidator : IOcpiValidator<Cdr>
             );
         }
 
-        if (model.TotalParkingTime is { } parkingTime && parkingTime < 0)
+        if (totalParkingTime is { } parkingTime && parkingTime < 0)
         {
             errors.Add(
                 new OcpiValidationError(
@@ -86,28 +169,10 @@ public sealed class CdrValidator : IOcpiValidator<Cdr>
                 }
             );
         }
-    }
 
-    private static void ValidateCurrency(Cdr model, List<OcpiValidationError> errors)
-    {
-        if (model.Currency.Length != 3 || !model.Currency.All(char.IsLetter))
-        {
-            errors.Add(
-                new OcpiValidationError(
-                    "CDR_INVALID_CURRENCY",
-                    $"Currency '{model.Currency}' is not a valid ISO 4217 code.",
-                    "Provide a 3-letter ISO 4217 currency code (e.g. 'EUR', 'USD')."
-                )
-                {
-                    PropertyPath = "Currency",
-                }
-            );
-        }
-    }
+        ValidationHelpers.ValidateCurrency(currency, "CDR_INVALID_CURRENCY", errors);
 
-    private static void ValidateChargingPeriods(Cdr model, List<OcpiValidationError> errors)
-    {
-        if (model.ChargingPeriods.Count == 0)
+        if (chargingPeriodCount == 0)
         {
             errors.Add(
                 new OcpiValidationError(
@@ -122,9 +187,13 @@ public sealed class CdrValidator : IOcpiValidator<Cdr>
         }
     }
 
-    private static void ValidateCreditConsistency(Cdr model, List<OcpiValidationError> errors)
+    private static void ValidateCreditConsistency(
+        bool? credit,
+        bool hasCreditReferenceId,
+        List<OcpiValidationError> errors
+    )
     {
-        if (model.Credit == true && model.CreditReferenceId is null)
+        if (credit == true && !hasCreditReferenceId)
         {
             errors.Add(
                 new OcpiValidationError(
@@ -139,14 +208,31 @@ public sealed class CdrValidator : IOcpiValidator<Cdr>
         }
     }
 
-    private static void ValidateTotalCost(Cdr model, List<OcpiValidationError> errors)
+    private static void ValidateTotalCostDecimal(decimal totalCost, List<OcpiValidationError> errors)
     {
-        if (model.TotalCost.ExclVat < 0)
+        if (totalCost < 0)
         {
             errors.Add(
                 new OcpiValidationError(
                     "CDR_NEGATIVE_TOTAL_COST",
-                    $"TotalCost.ExclVat value {model.TotalCost.ExclVat} is negative.",
+                    $"TotalCost value {totalCost} is negative.",
+                    "Total cost must be zero or positive."
+                )
+                {
+                    PropertyPath = "TotalCost",
+                }
+            );
+        }
+    }
+
+    private static void ValidateTotalCostPrice(decimal exclVat, List<OcpiValidationError> errors)
+    {
+        if (exclVat < 0)
+        {
+            errors.Add(
+                new OcpiValidationError(
+                    "CDR_NEGATIVE_TOTAL_COST",
+                    $"TotalCost.ExclVat value {exclVat} is negative.",
                     "Total cost must be zero or positive."
                 )
                 {
