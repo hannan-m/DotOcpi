@@ -1,0 +1,122 @@
+name: Publish NuGet Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build & Test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            dotnet: '8.0.x'
+            framework: net8.0
+          - os: ubuntu-latest
+            dotnet: '10.0.x'
+            framework: net10.0
+          - os: windows-latest
+            dotnet: '8.0.x'
+            framework: net8.0
+          - os: windows-latest
+            dotnet: '10.0.x'
+            framework: net10.0
+      fail-fast: true
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for MinVer
+
+      - name: Setup .NET ${{ matrix.dotnet }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test --no-build --framework ${{ matrix.framework }} --verbosity normal
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install CSharpier
+        run: dotnet tool install csharpier -g
+
+      - name: Check formatting
+        run: csharpier check src/ tests/
+
+  pack:
+    name: Pack
+    needs: [validate, format-check]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for MinVer
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Pack
+        run: dotnet pack --no-restore -c Release -o ./artifacts
+
+      - name: List packages
+        run: ls -la ./artifacts/
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+          retention-days: 7
+
+  publish:
+    name: Publish to NuGet
+    needs: pack
+    runs-on: ubuntu-latest
+    environment: nuget
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Push to NuGet
+        run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
