@@ -668,67 +668,6 @@ internal static class VersionModelBuilder
         };
     }
 
-    // ── Credentials ───────────────────────────────────────────
-
-    public static object BuildCredentialsResponse(
-        OcpiVersion version,
-        string tokenB,
-        string versionsUrl,
-        PartyIdentity cpoIdentity
-    )
-    {
-        return version switch
-        {
-            OcpiVersion.V2_2_1 => new V2_2_1.Credentials
-            {
-                Token = tokenB,
-                Url = versionsUrl,
-                Roles =
-                [
-                    new V2_2_1.CredentialsRole
-                    {
-                        Role = V2_2_1.Role.CPO,
-                        CountryCode = cpoIdentity.CountryCode,
-                        PartyId = cpoIdentity.PartyId,
-                        BusinessDetails = new V2_2_1.BusinessDetails { Name = "Test CPO" },
-                    },
-                ],
-            },
-            OcpiVersion.V2_2 => new V2_2.Credentials
-            {
-                Token = tokenB,
-                Url = versionsUrl,
-                Roles =
-                [
-                    new V2_2.CredentialsRole
-                    {
-                        Role = V2_2.Role.CPO,
-                        CountryCode = cpoIdentity.CountryCode,
-                        PartyId = cpoIdentity.PartyId,
-                        BusinessDetails = new V2_2.BusinessDetails { Name = "Test CPO" },
-                    },
-                ],
-            },
-            OcpiVersion.V2_1_1 => new V2_1_1.Credentials
-            {
-                Token = tokenB,
-                Url = versionsUrl,
-                CountryCode = cpoIdentity.CountryCode,
-                PartyId = cpoIdentity.PartyId,
-                BusinessName = "Test CPO",
-            },
-            OcpiVersion.V2_0 => new V2_0.Credentials
-            {
-                Token = tokenB,
-                Url = versionsUrl,
-                CountryCode = cpoIdentity.CountryCode,
-                PartyId = cpoIdentity.PartyId,
-                BusinessName = "Test CPO",
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(version)),
-        };
-    }
-
     // ── Status mapping ────────────────────────────────────────
 
     private static EvseStatus ResolveEvseStatus(

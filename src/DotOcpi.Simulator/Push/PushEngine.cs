@@ -145,6 +145,11 @@ internal sealed class PushEngine : IAsyncDisposable
 
     private async Task SendCommandCallbackAsync(PushRequest request, CancellationToken ct)
     {
+        if (request.Url is null)
+            return;
+        if (!_config.AllowLoopbackCallbacks && !SsrfGuard.IsUrlSafeForOutbound(request.Url))
+            return;
+
         var json = JsonSerializer.SerializeToUtf8Bytes(new { result = (string)request.Payload! });
         using var content = new ByteArrayContent(json);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
