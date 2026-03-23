@@ -2,17 +2,20 @@
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/DotOcpi.Benchmarks/DotOcpi.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/DotOcpi.Sample/DotOcpi.Sample.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/DotOcpi.AspNetCore/DotOcpi.AspNetCore.csproj" />
     <Project Path="src/DotOcpi.Client/DotOcpi.Client.csproj" />
-    <Project Path="src/DotOcpi.Testing/DotOcpi.Testing.csproj" />
+    <Project Path="src/DotOcpi.Simulator/DotOcpi.Simulator.csproj" />
     <Project Path="src/DotOcpi/DotOcpi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DotOcpi.AspNetCore.Tests/DotOcpi.AspNetCore.Tests.csproj" />
     <Project Path="tests/DotOcpi.Client.Tests/DotOcpi.Client.Tests.csproj" />
     <Project Path="tests/DotOcpi.Integration.Tests/DotOcpi.Integration.Tests.csproj" />
-    <Project Path="tests/DotOcpi.Testing.Tests/DotOcpi.Testing.Tests.csproj" />
+    <Project Path="tests/DotOcpi.Simulator.Tests/DotOcpi.Simulator.Tests.csproj" />
     <Project Path="tests/DotOcpi.Tests/DotOcpi.Tests.csproj" />
   </Folder>
 </Solution>

@@ -14,6 +14,7 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
     <!-- Client -->
+    <!-- TODO: Update to 9.x+ for NativeAOT Polly.Core compatibility (requires network) -->
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="8.0.0" />
     <!-- Versioning -->
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
@@ -30,5 +31,7 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+    <!-- Sample -->
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
 </Project>
