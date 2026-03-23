@@ -35,6 +35,25 @@ public interface ITokenStore
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if the hash was found and removed.</returns>
     ValueTask<bool> RemoveAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atomically rotates a token: stores the new hash, then removes the old.
+    /// Implementations should ensure a brief dual-validity window (both hashes valid)
+    /// rather than a zero-validity window (neither valid) that would lock out the CPO.
+    /// Database-backed implementations should use a single transaction.
+    /// The default implementation calls StoreAsync then RemoveAsync sequentially.
+    /// </summary>
+    async ValueTask RotateTokenAsync(
+        string oldTokenHash,
+        string newTokenHash,
+        TokenPurpose purpose,
+        string partyId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await StoreAsync(newTokenHash, purpose, partyId, cancellationToken).ConfigureAwait(false);
+        await RemoveAsync(oldTokenHash, cancellationToken).ConfigureAwait(false);
+    }
 }
 
 /// <summary>

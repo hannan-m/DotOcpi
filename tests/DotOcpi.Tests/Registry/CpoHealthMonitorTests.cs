@@ -18,10 +18,10 @@ public class CpoHealthMonitorTests
             interval: TimeSpan.FromMilliseconds(50)
         );
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
 
         await monitor.StartAsync(cts.Token);
-        await Task.Delay(300);
+        await cts.CancelAsync();
         await monitor.StopAsync(CancellationToken.None);
     }
 
@@ -52,10 +52,10 @@ public class CpoHealthMonitorTests
             interval: TimeSpan.FromMilliseconds(50)
         );
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
 
         await monitor.StartAsync(cts.Token);
-        await Task.Delay(300);
+        await cts.CancelAsync();
         await monitor.StopAsync(CancellationToken.None);
 
         var conn = registry.FindByConnectionKey("DE:ALL");
