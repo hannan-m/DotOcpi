@@ -99,16 +99,17 @@ public class ChargingSimulationTests
         session.KwhDelivered.Should().BeGreaterThan(afterFirst);
     }
 
-    private static SessionState CreateSession() => new()
-    {
-        SessionId = "SES-001",
-        LocationId = "LOC1",
-        EvseUid = "EVSE001",
-        ConnectorId = "1",
-        TokenUid = "TOKEN001",
-        TokenContractId = "CONTRACT001",
-        StartTime = DateTimeOffset.UtcNow,
-        LastUpdated = DateTimeOffset.UtcNow,
-        ConnectionId = "default",
-    };
+    private static SessionState CreateSession() =>
+        new()
+        {
+            SessionId = "SES-001",
+            LocationId = "LOC1",
+            EvseUid = "EVSE001",
+            ConnectorId = "1",
+            TokenUid = "TOKEN001",
+            TokenContractId = "CONTRACT001",
+            StartTime = DateTimeOffset.UtcNow,
+            LastUpdated = DateTimeOffset.UtcNow,
+            ConnectionId = "default",
+        };
 }

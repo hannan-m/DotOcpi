@@ -149,10 +149,7 @@ public class PullSyncOptionsResolverTests
     [Fact]
     public void ResolveEnabledModules_NoOverride_ReturnsGlobalModules()
     {
-        var options = new PullSyncOptions
-        {
-            EnabledModules = ["locations", "tariffs"],
-        };
+        var options = new PullSyncOptions { EnabledModules = ["locations", "tariffs"] };
 
         var result = PullSyncOptionsResolver.ResolveEnabledModules(options, "DE:ALL");
 
@@ -165,10 +162,7 @@ public class PullSyncOptionsResolverTests
         var options = new PullSyncOptions
         {
             EnabledModules = ["locations", "tariffs"],
-            CpoOverrides =
-            {
-                ["DE:ALL"] = new() { EnabledModules = ["locations", "sessions", "cdrs", "tariffs"] },
-            },
+            CpoOverrides = { ["DE:ALL"] = new() { EnabledModules = ["locations", "sessions", "cdrs", "tariffs"] } },
         };
 
         var deResult = PullSyncOptionsResolver.ResolveEnabledModules(options, "DE:ALL");

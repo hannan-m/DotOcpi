@@ -136,10 +136,7 @@ internal sealed partial class OcpiPullSyncBackgroundService : BackgroundService
     [LoggerMessage(Level = LogLevel.Error, Message = "Pull sync cycle failed")]
     private partial void LogSyncCycleFailed(Exception exception);
 
-    [LoggerMessage(
-        Level = LogLevel.Debug,
-        Message = "Scheduling sync: {CpoId}/{ModuleId} (interval {Interval})"
-    )]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Scheduling sync: {CpoId}/{ModuleId} (interval {Interval})")]
     private partial void LogSyncScheduled(string cpoId, string moduleId, TimeSpan interval);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Sync failed: {CpoId}/{ModuleId}")]

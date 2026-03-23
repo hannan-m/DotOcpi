@@ -44,7 +44,9 @@ internal sealed class PullSyncOptionsValidator : IValidateOptions<PullSyncOption
             foreach (var (moduleId, moduleOpts) in cpoOpts.ModuleOverrides)
             {
                 if (!ValidModules.Contains(moduleId))
-                    errors.Add($"CpoOverrides['{cpoId}'].ModuleOverrides key '{moduleId}' is not a valid pullable module.");
+                    errors.Add(
+                        $"CpoOverrides['{cpoId}'].ModuleOverrides key '{moduleId}' is not a valid pullable module."
+                    );
 
                 if (moduleOpts.Interval.HasValue && moduleOpts.Interval.Value <= TimeSpan.Zero)
                     errors.Add($"CpoOverrides['{cpoId}'].ModuleOverrides['{moduleId}'].Interval must be positive.");

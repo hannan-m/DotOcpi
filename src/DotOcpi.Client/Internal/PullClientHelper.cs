@@ -60,13 +60,7 @@ internal static class PullClientHelper
 
         await foreach (
             var page in pagination
-                .StreamPagesAsync(
-                    request,
-                    context.Connection.Version,
-                    modelType,
-                    context.RawToken,
-                    cancellationToken
-                )
+                .StreamPagesAsync(request, context.Connection.Version, modelType, context.RawToken, cancellationToken)
                 .ConfigureAwait(false)
         )
         {

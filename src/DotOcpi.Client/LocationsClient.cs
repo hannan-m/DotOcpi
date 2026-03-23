@@ -40,8 +40,15 @@ internal sealed class LocationsClient : ILocationsClient
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
         CancellationToken cancellationToken = default
-    ) => PullClientHelper.StreamAllAsync(
-        _contextProvider, _pagination,
-        cpoId, "locations", OcpiModelTypeMap.GetLocationType,
-        dateFrom, dateTo, cancellationToken);
+    ) =>
+        PullClientHelper.StreamAllAsync(
+            _contextProvider,
+            _pagination,
+            cpoId,
+            "locations",
+            OcpiModelTypeMap.GetLocationType,
+            dateFrom,
+            dateTo,
+            cancellationToken
+        );
 }

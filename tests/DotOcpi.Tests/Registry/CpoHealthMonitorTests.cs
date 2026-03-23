@@ -66,11 +66,7 @@ public class CpoHealthMonitorTests
     public void Constructor_WithDefaults_Succeeds()
     {
         var registry = new InMemoryCpoRegistry();
-        var monitor = new CpoHealthMonitor(
-            registry,
-            new HttpClient(),
-            NullLogger<CpoHealthMonitor>.Instance
-        );
+        var monitor = new CpoHealthMonitor(registry, new HttpClient(), NullLogger<CpoHealthMonitor>.Instance);
 
         monitor.Should().NotBeNull();
     }

@@ -12,8 +12,8 @@ public class TariffsModel(ICpoRegistry registry, InMemoryDataStore store) : Page
 
     public void OnGet()
     {
-        Tariffs = store.Tariffs
-            .Select(kv =>
+        Tariffs = store
+            .Tariffs.Select(kv =>
             {
                 var cpoKey = kv.Key.Split(':')[0] + ":" + kv.Key.Split(':')[1];
                 var version = registry.FindByConnectionKey(cpoKey)?.Version ?? OcpiVersion.V2_2_1;

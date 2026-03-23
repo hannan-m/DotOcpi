@@ -32,8 +32,12 @@ public class OcpiSyncServiceTests
             UpdatedAt = SyncStart.AddDays(-1),
         };
 
-    private static (OcpiSyncService service, IOcpiSyncHandler handler, ISyncStateStore store, FakeTimeProvider time)
-        CreateService(CpoConnection? connection = null, string? responseJson = null)
+    private static (
+        OcpiSyncService service,
+        IOcpiSyncHandler handler,
+        ISyncStateStore store,
+        FakeTimeProvider time
+    ) CreateService(CpoConnection? connection = null, string? responseJson = null)
     {
         var registry = Substitute.For<ICpoRegistry>();
         var conn = connection ?? CreateConnection();
@@ -220,7 +224,11 @@ public class OcpiSyncServiceTests
         result.ItemCount.Should().Be(0);
         await handler
             .DidNotReceive()
-            .OnPageReceivedAsync(Arg.Any<SyncContext>(), Arg.Any<IReadOnlyList<object>>(), Arg.Any<CancellationToken>());
+            .OnPageReceivedAsync(
+                Arg.Any<SyncContext>(),
+                Arg.Any<IReadOnlyList<object>>(),
+                Arg.Any<CancellationToken>()
+            );
     }
 
     [Fact]
@@ -245,11 +253,7 @@ public class OcpiSyncServiceTests
         var (service, handler, store, _) = CreateService();
         var customSince = new DateTimeOffset(2024, 3, 1, 0, 0, 0, TimeSpan.Zero);
 
-        await store.SetLastSyncAsync(
-            "DE:ALL",
-            "locations",
-            new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero)
-        );
+        await store.SetLastSyncAsync("DE:ALL", "locations", new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
 
         await service.SyncModuleFromCpoAsync("DE:ALL", "locations", since: customSince);
 
@@ -287,7 +291,11 @@ public class OcpiSyncServiceTests
 
         await handler
             .DidNotReceive()
-            .OnPageReceivedAsync(Arg.Any<SyncContext>(), Arg.Any<IReadOnlyList<object>>(), Arg.Any<CancellationToken>());
+            .OnPageReceivedAsync(
+                Arg.Any<SyncContext>(),
+                Arg.Any<IReadOnlyList<object>>(),
+                Arg.Any<CancellationToken>()
+            );
 
         await handler
             .Received(1)

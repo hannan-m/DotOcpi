@@ -332,9 +332,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
     [Fact]
     public async Task GetSingleLocation_NotFound_Returns404()
     {
-        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
-            c.Locations = [new { id = "LOC1" }]
-        );
+        await using var server = await OcpiCpoSimulator.CreateAsync(c => c.Locations = [new { id = "LOC1" }]);
 
         using var client = CreateClient(server);
         var response = await client.GetAsync(new Uri(server.BaseUrl, "/ocpi/locations/UNKNOWN"));
@@ -361,12 +359,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
     [Fact]
     public async Task GetLocations_WithOffsetAndLimit_ReturnsPage()
     {
-        var locs = new object[]
-        {
-            new { id = "L1" },
-            new { id = "L2" },
-            new { id = "L3" },
-        };
+        var locs = new object[] { new { id = "L1" }, new { id = "L2" }, new { id = "L3" } };
         await using var server = await OcpiCpoSimulator.CreateAsync(c => c.Locations = [.. locs]);
 
         using var client = CreateClient(server);
@@ -417,11 +410,13 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
         await using var server = await OcpiCpoSimulator.CreateAsync();
 
         using var client = CreateClient(server);
-        var token = new { uid = "TOKEN1", type = "RFID", auth_id = "NL-TST-001" };
-        var response = await client.PutAsync(
-            new Uri(server.BaseUrl, "/ocpi/tokens/TOKEN1"),
-            JsonContent.Create(token)
-        );
+        var token = new
+        {
+            uid = "TOKEN1",
+            type = "RFID",
+            auth_id = "NL-TST-001",
+        };
+        var response = await client.PutAsync(new Uri(server.BaseUrl, "/ocpi/tokens/TOKEN1"), JsonContent.Create(token));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -436,11 +431,13 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
         using var client = CreateClient(server);
 
         // First push a token
-        var token = new { uid = "TOK1", type = "RFID", valid = true };
-        await client.PutAsync(
-            new Uri(server.BaseUrl, "/ocpi/tokens/TOK1"),
-            JsonContent.Create(token)
-        );
+        var token = new
+        {
+            uid = "TOK1",
+            type = "RFID",
+            valid = true,
+        };
+        await client.PutAsync(new Uri(server.BaseUrl, "/ocpi/tokens/TOK1"), JsonContent.Create(token));
 
         // Patch it
         var patch = new { valid = false };
@@ -498,10 +495,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
 
         using var client = CreateClient(server);
         var command = new { response_url = "https://emsp.example.com/callback", token = new { uid = "T1" } };
-        var response = await client.PostAsJsonAsync(
-            new Uri(server.BaseUrl, "/ocpi/commands/START_SESSION"),
-            command
-        );
+        var response = await client.PostAsJsonAsync(new Uri(server.BaseUrl, "/ocpi/commands/START_SESSION"), command);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -511,9 +505,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
     [Fact]
     public async Task Command_ConfigurableResponse_ReturnsConfiguredStatus()
     {
-        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
-            c.CommandResponseStatus = "REJECTED"
-        );
+        await using var server = await OcpiCpoSimulator.CreateAsync(c => c.CommandResponseStatus = "REJECTED");
 
         using var client = CreateClient(server);
         var response = await client.PostAsJsonAsync(
@@ -549,10 +541,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
 
         using var client = CreateClient(server);
         var profile = new { charging_rate_unit = "W" };
-        await client.PutAsync(
-            new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1"),
-            JsonContent.Create(profile)
-        );
+        await client.PutAsync(new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1"), JsonContent.Create(profile));
 
         var response = await client.GetAsync(new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1"));
 
@@ -585,23 +574,17 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
             JsonContent.Create(new { rate = "W" })
         );
 
-        var deleteResponse = await client.DeleteAsync(
-            new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1")
-        );
+        var deleteResponse = await client.DeleteAsync(new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1"));
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var getResponse = await client.GetAsync(
-            new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1")
-        );
+        var getResponse = await client.GetAsync(new Uri(server.BaseUrl, "/ocpi/charging_profiles/SESSION1"));
         getResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task GetReceivedRequests_RecordsAllRequests()
     {
-        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
-            c.Locations = [new { id = "LOC1" }]
-        );
+        await using var server = await OcpiCpoSimulator.CreateAsync(c => c.Locations = [new { id = "LOC1" }]);
 
         using var client = CreateClient(server);
         await client.GetAsync(new Uri(server.BaseUrl, "/ocpi/versions"));
@@ -662,23 +645,22 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
         var callbackBuilder = WebApplication.CreateBuilder();
         callbackBuilder.WebHost.ConfigureKestrel(o => o.Listen(IPAddress.Loopback, 0));
         var callbackApp = callbackBuilder.Build();
-        callbackApp.MapPost("/callback/{correlationId}", async (HttpContext ctx) =>
-        {
-            receivedCallback = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body);
-            tcs.TrySetResult(true);
-            ctx.Response.StatusCode = 200;
-        });
+        callbackApp.MapPost(
+            "/callback/{correlationId}",
+            async (HttpContext ctx) =>
+            {
+                receivedCallback = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body);
+                tcs.TrySetResult(true);
+                ctx.Response.StatusCode = 200;
+            }
+        );
         await callbackApp.StartAsync();
         var callbackUrl = callbackApp.Urls.First();
 
         try
         {
             using var client = CreateClient(server);
-            var command = new
-            {
-                response_url = $"{callbackUrl}/callback/CORR-123",
-                token = new { uid = "T1" },
-            };
+            var command = new { response_url = $"{callbackUrl}/callback/CORR-123", token = new { uid = "T1" } };
             var response = await client.PostAsJsonAsync(
                 new Uri(server.BaseUrl, "/ocpi/commands/START_SESSION"),
                 command
@@ -760,9 +742,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
     [Fact]
     public async Task GetLocations_AfterRegistration_RequiresAuth()
     {
-        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
-            c.Locations = [new { id = "LOC1" }]
-        );
+        await using var server = await OcpiCpoSimulator.CreateAsync(c => c.Locations = [new { id = "LOC1" }]);
 
         // Register first to issue Token B
         using var regClient = CreateClient(server);
@@ -779,8 +759,10 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
 
         // With Token B — should succeed
         using var authClient = CreateClient(server);
-        authClient.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Token", server.GetIssuedTokenB());
+        authClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Token",
+            server.GetIssuedTokenB()
+        );
         var okResponse = await authClient.GetAsync(new Uri(server.BaseUrl, "/ocpi/locations"));
         okResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -806,10 +788,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
         await using var server = await OcpiCpoSimulator.CreateAsync();
 
         using var client = CreateClient(server);
-        await client.PutAsync(
-            new Uri(server.BaseUrl, "/ocpi/tokens/TOK1"),
-            JsonContent.Create(new { uid = "TOK1" })
-        );
+        await client.PutAsync(new Uri(server.BaseUrl, "/ocpi/tokens/TOK1"), JsonContent.Create(new { uid = "TOK1" }));
 
         // Send a JSON array instead of object
         var response = await client.PatchAsync(
@@ -847,12 +826,16 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
     [Fact]
     public async Task StartSession_CreatesActiveSession()
     {
-        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
-            c.RequireAuth = false
-        );
+        await using var server = await OcpiCpoSimulator.CreateAsync(c => c.RequireAuth = false);
 
         using var client = CreateClient(server);
-        var command = new { response_url = "https://example.com/cb", token = new { uid = "T1" }, location_id = "LOC1", evse_uid = "E1" };
+        var command = new
+        {
+            response_url = "https://example.com/cb",
+            token = new { uid = "T1" },
+            location_id = "LOC1",
+            evse_uid = "E1",
+        };
         await client.PostAsJsonAsync(new Uri(server.BaseUrl, "/ocpi/commands/START_SESSION"), command);
 
         // Verify session was created
@@ -869,20 +852,27 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
     [Fact]
     public async Task StopSession_CompletesSessionAndCreatesCdr()
     {
-        await using var server = await OcpiCpoSimulator.CreateAsync(c =>
-            c.RequireAuth = false
-        );
+        await using var server = await OcpiCpoSimulator.CreateAsync(c => c.RequireAuth = false);
 
         using var client = CreateClient(server);
 
         // Start a session first
-        var startCmd = new { response_url = "https://example.com/cb", token = new { uid = "T1" }, location_id = "LOC1", evse_uid = "E1" };
+        var startCmd = new
+        {
+            response_url = "https://example.com/cb",
+            token = new { uid = "T1" },
+            location_id = "LOC1",
+            evse_uid = "E1",
+        };
         await client.PostAsJsonAsync(new Uri(server.BaseUrl, "/ocpi/commands/START_SESSION"), startCmd);
 
         // Get the session ID
         var sessResponse = await client.GetAsync(new Uri(server.BaseUrl, "/ocpi/sessions"));
         var sessBody = await sessResponse.Content.ReadFromJsonAsync<JsonElement>();
-        var sessionId = sessBody.GetProperty("data")[sessBody.GetProperty("data").GetArrayLength() - 1].GetProperty("id").GetString();
+        var sessionId = sessBody
+            .GetProperty("data")[sessBody.GetProperty("data").GetArrayLength() - 1]
+            .GetProperty("id")
+            .GetString();
 
         // Stop it
         var stopCmd = new { response_url = "https://example.com/cb", session_id = sessionId };

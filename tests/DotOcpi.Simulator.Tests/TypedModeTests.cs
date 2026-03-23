@@ -106,7 +106,13 @@ public class TypedModeTests : IAsyncLifetime
     public async Task StartSession_TypedMode_CreatesSessionAndChangesEvseStatus()
     {
         using var client = new HttpClient { BaseAddress = _server.BaseUrl };
-        var command = new { response_url = "https://example.com/cb", token = new { uid = "T1", contract_id = "NL-MSP-001" }, location_id = "LOC1", evse_uid = "EVSE001" };
+        var command = new
+        {
+            response_url = "https://example.com/cb",
+            token = new { uid = "T1", contract_id = "NL-MSP-001" },
+            location_id = "LOC1",
+            evse_uid = "EVSE001",
+        };
         var response = await client.PostAsJsonAsync("/ocpi/commands/START_SESSION", command);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -131,7 +137,13 @@ public class TypedModeTests : IAsyncLifetime
         using var client = new HttpClient { BaseAddress = _server.BaseUrl };
 
         // Start session
-        var startCmd = new { response_url = "https://example.com/cb", token = new { uid = "T1", contract_id = "NL-MSP-001" }, location_id = "LOC1", evse_uid = "EVSE001" };
+        var startCmd = new
+        {
+            response_url = "https://example.com/cb",
+            token = new { uid = "T1", contract_id = "NL-MSP-001" },
+            location_id = "LOC1",
+            evse_uid = "EVSE001",
+        };
         await client.PostAsJsonAsync("/ocpi/commands/START_SESSION", startCmd);
 
         var sessions = _server.GetActiveSessions();

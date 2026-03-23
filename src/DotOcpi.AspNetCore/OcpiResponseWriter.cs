@@ -39,7 +39,11 @@ public static class OcpiResponseWriter
 
         var options = OcpiJsonOptions.GetOptions(version);
         return JsonSerializer.SerializeAsync(
-            httpContext.Response.Body, envelope, options.GetTypeInfo(typeof(OcpiResponse<T>)), cancellationToken);
+            httpContext.Response.Body,
+            envelope,
+            options.GetTypeInfo(typeof(OcpiResponse<T>)),
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -292,7 +296,9 @@ public static class OcpiResponseWriter
                 writer.WriteEndObject();
             }
 
-            await httpContext.Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted).ConfigureAwait(false);
+            await httpContext
+                .Response.Body.WriteAsync(buffer.WrittenMemory, httpContext.RequestAborted)
+                .ConfigureAwait(false);
         }
     }
 }

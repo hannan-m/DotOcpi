@@ -32,11 +32,12 @@ public sealed class MetricsCollector
     }
 
     public int GetRequestCount(string cpoId) => GetOrCreate(cpoId).Requests;
+
     public int GetErrorCount(string cpoId) => GetOrCreate(cpoId).Errors;
+
     public int GetSyncCount(string cpoId) => GetOrCreate(cpoId).Syncs;
 
-    private CpoMetrics GetOrCreate(string cpoId) =>
-        _metrics.GetOrAdd(cpoId, _ => new CpoMetrics());
+    private CpoMetrics GetOrCreate(string cpoId) => _metrics.GetOrAdd(cpoId, _ => new CpoMetrics());
 
     private sealed class CpoMetrics
     {
@@ -49,7 +50,9 @@ public sealed class MetricsCollector
         public int Syncs => _syncs;
 
         public void IncrementRequests() => Interlocked.Increment(ref _requests);
+
         public void IncrementErrors() => Interlocked.Increment(ref _errors);
+
         public void IncrementSyncs() => Interlocked.Increment(ref _syncs);
     }
 }

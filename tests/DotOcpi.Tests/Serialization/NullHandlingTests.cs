@@ -137,5 +137,4 @@ public class NullHandlingTests
         location.Should().NotBeNull();
         location!.Name.Should().BeNull();
     }
-
 }

@@ -12,11 +12,15 @@ namespace DotOcpi.AspNetCore.Handlers.Locations;
 /// Registers both URL patterns: flat (2.0/2.1.1) and party-prefixed (2.2+).
 /// </summary>
 [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-    "AOT", "IL2026:RequiresUnreferencedCode",
-    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+    "AOT",
+    "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding."
+)]
 [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-    "AOT", "IL3050:RequiresDynamicCode",
-    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
+    "AOT",
+    "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed."
+)]
 public static class LocationsEndpoints
 {
     /// <summary>
@@ -36,11 +40,15 @@ public static class LocationsEndpoints
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-        "AOT", "IL2026:RequiresUnreferencedCode",
-        Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+        "AOT",
+        "IL2026:RequiresUnreferencedCode",
+        Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding."
+    )]
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-        "AOT", "IL3050:RequiresDynamicCode",
-        Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
+        "AOT",
+        "IL3050:RequiresDynamicCode",
+        Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed."
+    )]
     private static void RegisterRoutes(RouteGroupBuilder group, bool usesPartyId)
     {
         var prefix = usesPartyId ? "{countryCode}/{partyId}/" : "";
@@ -144,7 +152,12 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleConnectorPut(string locationId, string evseUid, string connectorId, HttpContext httpContext)
+    internal static async Task HandleConnectorPut(
+        string locationId,
+        string evseUid,
+        string connectorId,
+        HttpContext httpContext
+    )
     {
         var ctx = httpContext.GetOcpiContext()!;
 
@@ -164,7 +177,12 @@ public static class LocationsEndpoints
             .ConfigureAwait(false);
     }
 
-    internal static async Task HandleConnectorPatch(string locationId, string evseUid, string connectorId, HttpContext httpContext)
+    internal static async Task HandleConnectorPatch(
+        string locationId,
+        string evseUid,
+        string connectorId,
+        HttpContext httpContext
+    )
     {
         var ctx = httpContext.GetOcpiContext()!;
 

@@ -12,7 +12,9 @@ public class OcpiRateLimitFilterTests : IDisposable
 
     public OcpiRateLimitFilterTests()
     {
-        _filter = new OcpiRateLimitFilter(new OcpiRateLimitOptions { MaxRequestsPerWindow = 2, Window = TimeSpan.FromMinutes(1) });
+        _filter = new OcpiRateLimitFilter(
+            new OcpiRateLimitOptions { MaxRequestsPerWindow = 2, Window = TimeSpan.FromMinutes(1) }
+        );
     }
 
     public void Dispose()
@@ -42,8 +44,7 @@ public class OcpiRateLimitFilterTests : IDisposable
         return new DefaultEndpointFilterInvocationContext(httpContext);
     }
 
-    private static EndpointFilterDelegate NextFilter() =>
-        _ => ValueTask.FromResult<object?>(Results.Ok());
+    private static EndpointFilterDelegate NextFilter() => _ => ValueTask.FromResult<object?>(Results.Ok());
 
     [Fact]
     public async Task NoConnection_PassesThrough()
@@ -64,11 +65,14 @@ public class OcpiRateLimitFilterTests : IDisposable
         {
             var httpContext = new DefaultHttpContext();
             httpContext.Items[typeof(CpoConnection)] = connection;
-            var result = await _filter.InvokeAsync(CreateContext(httpContext), _ =>
-            {
-                callCount++;
-                return ValueTask.FromResult<object?>(Results.Ok());
-            });
+            var result = await _filter.InvokeAsync(
+                CreateContext(httpContext),
+                _ =>
+                {
+                    callCount++;
+                    return ValueTask.FromResult<object?>(Results.Ok());
+                }
+            );
         }
 
         callCount.Should().Be(2);

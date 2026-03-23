@@ -23,8 +23,15 @@ internal sealed class CdrsClient : ICdrsClient
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
         CancellationToken cancellationToken = default
-    ) => PullClientHelper.StreamAllAsync(
-        _contextProvider, _pagination,
-        cpoId, "cdrs", OcpiModelTypeMap.GetCdrType,
-        dateFrom, dateTo, cancellationToken);
+    ) =>
+        PullClientHelper.StreamAllAsync(
+            _contextProvider,
+            _pagination,
+            cpoId,
+            "cdrs",
+            OcpiModelTypeMap.GetCdrType,
+            dateFrom,
+            dateTo,
+            cancellationToken
+        );
 }

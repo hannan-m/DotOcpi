@@ -26,13 +26,15 @@ public class MetricsModel(ICpoRegistry registry, InMemoryDataStore store, Metric
         TotalSyncs = metrics.TotalSyncs;
         TotalErrors = metrics.TotalErrors;
 
-        CpoMetrics = connections.Select(c => new CpoMetric
-        {
-            ConnectionKey = c.ConnectionKey,
-            Requests = metrics.GetRequestCount(c.ConnectionKey),
-            Errors = metrics.GetErrorCount(c.ConnectionKey),
-            Syncs = metrics.GetSyncCount(c.ConnectionKey),
-        }).ToList();
+        CpoMetrics = connections
+            .Select(c => new CpoMetric
+            {
+                ConnectionKey = c.ConnectionKey,
+                Requests = metrics.GetRequestCount(c.ConnectionKey),
+                Errors = metrics.GetErrorCount(c.ConnectionKey),
+                Syncs = metrics.GetSyncCount(c.ConnectionKey),
+            })
+            .ToList();
     }
 
     public record CpoMetric

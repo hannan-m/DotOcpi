@@ -45,13 +45,17 @@ public sealed partial class AutoRegistrationService(
     {
         var versionsUrl = $"{cpo.BaseUrl}ocpi/versions";
         var versions = await versionDiscovery.GetVersionsAsync(versionsUrl, cpo.TokenA, ct).ConfigureAwait(false);
-        var negotiated = VersionNegotiator.Negotiate(versions.Select(v => v.Version))
+        var negotiated =
+            VersionNegotiator.Negotiate(versions.Select(v => v.Version))
             ?? throw new InvalidOperationException("No version match");
         var versionEntry = versions.First(v => v.Version == negotiated.ToVersionString());
-        var detail = await versionDiscovery.GetVersionDetailAsync(versionEntry.Url, cpo.TokenA, ct).ConfigureAwait(false);
+        var detail = await versionDiscovery
+            .GetVersionDetailAsync(versionEntry.Url, cpo.TokenA, ct)
+            .ConfigureAwait(false);
 
-        var credentialsUrl = detail.Endpoints
-            .First(e => string.Equals(e.Identifier, "credentials", StringComparison.OrdinalIgnoreCase)).Url;
+        var credentialsUrl = detail
+            .Endpoints.First(e => string.Equals(e.Identifier, "credentials", StringComparison.OrdinalIgnoreCase))
+            .Url;
 
         var ourTokenB = TokenGenerator.Generate();
         var ourTokenBHash = TokenHasher.Hash(ourTokenB);
@@ -63,8 +67,8 @@ public sealed partial class AutoRegistrationService(
 
         await tokenStore.StoreAsync(ourTokenBHash, TokenPurpose.TokenB, "NL:MSP", ct).ConfigureAwait(false);
 
-        var moduleEndpoints = detail.Endpoints
-            .Where(e => !string.Equals(e.Identifier, "credentials", StringComparison.OrdinalIgnoreCase))
+        var moduleEndpoints = detail
+            .Endpoints.Where(e => !string.Equals(e.Identifier, "credentials", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(e => e.Identifier, e => e.Url, StringComparer.OrdinalIgnoreCase);
 
         var now = DateTimeOffset.UtcNow;

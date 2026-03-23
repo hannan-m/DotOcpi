@@ -18,15 +18,16 @@ public static class VersionNegotiator
         OcpiVersion.V2_0,
     ];
 
-    private static readonly FrozenDictionary<string, OcpiVersion> VersionMap =
-        new Dictionary<string, OcpiVersion>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["2.2.1"] = OcpiVersion.V2_2_1,
-            ["2.2"] = OcpiVersion.V2_2,
-            ["2.1.1"] = OcpiVersion.V2_1_1,
-            ["2.1"] = OcpiVersion.V2_1_1,
-            ["2.0"] = OcpiVersion.V2_0,
-        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenDictionary<string, OcpiVersion> VersionMap = new Dictionary<string, OcpiVersion>(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        ["2.2.1"] = OcpiVersion.V2_2_1,
+        ["2.2"] = OcpiVersion.V2_2,
+        ["2.1.1"] = OcpiVersion.V2_1_1,
+        ["2.1"] = OcpiVersion.V2_1_1,
+        ["2.0"] = OcpiVersion.V2_0,
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Determines the highest mutually supported OCPI version.

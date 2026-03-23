@@ -107,8 +107,7 @@ internal sealed partial class OcpiSyncService : IOcpiSyncService
         var cpoId = connection.ConnectionKey;
 
         var dateFrom =
-            since
-            ?? await _syncStateStore.GetLastSyncAsync(cpoId, moduleId, cancellationToken).ConfigureAwait(false);
+            since ?? await _syncStateStore.GetLastSyncAsync(cpoId, moduleId, cancellationToken).ConfigureAwait(false);
         var syncStart = _timeProvider.GetUtcNow();
 
         LogSyncStarted(cpoId, moduleId, dateFrom);
@@ -146,7 +145,9 @@ internal sealed partial class OcpiSyncService : IOcpiSyncService
 
                 if (_handler is not null && page.Items.Count > 0)
                 {
-                    await _handler.OnPageReceivedAsync(syncContext, page.Items, cancellationToken).ConfigureAwait(false);
+                    await _handler
+                        .OnPageReceivedAsync(syncContext, page.Items, cancellationToken)
+                        .ConfigureAwait(false);
                 }
             }
 
@@ -164,9 +165,7 @@ internal sealed partial class OcpiSyncService : IOcpiSyncService
                 await _handler.OnSyncCompletedAsync(syncContext, result, cancellationToken).ConfigureAwait(false);
             }
 
-            await _syncStateStore
-                .SetLastSyncAsync(cpoId, moduleId, syncStart, cancellationToken)
-                .ConfigureAwait(false);
+            await _syncStateStore.SetLastSyncAsync(cpoId, moduleId, syncStart, cancellationToken).ConfigureAwait(false);
 
             LogSyncCompleted(cpoId, moduleId, itemCount);
             return result;

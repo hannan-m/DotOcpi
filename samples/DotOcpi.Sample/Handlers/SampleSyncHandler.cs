@@ -25,15 +25,24 @@ public sealed partial class SampleSyncHandler(
         foreach (var item in items)
         {
             var id = InMemoryDataStore.ExtractId(item);
-            if (id is null) continue;
+            if (id is null)
+                continue;
 
             var key = InMemoryDataStore.Key(context.CpoId, id);
             switch (context.ModuleId)
             {
-                case "locations": store.Locations[key] = item; break;
-                case "sessions": store.Sessions[key] = item; break;
-                case "cdrs": store.Cdrs[key] = item; break;
-                case "tariffs": store.Tariffs[key] = item; break;
+                case "locations":
+                    store.Locations[key] = item;
+                    break;
+                case "sessions":
+                    store.Sessions[key] = item;
+                    break;
+                case "cdrs":
+                    store.Cdrs[key] = item;
+                    break;
+                case "tariffs":
+                    store.Tariffs[key] = item;
+                    break;
             }
         }
 
@@ -50,26 +59,40 @@ public sealed partial class SampleSyncHandler(
         metrics.RecordSync(context.CpoId);
         metrics.RecordRequest(context.CpoId);
 
-        await sse.BroadcastAsync("sync-completed", new
-        {
-            cpoId = context.CpoId,
-            module = context.ModuleId,
-            items = result.ItemCount,
-            duration = result.Duration.ToString(),
-        }).ConfigureAwait(false);
+        await sse.BroadcastAsync(
+                "sync-completed",
+                new
+                {
+                    cpoId = context.CpoId,
+                    module = context.ModuleId,
+                    items = result.ItemCount,
+                    duration = result.Duration.ToString(),
+                }
+            )
+            .ConfigureAwait(false);
 
-        await sse.BroadcastAsync("data-update", new
-        {
-            locations = store.Locations.Count,
-            sessions = store.Sessions.Count,
-            tariffs = store.Tariffs.Count,
-            cdrs = store.Cdrs.Count,
-        }).ConfigureAwait(false);
+        await sse.BroadcastAsync(
+                "data-update",
+                new
+                {
+                    locations = store.Locations.Count,
+                    sessions = store.Sessions.Count,
+                    tariffs = store.Tariffs.Count,
+                    cdrs = store.Cdrs.Count,
+                }
+            )
+            .ConfigureAwait(false);
     }
 
     [LoggerMessage(
         Level = LogLevel.Information,
         Message = "[Sync] Completed {CpoId}/{ModuleId}: {ItemCount} items, {PageCount} pages in {Duration}"
     )]
-    private partial void LogSyncCompleted(string cpoId, string moduleId, int itemCount, int pageCount, TimeSpan duration);
+    private partial void LogSyncCompleted(
+        string cpoId,
+        string moduleId,
+        int itemCount,
+        int pageCount,
+        TimeSpan duration
+    );
 }

@@ -28,7 +28,8 @@ public sealed partial class CpoHealthMonitor : BackgroundService
         ILogger<CpoHealthMonitor> logger,
         TimeSpan? interval = null,
         int maxConsecutiveFailures = 3,
-        TimeSpan? healthCheckTimeout = null)
+        TimeSpan? healthCheckTimeout = null
+    )
     {
         _registry = registry;
         _httpClient = httpClient;
@@ -91,10 +92,7 @@ public sealed partial class CpoHealthMonitor : BackgroundService
                 }
                 else
                 {
-                    var updated = connection with
-                    {
-                        LastHealthCheckAt = DateTimeOffset.UtcNow,
-                    };
+                    var updated = connection with { LastHealthCheckAt = DateTimeOffset.UtcNow };
                     _registry.AddOrUpdate(updated);
                 }
 
@@ -129,9 +127,7 @@ public sealed partial class CpoHealthMonitor : BackgroundService
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(_timeout);
 
-            using var response = await _httpClient
-                .GetAsync(connection.CpoVersionsUrl, cts.Token)
-                .ConfigureAwait(false);
+            using var response = await _httpClient.GetAsync(connection.CpoVersionsUrl, cts.Token).ConfigureAwait(false);
 
             return response.IsSuccessStatusCode;
         }
@@ -151,10 +147,21 @@ public sealed partial class CpoHealthMonitor : BackgroundService
     [LoggerMessage(Level = LogLevel.Debug, Message = "Health check passed for {ConnectionKey} ({Version})")]
     private static partial void LogHealthCheck(ILogger logger, string connectionKey, OcpiVersion version);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Health check failed for {ConnectionKey} ({Failures}/{MaxFailures})")]
-    private static partial void LogHealthCheckFailed(ILogger logger, string connectionKey, int failures, int maxFailures);
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Health check failed for {ConnectionKey} ({Failures}/{MaxFailures})"
+    )]
+    private static partial void LogHealthCheckFailed(
+        ILogger logger,
+        string connectionKey,
+        int failures,
+        int maxFailures
+    );
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "CPO {ConnectionKey} marked Offline after {Failures} consecutive failures")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "CPO {ConnectionKey} marked Offline after {Failures} consecutive failures"
+    )]
     private static partial void LogCpoMarkedOffline(ILogger logger, string connectionKey, int failures);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "CPO {ConnectionKey} restored to Connected")]

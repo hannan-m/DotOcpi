@@ -50,9 +50,12 @@ public sealed class OcpiTokenValidator
         // already found the entry by hash lookup, this ensures no timing
         // information leaks about partial hash matches in alternative store
         // implementations that might use prefix search.
-        if (!CryptographicOperations.FixedTimeEquals(
+        if (
+            !CryptographicOperations.FixedTimeEquals(
                 MemoryMarshal.AsBytes(incomingHash.AsSpan()),
-                MemoryMarshal.AsBytes(entry.TokenHash.AsSpan())))
+                MemoryMarshal.AsBytes(entry.TokenHash.AsSpan())
+            )
+        )
         {
             return TokenValidationResult.Failed("Token validation failed.");
         }

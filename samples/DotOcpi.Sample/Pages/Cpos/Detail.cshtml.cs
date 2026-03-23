@@ -39,8 +39,7 @@ public class DetailModel(ICpoRegistry registry, InMemoryDataStore store) : PageM
             ? OcpiJsonOptions.GetOptions(Connection.Version)
             : OcpiJsonOptions.GetOptions(OcpiVersion.V2_2_1);
 
-        return dict
-            .Where(kv => kv.Key.StartsWith(cpoKey + ":"))
+        return dict.Where(kv => kv.Key.StartsWith(cpoKey + ":"))
             .Select(kv =>
             {
                 var json = JsonSerializer.Serialize(kv.Value, opts.GetTypeInfo(kv.Value.GetType()));

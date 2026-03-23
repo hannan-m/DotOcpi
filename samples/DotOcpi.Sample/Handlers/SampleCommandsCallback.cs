@@ -10,8 +10,13 @@ namespace DotOcpi.Sample.Handlers;
 public sealed partial class SampleCommandsCallback(ILogger<SampleCommandsCallback> logger) : ICommandsCallback
 {
     private readonly ILogger _logger = logger;
+
     public Task<OcpiResult> OnCommandResultAsync(
-        OcpiRequestContext context, string correlationId, object result, CancellationToken ct)
+        OcpiRequestContext context,
+        string correlationId,
+        object result,
+        CancellationToken ct
+    )
     {
         var resultStr = result.ToString() ?? "";
         LogCommandResult(correlationId, context.CpoId, resultStr);

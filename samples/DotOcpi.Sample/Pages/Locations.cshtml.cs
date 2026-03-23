@@ -17,8 +17,8 @@ public class LocationsModel(ICpoRegistry registry, InMemoryDataStore store) : Pa
         FilterCpo = cpo;
         CpoKeys = registry.GetAll().Select(c => c.ConnectionKey).ToList();
 
-        Locations = store.Locations
-            .Where(kv => cpo is null || kv.Key.StartsWith(cpo + ":"))
+        Locations = store
+            .Locations.Where(kv => cpo is null || kv.Key.StartsWith(cpo + ":"))
             .Select(kv =>
             {
                 var cpoKey = kv.Key.Split(':')[0] + ":" + kv.Key.Split(':')[1];

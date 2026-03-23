@@ -11,10 +11,7 @@ public sealed partial class SampleTokensAuthorizer(ILogger<SampleTokensAuthorize
     private readonly ILogger _logger = logger;
 
     // Known token UIDs — in production, query your user database.
-    private static readonly HashSet<string> KnownTokens = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "TOKEN001",
-    };
+    private static readonly HashSet<string> KnownTokens = new(StringComparer.OrdinalIgnoreCase) { "TOKEN001" };
 
     public Task<OcpiResult<object>> AuthorizeAsync(
         OcpiRequestContext context,

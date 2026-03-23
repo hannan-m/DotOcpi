@@ -23,8 +23,15 @@ internal sealed class TariffsClient : ITariffsClient
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
         CancellationToken cancellationToken = default
-    ) => PullClientHelper.StreamAllAsync(
-        _contextProvider, _pagination,
-        cpoId, "tariffs", OcpiModelTypeMap.GetTariffType,
-        dateFrom, dateTo, cancellationToken);
+    ) =>
+        PullClientHelper.StreamAllAsync(
+            _contextProvider,
+            _pagination,
+            cpoId,
+            "tariffs",
+            OcpiModelTypeMap.GetTariffType,
+            dateFrom,
+            dateTo,
+            cancellationToken
+        );
 }

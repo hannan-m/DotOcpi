@@ -18,13 +18,17 @@ public sealed class OcpiRateLimitFilter : IEndpointFilter, IDisposable
     public OcpiRateLimitFilter(OcpiRateLimitOptions options)
     {
         _limiter = PartitionedRateLimiter.Create<string, string>(key =>
-            RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = options.MaxRequestsPerWindow,
-                Window = options.Window,
-                AutoReplenishment = true,
-                QueueLimit = 0,
-            }));
+            RateLimitPartition.GetFixedWindowLimiter(
+                key,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = options.MaxRequestsPerWindow,
+                    Window = options.Window,
+                    AutoReplenishment = true,
+                    QueueLimit = 0,
+                }
+            )
+        );
     }
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -43,9 +47,8 @@ public sealed class OcpiRateLimitFilter : IEndpointFilter, IDisposable
 
         if (lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
         {
-            httpContext.Response.Headers.RetryAfter =
-                Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds))
-                    .ToString(System.Globalization.CultureInfo.InvariantCulture);
+            httpContext.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds))
+                .ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         return OcpiResponseWriter.ErrorResult(

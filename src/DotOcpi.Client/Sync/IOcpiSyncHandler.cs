@@ -22,9 +22,5 @@ public interface IOcpiSyncHandler
     /// Called after all pages for a CPO+module sync cycle have been successfully
     /// fetched and delivered. Not called if the sync fails or is cancelled.
     /// </summary>
-    Task OnSyncCompletedAsync(
-        SyncContext context,
-        SyncResult result,
-        CancellationToken cancellationToken = default
-    );
+    Task OnSyncCompletedAsync(SyncContext context, SyncResult result, CancellationToken cancellationToken = default);
 }

@@ -11,25 +11,14 @@ public sealed class CommandHistory
 
     public void Add(string cpoId, string commandType, string result)
     {
-        _records.Enqueue(new CommandRecord(
-            DateTimeOffset.UtcNow,
-            cpoId,
-            commandType,
-            result
-        ));
+        _records.Enqueue(new CommandRecord(DateTimeOffset.UtcNow, cpoId, commandType, result));
 
         // Keep last 50
         while (_records.Count > 50)
             _records.TryDequeue(out _);
     }
 
-    public IReadOnlyList<CommandRecord> GetRecent(int count = 20) =>
-        _records.Reverse().Take(count).ToList();
+    public IReadOnlyList<CommandRecord> GetRecent(int count = 20) => _records.Reverse().Take(count).ToList();
 }
 
-public sealed record CommandRecord(
-    DateTimeOffset Time,
-    string CpoId,
-    string CommandType,
-    string Result
-);
+public sealed record CommandRecord(DateTimeOffset Time, string CpoId, string CommandType, string Result);

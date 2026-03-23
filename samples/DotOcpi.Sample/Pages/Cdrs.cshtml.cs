@@ -12,8 +12,8 @@ public class CdrsModel(ICpoRegistry registry, InMemoryDataStore store) : PageMod
 
     public void OnGet()
     {
-        Cdrs = store.Cdrs
-            .Select(kv =>
+        Cdrs = store
+            .Cdrs.Select(kv =>
             {
                 var cpoKey = kv.Key.Split(':')[0] + ":" + kv.Key.Split(':')[1];
                 var version = registry.FindByConnectionKey(cpoKey)?.Version ?? OcpiVersion.V2_2_1;

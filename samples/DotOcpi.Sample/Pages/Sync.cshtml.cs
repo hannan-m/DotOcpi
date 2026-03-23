@@ -10,26 +10,29 @@ public class SyncModel(ICpoRegistry registry, InMemoryDataStore store) : PageMod
 
     public void OnGet()
     {
-        CpoSyncs = registry.GetAll().Select(c => new CpoSyncInfo
-        {
-            ConnectionKey = c.ConnectionKey,
-            Version = c.Version.ToVersionString(),
-            Modules = c.ModuleEndpoints.Keys
-                .Where(m => m is "locations" or "tariffs" or "sessions" or "cdrs")
-                .Select(m => new ModuleSyncInfo
-                {
-                    Name = m,
-                    ItemCount = m switch
+        CpoSyncs = registry
+            .GetAll()
+            .Select(c => new CpoSyncInfo
+            {
+                ConnectionKey = c.ConnectionKey,
+                Version = c.Version.ToVersionString(),
+                Modules = c
+                    .ModuleEndpoints.Keys.Where(m => m is "locations" or "tariffs" or "sessions" or "cdrs")
+                    .Select(m => new ModuleSyncInfo
                     {
-                        "locations" => store.Locations.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
-                        "tariffs" => store.Tariffs.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
-                        "sessions" => store.Sessions.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
-                        "cdrs" => store.Cdrs.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
-                        _ => 0,
-                    },
-                })
-                .ToList(),
-        }).ToList();
+                        Name = m,
+                        ItemCount = m switch
+                        {
+                            "locations" => store.Locations.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
+                            "tariffs" => store.Tariffs.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
+                            "sessions" => store.Sessions.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
+                            "cdrs" => store.Cdrs.Count(kv => kv.Key.StartsWith(c.ConnectionKey + ":")),
+                            _ => 0,
+                        },
+                    })
+                    .ToList(),
+            })
+            .ToList();
     }
 
     public record CpoSyncInfo

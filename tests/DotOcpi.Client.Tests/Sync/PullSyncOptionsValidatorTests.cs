@@ -72,10 +72,7 @@ public class PullSyncOptionsValidatorTests
     [Fact]
     public void Validate_AllValidModules_Succeeds()
     {
-        var options = new PullSyncOptions
-        {
-            EnabledModules = ["locations", "sessions", "cdrs", "tariffs"],
-        };
+        var options = new PullSyncOptions { EnabledModules = ["locations", "sessions", "cdrs", "tariffs"] };
 
         var result = _validator.Validate(null, options);
 
@@ -99,10 +96,7 @@ public class PullSyncOptionsValidatorTests
     [Fact]
     public void Validate_ZeroModuleOverrideInterval_Fails()
     {
-        var options = new PullSyncOptions
-        {
-            ModuleOverrides = { ["locations"] = new() { Interval = TimeSpan.Zero } },
-        };
+        var options = new PullSyncOptions { ModuleOverrides = { ["locations"] = new() { Interval = TimeSpan.Zero } } };
 
         var result = _validator.Validate(null, options);
 
@@ -113,10 +107,7 @@ public class PullSyncOptionsValidatorTests
     [Fact]
     public void Validate_ZeroCpoDefaultInterval_Fails()
     {
-        var options = new PullSyncOptions
-        {
-            CpoOverrides = { ["DE:ALL"] = new() { DefaultInterval = TimeSpan.Zero } },
-        };
+        var options = new PullSyncOptions { CpoOverrides = { ["DE:ALL"] = new() { DefaultInterval = TimeSpan.Zero } } };
 
         var result = _validator.Validate(null, options);
 
@@ -127,10 +118,7 @@ public class PullSyncOptionsValidatorTests
     [Fact]
     public void Validate_InvalidModuleInCpoEnabledModules_Fails()
     {
-        var options = new PullSyncOptions
-        {
-            CpoOverrides = { ["DE:ALL"] = new() { EnabledModules = ["tokens"] } },
-        };
+        var options = new PullSyncOptions { CpoOverrides = { ["DE:ALL"] = new() { EnabledModules = ["tokens"] } } };
 
         var result = _validator.Validate(null, options);
 
@@ -145,10 +133,7 @@ public class PullSyncOptionsValidatorTests
         {
             CpoOverrides =
             {
-                ["DE:ALL"] = new()
-                {
-                    ModuleOverrides = { ["bad"] = new() { Interval = TimeSpan.FromHours(1) } },
-                },
+                ["DE:ALL"] = new() { ModuleOverrides = { ["bad"] = new() { Interval = TimeSpan.FromHours(1) } } },
             },
         };
 

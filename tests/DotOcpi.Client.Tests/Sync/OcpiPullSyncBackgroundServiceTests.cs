@@ -43,10 +43,7 @@ public class OcpiPullSyncBackgroundServiceTests
         IOcpiSyncService syncService,
         ISyncStateStore store,
         FakeTimeProvider time
-    ) CreateBackgroundService(
-        PullSyncOptions options,
-        params CpoConnection[] connections
-    )
+    ) CreateBackgroundService(PullSyncOptions options, params CpoConnection[] connections)
     {
         var registry = Substitute.For<ICpoRegistry>();
         registry.GetAll().Returns(connections);
@@ -59,13 +56,15 @@ public class OcpiPullSyncBackgroundServiceTests
                 Arg.Any<DateTimeOffset?>(),
                 Arg.Any<CancellationToken>()
             )
-            .Returns(new SyncResult
-            {
-                ItemCount = 1,
-                PageCount = 1,
-                Duration = TimeSpan.FromSeconds(1),
-                IsSuccess = true,
-            });
+            .Returns(
+                new SyncResult
+                {
+                    ItemCount = 1,
+                    PageCount = 1,
+                    Duration = TimeSpan.FromSeconds(1),
+                    IsSuccess = true,
+                }
+            );
 
         var store = new InMemorySyncStateStore();
         var time = new FakeTimeProvider(Now);
@@ -97,12 +96,8 @@ public class OcpiPullSyncBackgroundServiceTests
 
         await service.RunSyncCycleAsync(CancellationToken.None);
 
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:ALL", "tariffs", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:ALL", "tariffs", null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -125,7 +120,12 @@ public class OcpiPullSyncBackgroundServiceTests
 
         await syncService
             .DidNotReceive()
-            .SyncModuleFromCpoAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
+            .SyncModuleFromCpoAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<CancellationToken>()
+            );
     }
 
     [Fact]
@@ -146,9 +146,7 @@ public class OcpiPullSyncBackgroundServiceTests
 
         await service.RunSyncCycleAsync(CancellationToken.None);
 
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -157,25 +155,29 @@ public class OcpiPullSyncBackgroundServiceTests
         var pending = CreateConnection("DE", "PND", ConnectionStatus.Pending, "locations");
         var offline = CreateConnection("DE", "OFF", ConnectionStatus.Offline, "locations");
         var connected = CreateConnection("DE", "CON", ConnectionStatus.Connected, "locations");
-        var options = new PullSyncOptions
-        {
-            EnabledModules = ["locations"],
-            DefaultInterval = TimeSpan.FromHours(1),
-        };
+        var options = new PullSyncOptions { EnabledModules = ["locations"], DefaultInterval = TimeSpan.FromHours(1) };
 
         var (service, syncService, _, _) = CreateBackgroundService(options, pending, offline, connected);
 
         await service.RunSyncCycleAsync(CancellationToken.None);
 
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:CON", "locations", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:CON", "locations", null, Arg.Any<CancellationToken>());
         await syncService
             .DidNotReceive()
-            .SyncModuleFromCpoAsync("DE:PND", Arg.Any<string>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
+            .SyncModuleFromCpoAsync(
+                "DE:PND",
+                Arg.Any<string>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<CancellationToken>()
+            );
         await syncService
             .DidNotReceive()
-            .SyncModuleFromCpoAsync("DE:OFF", Arg.Any<string>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
+            .SyncModuleFromCpoAsync(
+                "DE:OFF",
+                Arg.Any<string>(),
+                Arg.Any<DateTimeOffset?>(),
+                Arg.Any<CancellationToken>()
+            );
     }
 
     [Fact]
@@ -192,9 +194,7 @@ public class OcpiPullSyncBackgroundServiceTests
 
         await service.RunSyncCycleAsync(CancellationToken.None);
 
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
         await syncService
             .DidNotReceive()
             .SyncModuleFromCpoAsync("DE:ALL", "tariffs", Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
@@ -226,9 +226,7 @@ public class OcpiPullSyncBackgroundServiceTests
 
         await service.RunSyncCycleAsync(CancellationToken.None);
 
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:ALL", "locations", null, Arg.Any<CancellationToken>());
         await syncService
             .DidNotReceive()
             .SyncModuleFromCpoAsync("DE:ALL", "cdrs", Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
@@ -242,13 +240,7 @@ public class OcpiPullSyncBackgroundServiceTests
         {
             EnabledModules = ["locations", "tariffs"],
             DefaultInterval = TimeSpan.FromHours(1),
-            CpoOverrides =
-            {
-                ["DE:ALL"] = new CpoSyncOptions
-                {
-                    EnabledModules = ["sessions"],
-                },
-            },
+            CpoOverrides = { ["DE:ALL"] = new CpoSyncOptions { EnabledModules = ["sessions"] } },
         };
 
         var (service, syncService, _, _) = CreateBackgroundService(options, conn);
@@ -256,9 +248,7 @@ public class OcpiPullSyncBackgroundServiceTests
         await service.RunSyncCycleAsync(CancellationToken.None);
 
         // Only sessions should sync for DE:ALL (CPO override)
-        await syncService
-            .Received(1)
-            .SyncModuleFromCpoAsync("DE:ALL", "sessions", null, Arg.Any<CancellationToken>());
+        await syncService.Received(1).SyncModuleFromCpoAsync("DE:ALL", "sessions", null, Arg.Any<CancellationToken>());
         await syncService
             .DidNotReceive()
             .SyncModuleFromCpoAsync("DE:ALL", "locations", Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>());
@@ -272,11 +262,7 @@ public class OcpiPullSyncBackgroundServiceTests
     {
         var conn1 = CreateConnection("DE", "CPO1", modules: ["locations"]);
         var conn2 = CreateConnection("DE", "CPO2", modules: ["locations"]);
-        var options = new PullSyncOptions
-        {
-            EnabledModules = ["locations"],
-            DefaultInterval = TimeSpan.FromHours(1),
-        };
+        var options = new PullSyncOptions { EnabledModules = ["locations"], DefaultInterval = TimeSpan.FromHours(1) };
 
         var (service, syncService, _, _) = CreateBackgroundService(options, conn1, conn2);
 

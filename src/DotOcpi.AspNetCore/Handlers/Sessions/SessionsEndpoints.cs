@@ -11,11 +11,15 @@ namespace DotOcpi.AspNetCore.Handlers.Sessions;
 /// Maps OCPI Sessions module endpoints for all supported versions.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-    "AOT", "IL2026:RequiresUnreferencedCode",
-    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+    "AOT",
+    "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding."
+)]
 [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-    "AOT", "IL3050:RequiresDynamicCode",
-    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
+    "AOT",
+    "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed."
+)]
 public static class SessionsEndpoints
 {
     /// <summary>

@@ -12,8 +12,8 @@ public class SessionsModel(ICpoRegistry registry, InMemoryDataStore store) : Pag
 
     public void OnGet(string? status)
     {
-        Sessions = store.Sessions
-            .Select(kv =>
+        Sessions = store
+            .Sessions.Select(kv =>
             {
                 var cpoKey = kv.Key.Split(':')[0] + ":" + kv.Key.Split(':')[1];
                 var version = registry.FindByConnectionKey(cpoKey)?.Version ?? OcpiVersion.V2_2_1;
@@ -21,8 +21,13 @@ public class SessionsModel(ICpoRegistry registry, InMemoryDataStore store) : Pag
                 var json = JsonSerializer.Serialize(kv.Value, opts.GetTypeInfo(kv.Value.GetType()));
                 return (cpoKey, JsonDocument.Parse(json).RootElement.Clone());
             })
-            .Where(x => status is null ||
-                (x.Item2.TryGetProperty("status", out var s) && string.Equals(s.GetString(), status, StringComparison.OrdinalIgnoreCase)))
+            .Where(x =>
+                status is null
+                || (
+                    x.Item2.TryGetProperty("status", out var s)
+                    && string.Equals(s.GetString(), status, StringComparison.OrdinalIgnoreCase)
+                )
+            )
             .ToList();
     }
 }

@@ -44,8 +44,7 @@ public readonly record struct CiString : IEquatable<CiString>
     public static implicit operator string(CiString ciString) => ciString.Value;
 
     /// <inheritdoc/>
-    public bool Equals(CiString other) =>
-        string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
+    public bool Equals(CiString other) => string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Value);

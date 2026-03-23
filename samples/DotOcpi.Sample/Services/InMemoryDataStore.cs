@@ -20,7 +20,8 @@ public sealed class InMemoryDataStore
     /// <summary>Trims a collection to half capacity if it exceeds the max.</summary>
     public static void TrimIfNeeded(ConcurrentDictionary<string, object> dict)
     {
-        if (dict.Count <= MaxEntriesPerCollection) return;
+        if (dict.Count <= MaxEntriesPerCollection)
+            return;
         var keysToRemove = dict.Keys.Take(dict.Count - MaxEntriesPerCollection / 2);
         foreach (var key in keysToRemove)
             dict.TryRemove(key, out _);

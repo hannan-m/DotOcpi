@@ -12,11 +12,15 @@ namespace DotOcpi.AspNetCore.Handlers.Commands;
 /// The eMSP receives async command results from CPOs via POST to the response_url.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-    "AOT", "IL2026:RequiresUnreferencedCode",
-    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding.")]
+    "AOT",
+    "IL2026:RequiresUnreferencedCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no reflection-based binding."
+)]
 [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
-    "AOT", "IL3050:RequiresDynamicCode",
-    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed.")]
+    "AOT",
+    "IL3050:RequiresDynamicCode",
+    Justification = "Endpoint delegates use only string and HttpContext parameters — no runtime code generation needed."
+)]
 public static class CommandsEndpoints
 {
     /// <summary>

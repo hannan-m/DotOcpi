@@ -23,10 +23,17 @@ internal sealed class SessionsClient : ISessionsClient
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
         CancellationToken cancellationToken = default
-    ) => PullClientHelper.StreamAllAsync(
-        _contextProvider, _pagination,
-        cpoId, "sessions", OcpiModelTypeMap.GetSessionType,
-        dateFrom, dateTo, cancellationToken);
+    ) =>
+        PullClientHelper.StreamAllAsync(
+            _contextProvider,
+            _pagination,
+            cpoId,
+            "sessions",
+            OcpiModelTypeMap.GetSessionType,
+            dateFrom,
+            dateTo,
+            cancellationToken
+        );
 
     /// <summary>
     /// Charging preferences require OCPI 2.2 or later.
