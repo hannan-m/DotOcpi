@@ -196,7 +196,7 @@ public interface ICpoRegistryStore
 {
     Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct);
     Task SaveAsync(CpoConnection connection, CancellationToken ct);
-    Task DeleteAsync(string cpoId, CancellationToken ct);
+    Task RemoveAsync(string cpoId, CancellationToken ct);
 }
 ```
 

@@ -13,7 +13,7 @@ How the library itself is tested, and how consumers test their integrations.
 - [7. Test Data Strategy](#7-test-data-strategy)
 - [8. Security Testing](#8-security-testing)
 - [9. Serialization Testing](#9-serialization-testing)
-- [10. Consumer Testing (DotOcpi.Simulator)](#10-consumer-testing-dotocpitesting)
+- [10. Consumer Testing (DotOcpi.Simulator)](#10-consumer-testing-dotocpisimulator)
 - [11. Sync Testing](#11-sync-testing)
 - [12. CI/CD Pipeline](#12-cicd-pipeline)
 
@@ -516,7 +516,7 @@ public class LocationSerializationTests
     public void Serialize_Location_RoundTrips(OcpiVersion version)
     {
         var location = TestData.CreateLocation(version);
-        var options = OcpiJsonOptions.GetForVersion(version);
+        var options = OcpiJsonOptions.GetOptions(version);
 
         var json = JsonSerializer.Serialize(location, location.GetType(), options);
         var deserialized = JsonSerializer.Deserialize(json, location.GetType(), options);
@@ -907,7 +907,7 @@ public class CiStringTests
 
 ## 10. Consumer Testing (DotOcpi.Simulator)
 
-The `DotOcpi.Simulator` package enables consumers to test their own integrations. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API.
+The `DotOcpi.Simulator` package enables consumers to test their own integrations. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpisimulator) for the full API.
 
 ### Testing the Testing Package Itself
 

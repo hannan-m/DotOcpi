@@ -159,11 +159,10 @@ public interface ICommandsCallback
     /// Called when a CPO sends the async command result
     /// to the response_url.
     /// </summary>
-    Task OnCommandResultAsync(
+    Task<OcpiResult> OnCommandResultAsync(
         OcpiRequestContext context,
         string correlationId,
-        CommandResultType result,
-        DisplayText[]? message,
+        object result,
         CancellationToken ct);
 }
 ```

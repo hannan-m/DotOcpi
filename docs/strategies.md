@@ -20,7 +20,7 @@ Cross-cutting strategies that apply across the library.
 - [14. PATCH Handling Strategy](#14-patch-handling-strategy)
 - [15. Type Convention Strategy](#15-type-convention-strategy)
 - [16. Exception Strategy](#16-exception-strategy)
-- [17. Testing Strategy (DotOcpi.Simulator)](#17-testing-strategy-dotocpitesting)
+- [17. Testing Strategy (DotOcpi.Simulator)](#17-testing-strategy-dotocpisimulator)
 - [18. Security Strategy](#18-security-strategy)
 
 ---
@@ -729,8 +729,8 @@ services.AddDotOcpi()
     .AddPullSync(options =>
     {
         options.DefaultInterval = TimeSpan.FromHours(1);
-        options.Modules = [ModuleId.Locations, ModuleId.Tariffs];
-        options.RandomJitter = TimeSpan.FromMinutes(5); // Avoid thundering herd
+        options.EnabledModules = ["locations", "tariffs"];
+        options.MaxJitter = TimeSpan.FromMinutes(5); // Avoid thundering herd
     });
 ```
 

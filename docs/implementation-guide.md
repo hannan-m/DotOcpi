@@ -31,7 +31,7 @@ Step-by-step build order for the library. Each phase produces working, testable 
 1. **Create the solution file**
 
    ```
-   DotOcpi.sln
+   DotOcpi.slnx
    ```
 
 2. **Create all project files with multi-targeting and dependencies**
@@ -528,14 +528,17 @@ Each context:
 
 ```csharp
 // src/DotOcpi/Serialization/OcpiJsonOptions.cs
-internal static class OcpiJsonOptions
+public static class OcpiJsonOptions
 {
-    public static JsonSerializerOptions GetForVersion(OcpiVersion version);
-    public static JsonTypeInfo<T> GetTypeInfo<T>(OcpiVersion version);
+    public static JsonSerializerOptions GetOptions(OcpiVersion version);
+    public static JsonSerializerOptions V2_2_1 { get; }
+    public static JsonSerializerOptions V2_2 { get; }
+    public static JsonSerializerOptions V2_1_1 { get; }
+    public static JsonSerializerOptions V2_0 { get; }
 }
 ```
 
-One frozen `JsonSerializerOptions` instance per version, created at startup.
+One lazy-initialized `JsonSerializerOptions` instance per version, made read-only after creation.
 
 #### 4.4 — PATCH Handling
 
@@ -725,10 +728,10 @@ Per [performance.md #5](performance.md#5-token-validation-hot-path):
 #### 6.6 — AuthorizationHeaderParser
 
 ```csharp
-// src/DotOcpi/TokenManagement/AuthorizationHeaderParser.cs
-internal static class AuthorizationHeaderParser
+// src/DotOcpi/Security/AuthorizationHeaderParser.cs
+public static class AuthorizationHeaderParser
 {
-    public static bool TryExtractToken(StringValues authHeader, out ReadOnlySpan<char> token);
+    public static bool TryParse(ReadOnlySpan<char> headerValue, out string token);
 }
 ```
 
@@ -809,7 +812,7 @@ public interface ICpoRegistryStore
 {
     Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct);
     Task SaveAsync(CpoConnection connection, CancellationToken ct);
-    Task DeleteAsync(string cpoId, CancellationToken ct);
+    Task RemoveAsync(string cpoId, CancellationToken ct);
 }
 ```
 
@@ -1245,8 +1248,8 @@ group.MapPatch("/tariffs/{tariffId}", TariffsEndpoints.HandlePatch);   // 2.0/2.
 group.MapDelete("/tariffs/{tariffId}", TariffsEndpoints.HandleDelete);
 // ... + 2.2+ pattern with countryCode/partyId (no PATCH)
 
-// Tokens sender (server-side pagination: call ITokensSender.GetTokensAsync + GetTokenCountAsync,
-// set X-Total-Count, X-Limit, and Link headers for next page)
+// Tokens sender (server-side pagination: call ITokensSender.GetTokensAsync,
+// set X-Total-Count from PaginatedResult.TotalCount, X-Limit, and Link headers for next page)
 group.MapGet("/tokens", TokensEndpoints.HandleGetAll);
 group.MapPost("/tokens/{tokenUid}/authorize", TokensEndpoints.HandleAuthorize);
 
@@ -1300,7 +1303,7 @@ tests/DotOcpi.AspNetCore.Tests/Endpoints/
 public interface IOcpiClient
 {
     IRegistrationClient Registration { get; }
-    IVersionsClient Versions { get; }            // Manual version discovery / detail queries
+    IVersionDiscovery Versions { get; }           // Manual version discovery / detail queries
     ILocationsClient Locations { get; }
     ISessionsClient Sessions { get; }
     ICdrsClient Cdrs { get; }
@@ -1310,8 +1313,8 @@ public interface IOcpiClient
     IChargingProfilesClient ChargingProfiles { get; }
 }
 
-// src/DotOcpi.Client/IVersionsClient.cs
-public interface IVersionsClient
+// src/DotOcpi/Registration/IVersionDiscovery.cs (lives in core package)
+public interface IVersionDiscovery
 {
     Task<OcpiResult<IReadOnlyList<VersionInfo>>> GetVersionsAsync(Uri versionsUrl, string token, CancellationToken ct);
     Task<OcpiResult<VersionDetail>> GetVersionDetailAsync(Uri versionUrl, string token, CancellationToken ct);

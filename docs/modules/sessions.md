@@ -149,7 +149,7 @@ public interface ISessionsReceiver
     Task<OcpiResult> OnSessionPutAsync(
         OcpiRequestContext context,
         string sessionId,
-        object session,  // V2_0.Session | V2_1_1.Session | V2_2.Session | V2_2_1.Session
+        object data,  // V2_0.Session | V2_1_1.Session | V2_2.Session | V2_2_1.Session
         CancellationToken ct);
 
     Task<OcpiResult> OnSessionPatchAsync(
@@ -158,7 +158,7 @@ public interface ISessionsReceiver
         JsonElement patch,
         CancellationToken ct);
 
-    Task<OcpiResult<object>> OnSessionGetAsync(
+    Task<OcpiResult<object>> GetSessionAsync(
         OcpiRequestContext context,
         string sessionId,
         CancellationToken ct);

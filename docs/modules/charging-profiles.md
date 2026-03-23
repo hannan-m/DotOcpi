@@ -139,23 +139,16 @@ sequenceDiagram
 ```csharp
 public interface IChargingProfilesCallback
 {
-    Task OnChargingProfileResultAsync(
+    Task<OcpiResult> OnChargingProfileResultAsync(
         OcpiRequestContext context,
         string correlationId,
-        ChargingProfileResultType result,
+        object result,
         CancellationToken ct);
 
-    Task OnActiveChargingProfileResultAsync(
-        OcpiRequestContext context,
-        string correlationId,
-        ChargingProfileResultType result,
-        ActiveChargingProfile? profile,
-        CancellationToken ct);
-
-    Task OnActiveChargingProfileUpdateAsync(
+    Task<OcpiResult> OnActiveChargingProfileUpdateAsync(
         OcpiRequestContext context,
         string sessionId,
-        ActiveChargingProfile profile,
+        object activeProfile,
         CancellationToken ct);
 }
 ```

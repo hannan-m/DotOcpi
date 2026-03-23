@@ -83,8 +83,8 @@ dotOcpiBuilder.AddClient();
 dotOcpiBuilder.AddPullSync(options =>
 {
     options.DefaultInterval = TimeSpan.FromHours(1);
-    options.Modules = ["locations", "tariffs"];
-    options.RandomJitter = TimeSpan.FromMinutes(5);
+    options.EnabledModules = ["locations", "tariffs"];
+    options.MaxJitter = TimeSpan.FromMinutes(5);
 });
 ```
 
@@ -107,7 +107,7 @@ builder.Services.AddDotOcpi(options =>
 .AddPullSync(sync =>
 {
     sync.DefaultInterval = TimeSpan.FromHours(1);
-    sync.Modules = ["locations", "tariffs", "sessions"];
+    sync.EnabledModules = ["locations", "tariffs", "sessions"];
 });
 
 // Register module handlers

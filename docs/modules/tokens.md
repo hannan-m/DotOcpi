@@ -199,21 +199,12 @@ public interface ITokensSender
     /// <summary>
     /// Return a paginated list of tokens for CPO pull.
     /// </summary>
-    Task<OcpiResult<PaginatedResult<object>>> GetTokensAsync(
+    Task<PaginatedResult<object>> GetTokensAsync(
         OcpiRequestContext context,
-        DateTime? dateFrom,
-        DateTime? dateTo,
+        DateTimeOffset? dateFrom,
+        DateTimeOffset? dateTo,
         int offset,
         int limit,
-        CancellationToken ct);
-
-    /// <summary>
-    /// Return the total count of matching tokens (for X-Total-Count header).
-    /// </summary>
-    Task<int> GetTokenCountAsync(
-        OcpiRequestContext context,
-        DateTime? dateFrom,
-        DateTime? dateTo,
         CancellationToken ct);
 }
 
@@ -226,11 +217,10 @@ public interface ITokensAuthorizer
     /// Called when a CPO requests authorization for a token.
     /// Must NOT validate based on EVSE status or opening hours per OCPI spec.
     /// </summary>
-    Task<OcpiResult<AuthorizationInfo>> OnAuthorizeAsync(
+    Task<OcpiResult<object>> AuthorizeAsync(
         OcpiRequestContext context,
         string tokenUid,
-        TokenType? tokenType,
-        LocationReferences? locationReferences,
+        object? locationReferences,
         CancellationToken ct);
 }
 ```

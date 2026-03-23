@@ -5,7 +5,7 @@ parent: Advanced
 nav_order: 5
 ---
 
-# Testing with DotOcpi.Testing
+# Testing with DotOcpi.Simulator
 {: .no_toc }
 
 ## Table of contents
@@ -18,7 +18,7 @@ nav_order: 5
 
 ## Overview
 
-`DotOcpi.Testing` provides `OcpiTestCpoServer` — an in-memory OCPI-compliant CPO server that runs during your tests. It supports:
+`DotOcpi.Simulator` provides `OcpiCpoSimulator` — an in-memory OCPI-compliant CPO server that runs during your tests. It supports:
 
 - Version discovery and negotiation
 - Credentials exchange (Token A &rarr; B lifecycle)
@@ -28,7 +28,7 @@ nav_order: 5
 ## Installation
 
 ```bash
-dotnet add package DotOcpi.Testing
+dotnet add package DotOcpi.Simulator
 ```
 
 Add to your test project only.
@@ -36,15 +36,15 @@ Add to your test project only.
 ## Basic Usage
 
 ```csharp
-using DotOcpi.Testing;
+using DotOcpi.Simulator;
 
 public class MyIntegrationTests : IAsyncLifetime
 {
-    private OcpiTestCpoServer _server = null!;
+    private OcpiCpoSimulator _server = null!;
 
     public async Task InitializeAsync()
     {
-        _server = await OcpiTestCpoServer.CreateAsync(config =>
+        _server = await OcpiCpoSimulator.CreateAsync(config =>
         {
             config.SupportedVersions = [OcpiVersion.V2_2_1];
             config.CpoIdentity = new PartyIdentity("DE", "CPO");
@@ -79,16 +79,16 @@ public class MyIntegrationTests : IAsyncLifetime
 }
 ```
 
-## OcpiTestCpoServer
+## OcpiCpoSimulator
 
 ### Creation
 
 ```csharp
 // Default configuration
-var server = await OcpiTestCpoServer.CreateAsync();
+var server = await OcpiCpoSimulator.CreateAsync();
 
 // Custom configuration
-var server = await OcpiTestCpoServer.CreateAsync(config =>
+var server = await OcpiCpoSimulator.CreateAsync(config =>
 {
     config.SupportedVersions = [OcpiVersion.V2_2_1, OcpiVersion.V2_1_1];
     config.CpoIdentity = new PartyIdentity("DE", "CPO");
@@ -114,7 +114,7 @@ var server = await OcpiTestCpoServer.CreateAsync(config =>
 | `GetReceivedTokenC()` | Returns the last Token C received from the eMSP |
 | `DisposeAsync()` | Stops the server and releases resources |
 
-## TestCpoConfiguration
+## CpoSimulatorConfiguration
 
 | Property | Type | Default | Description |
 |:---------|:-----|:--------|:------------|
@@ -148,7 +148,7 @@ var server = await OcpiTestCpoServer.CreateAsync(config =>
 ### Reject Registration
 
 ```csharp
-var server = await OcpiTestCpoServer.CreateAsync(config =>
+var server = await OcpiCpoSimulator.CreateAsync(config =>
 {
     config.RejectRegistration = true;
 });
@@ -159,7 +159,7 @@ var server = await OcpiTestCpoServer.CreateAsync(config =>
 ### Force Status Code
 
 ```csharp
-var server = await OcpiTestCpoServer.CreateAsync(config =>
+var server = await OcpiCpoSimulator.CreateAsync(config =>
 {
     config.ForceStatusCode = new OcpiStatusCode(3000); // Server error
 });
@@ -170,7 +170,7 @@ var server = await OcpiTestCpoServer.CreateAsync(config =>
 ### Response Delay
 
 ```csharp
-var server = await OcpiTestCpoServer.CreateAsync(config =>
+var server = await OcpiCpoSimulator.CreateAsync(config =>
 {
     config.ResponseDelay = TimeSpan.FromSeconds(2);
 });
@@ -181,7 +181,7 @@ var server = await OcpiTestCpoServer.CreateAsync(config =>
 ### Simulate Timeout
 
 ```csharp
-var server = await OcpiTestCpoServer.CreateAsync(config =>
+var server = await OcpiCpoSimulator.CreateAsync(config =>
 {
     config.SimulateTimeout = true;
 });
@@ -195,7 +195,7 @@ var server = await OcpiTestCpoServer.CreateAsync(config =>
 [Fact]
 public async Task FullRegistrationHandshake()
 {
-    var server = await OcpiTestCpoServer.CreateAsync();
+    var server = await OcpiCpoSimulator.CreateAsync();
 
     using var httpClient = new HttpClient();
     var credentialsClient = new CredentialsClient(httpClient);
@@ -230,12 +230,12 @@ public async Task FullRegistrationHandshake()
 ```csharp
 public class MyAppTests : IAsyncLifetime
 {
-    private OcpiTestCpoServer _cpo = null!;
+    private OcpiCpoSimulator _cpo = null!;
     private WebApplicationFactory<Program> _factory = null!;
 
     public async Task InitializeAsync()
     {
-        _cpo = await OcpiTestCpoServer.CreateAsync(c =>
+        _cpo = await OcpiCpoSimulator.CreateAsync(c =>
         {
             c.Locations = [new { id = "LOC1", name = "Test" }];
         });
@@ -298,7 +298,7 @@ public static IEnumerable<object[]> AllVersions =>
 [MemberData(nameof(AllVersions))]
 public async Task Registration_Works_ForAllVersions(OcpiVersion version)
 {
-    var server = await OcpiTestCpoServer.CreateAsync(c =>
+    var server = await OcpiCpoSimulator.CreateAsync(c =>
     {
         c.SupportedVersions = [version];
     });
@@ -326,4 +326,4 @@ builder.Services.AddTestCpoServer(config =>
 });
 ```
 
-This registers `OcpiTestCpoServer` as a singleton and starts it automatically.
+This registers `OcpiCpoSimulator` as a singleton and starts it automatically.

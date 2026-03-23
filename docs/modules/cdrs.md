@@ -211,17 +211,17 @@ public interface ICdrsReceiver
 {
     /// <summary>
     /// Called when a CPO posts a new CDR.
-    /// Return the URL where this CDR can be retrieved via GET.
+    /// Returns the CDR ID and whether it was newly created (for idempotency).
     /// </summary>
-    Task<OcpiResult<Uri>> OnCdrPostAsync(
+    Task<OcpiResult<CdrPostResult>> OnCdrPostAsync(
         OcpiRequestContext context,
-        object cdr,  // V2_0.Cdr | V2_1_1.Cdr | V2_2.Cdr | V2_2_1.Cdr
+        object data,
         CancellationToken ct);
 
     /// <summary>
-    /// Called when a CPO retrieves a previously posted CDR.
+    /// Retrieves a CDR by ID.
     /// </summary>
-    Task<OcpiResult<object>> OnCdrGetAsync(
+    Task<OcpiResult<object>> GetCdrAsync(
         OcpiRequestContext context,
         string cdrId,
         CancellationToken ct);

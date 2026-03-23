@@ -57,7 +57,7 @@ All eMSP-side OCPI modules: Locations, Sessions, CDRs, Tariffs, Tokens, Commands
 | [`DotOcpi`](#) | Core: models, interfaces, token management, version negotiation |
 | [`DotOcpi.AspNetCore`](#) | ASP.NET Core server: middleware, endpoint routing, auth pipeline |
 | [`DotOcpi.Client`](#) | HttpClient-based OCPI client for CPO endpoints |
-| [`DotOcpi.Testing`](#) | In-memory test CPO server for integration tests |
+| [`DotOcpi.Simulator`](#) | In-memory test CPO server for integration tests |
 
 ## Quick Example
 

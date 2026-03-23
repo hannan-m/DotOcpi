@@ -143,8 +143,8 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
     .AddPullSync(sync =>
     {
         sync.DefaultInterval = TimeSpan.FromHours(1);  // Sync every hour
-        sync.Modules = ["locations", "tariffs"];         // Which modules to sync
-        sync.RandomJitter = TimeSpan.FromMinutes(5);    // Prevent thundering herd
+        sync.EnabledModules = ["locations", "tariffs"];    // Which modules to sync
+        sync.MaxJitter = TimeSpan.FromMinutes(5);       // Prevent thundering herd
     });
 ```
 
@@ -153,8 +153,8 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
 | Property | Type | Default | Description |
 |:---------|:-----|:--------|:------------|
 | `DefaultInterval` | `TimeSpan` | 1 hour | Time between sync cycles |
-| `Modules` | `IReadOnlyList<string>` | `["locations", "tariffs"]` | Modules to sync |
-| `RandomJitter` | `TimeSpan` | 5 min | Random delay added to prevent all CPOs syncing at once |
+| `EnabledModules` | `List<string>` | `["locations", "tariffs"]` | Modules to sync |
+| `MaxJitter` | `TimeSpan` | 5 min | Random delay added to prevent all CPOs syncing at once |
 
 ### Custom Sync State
 

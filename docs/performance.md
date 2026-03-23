@@ -137,32 +137,40 @@ public sealed class OcpiStatusConverter : JsonConverter<Status>
 A single `JsonSerializerOptions` instance per version, created at startup and reused:
 
 ```csharp
-internal static class OcpiJsonOptions
+public static class OcpiJsonOptions
 {
-    // Cached, thread-safe, reused for the lifetime of the app
-    private static readonly JsonSerializerOptions s_v2_0 = CreateOptions(OcpiJsonContext_V2_0.Default);
-    private static readonly JsonSerializerOptions s_v2_1_1 = CreateOptions(OcpiJsonContext_V2_1_1.Default);
-    private static readonly JsonSerializerOptions s_v2_2 = CreateOptions(OcpiJsonContext_V2_2.Default);
-    private static readonly JsonSerializerOptions s_v2_2_1 = CreateOptions(OcpiJsonContext_V2_2_1.Default);
+    // Lazy-initialized, thread-safe via null-coalescing assignment
+    private static JsonSerializerOptions? _v2_2_1;
+    private static JsonSerializerOptions? _v2_2;
+    private static JsonSerializerOptions? _v2_1_1;
+    private static JsonSerializerOptions? _v2_0;
 
-    public static JsonSerializerOptions GetForVersion(OcpiVersion version) => version switch
+    public static JsonSerializerOptions GetOptions(OcpiVersion version) => version switch
     {
-        OcpiVersion.V2_0 => s_v2_0,
-        OcpiVersion.V2_1_1 => s_v2_1_1,
-        OcpiVersion.V2_2 => s_v2_2,
-        OcpiVersion.V2_2_1 => s_v2_2_1,
+        OcpiVersion.V2_2_1 => V2_2_1,
+        OcpiVersion.V2_2 => V2_2,
+        OcpiVersion.V2_1_1 => V2_1_1,
+        OcpiVersion.V2_0 => V2_0,
         _ => throw new ArgumentOutOfRangeException(nameof(version))
     };
+
+    public static JsonSerializerOptions V2_2_1 => _v2_2_1 ??= CreateOptions(OcpiJsonContext_V2_2_1.Default);
+    public static JsonSerializerOptions V2_2 => _v2_2 ??= CreateOptions(OcpiJsonContext_V2_2.Default);
+    public static JsonSerializerOptions V2_1_1 => _v2_1_1 ??= CreateOptions(OcpiJsonContext_V2_1_1.Default);
+    public static JsonSerializerOptions V2_0 => _v2_0 ??= CreateOptions(OcpiJsonContext_V2_0.Default);
 
     private static JsonSerializerOptions CreateOptions(JsonSerializerContext context)
     {
         var options = new JsonSerializerOptions
         {
-            TypeInfoResolver = context,
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             MaxDepth = 32 // Prevent stack overflow from pathological input (Security Rule 14)
         };
+        options.TypeInfoResolverChain.Add(context);
+        options.Converters.Add(new OcpiDateTimeConverter());
+        options.Converters.Add(new CiStringConverter());
+        options.Converters.Add(new GeoLocationConverter());
         options.MakeReadOnly();
         return options;
     }
@@ -238,26 +246,33 @@ public readonly record struct OcpiStatusCode(int Value)
 
 ### Span-Based Header Parsing
 
-Token extraction from the Authorization header without string allocation:
+Token extraction from the Authorization header using Span-based parsing:
 
 ```csharp
-internal static class AuthorizationHeaderParser
+public static class AuthorizationHeaderParser
 {
     private const string TokenPrefix = "Token ";
 
-    public static bool TryExtractToken(
-        StringValues authHeader,
-        out ReadOnlySpan<char> token)
+    public static bool TryParse(
+        ReadOnlySpan<char> headerValue,
+        out string token)
     {
-        token = default;
-        if (authHeader.Count != 1) return false;
+        token = string.Empty;
 
-        ReadOnlySpan<char> value = authHeader[0].AsSpan().Trim();
-        if (!value.StartsWith(TokenPrefix.AsSpan(), StringComparison.Ordinal))
+        var trimmed = headerValue.Trim();
+        if (trimmed.Length <= TokenPrefix.Length)
             return false;
 
-        token = value[TokenPrefix.Length..];
-        return !token.IsEmpty;
+        if (!trimmed[..TokenPrefix.Length].Equals(
+            TokenPrefix.AsSpan(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var tokenSpan = trimmed[TokenPrefix.Length..].Trim();
+        if (tokenSpan.IsEmpty)
+            return false;
+
+        token = tokenSpan.ToString();
+        return true;
     }
 }
 ```
@@ -525,7 +540,7 @@ internal sealed class TokenValidator
         StringValues authHeader, CancellationToken ct)
     {
         // 1. Span-based extraction (zero allocation)
-        if (!AuthorizationHeaderParser.TryExtractToken(authHeader, out var rawToken))
+        if (!AuthorizationHeaderParser.TryParse(authHeader[0].AsSpan(), out var rawToken))
             return TokenValidationResult.Missing;
 
         // 2. Hash with stackalloc (zero allocation for small tokens)
@@ -676,9 +691,8 @@ benchmarks/
     ├── DotOcpi.Benchmarks.csproj
     ├── Program.cs
     ├── SerializationBenchmarks.cs
-    ├── TokenValidationBenchmarks.cs
-    ├── RegistryLookupBenchmarks.cs
-    └── PaginationBenchmarks.cs
+    ├── TokenBenchmarks.cs
+    └── RegistryBenchmarks.cs
 ```
 
 ### Multi-Framework Benchmarks

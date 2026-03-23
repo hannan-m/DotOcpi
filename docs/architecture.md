@@ -134,10 +134,10 @@ graph TD
 
 | Package | Depends On | Contains |
 |---|---|---|
-| **DotOcpi** | `M.E.DependencyInjection`, `M.E.Logging`, `M.E.Options`, `System.Text.Json` | Version-specific models, `OcpiResult<T>`, `ITokenStore`, `ICpoRegistry`, `IModuleHandler` interfaces, version negotiation, OCPI status codes, JSON converters, `ActivitySource` |
+| **DotOcpi** | `M.E.DependencyInjection`, `M.E.Logging`, `M.E.Options`, `System.Text.Json` | Version-specific models, `OcpiResult<T>`, `ITokenStore`, `ICpoRegistry`, module receiver/sender interfaces, version negotiation, OCPI status codes, JSON converters, `ActivitySource` |
 | **DotOcpi.Client** | `DotOcpi`, `M.E.Http` | `IOcpiClient`, typed HTTP clients per module, pagination handling, request/response pipeline, `X-Request-ID`/`X-Correlation-ID` generation |
 | **DotOcpi.AspNetCore** | `DotOcpi`, `Microsoft.AspNetCore.*` | OCPI auth middleware, endpoint routing, version/credentials endpoints, module receiver endpoints, request ID middleware |
-| **DotOcpi.Simulator** | `DotOcpi`, `Microsoft.AspNetCore.Mvc.Testing` | `OcpiCpoSimulator`, configurable module responses, handshake simulation, failure injection |
+| **DotOcpi.Simulator** | `DotOcpi`, `Microsoft.AspNetCore.App` (framework ref) | `OcpiCpoSimulator`, configurable module responses, handshake simulation, failure injection |
 
 ---
 
@@ -337,8 +337,6 @@ classDiagram
         +NegotiatedVersion: OcpiVersion
         +Connection: CpoConnection
         +ModuleId: string
-        +HttpContext: HttpContext
-        +IsFieldNotAvailable(value) bool
     }
 ```
 
@@ -352,10 +350,8 @@ classDiagram
 | `NegotiatedVersion` | OCPI version negotiated with this CPO |
 | `Connection` | Full `CpoConnection` record (endpoints, status, etc.) |
 | `ModuleId` | Module being invoked (`"locations"`, `"sessions"`, etc.) |
-| `HttpContext` | Underlying ASP.NET Core `HttpContext` (escape hatch) |
-| `IsFieldNotAvailable()` | Helper to detect the `#NA` sentinel value |
 
-The context is created by the auth middleware, stored in `HttpContext.Items`, and retrieved via `httpContext.GetOcpiContext()`.
+The context is created by the auth filter, stored in `HttpContext.Items`, and retrieved via `httpContext.GetOcpiContext()`.
 
 ---
 
@@ -392,7 +388,7 @@ graph TD
 classDiagram
     class IOcpiClient {
         +Registration IRegistrationClient
-        +Versions IVersionsClient
+        +Versions IVersionDiscovery
         +Locations ILocationsClient
         +Sessions ISessionsClient
         +Cdrs ICdrsClient
@@ -400,13 +396,13 @@ classDiagram
         +Tokens ITokensClient
         +Commands ICommandsClient
         +ChargingProfiles IChargingProfilesClient
+        +InvalidateConnection(cpoId) void
+        +InvalidateAllConnections() void
     }
 
     class ILocationsClient {
-        +GetAllLocationsAsync(cpoId, dateFrom?, ct) IAsyncEnumerable~object~
+        +GetAllLocationsAsync(cpoId, dateFrom?, dateTo?, ct) IAsyncEnumerable~object~
         +GetLocationAsync(cpoId, locationId, ct) OcpiResult~object~
-        +GetEvseAsync(cpoId, locationId, evseUid, ct) OcpiResult~object~
-        +GetConnectorAsync(cpoId, locationId, evseUid, connectorId, ct) OcpiResult~object~
     }
 
     class ITokensClient {
@@ -571,39 +567,35 @@ public interface IRegistrationClient
     /// <summary>
     /// Full automated handshake: discover versions → negotiate → POST credentials → store.
     /// </summary>
-    Task<OcpiResult<CpoConnection>> RegisterAsync(
-        Uri cpoVersionsUrl,
-        string tokenA,
-        PartyIdentity? emspIdentity = null,    // null = use default from options
-        OcpiVersion? preferredVersion = null,   // null = negotiate highest mutual
-        CancellationToken ct = default);
+    Task<RegistrationResult> RegisterAsync(
+        RegistrationRequest request,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Rotate tokens with an already-registered CPO.
     /// </summary>
-    Task<OcpiResult<CpoConnection>> RotateCredentialsAsync(
-        string cpoId,
-        CancellationToken ct = default);
+    Task<RegistrationResult> RotateCredentialsAsync(
+        CredentialRotationRequest request,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Unregister from a CPO (DELETE /credentials).
     /// </summary>
-    Task<OcpiResult> UnregisterAsync(
-        string cpoId,
-        CancellationToken ct = default);
+    Task UnregisterAsync(
+        UnregisterRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 // Consumer usage:
-var result = await ocpiClient.Registration.RegisterAsync(
-    new Uri("https://cpo.example.com/ocpi/versions"),
-    tokenA: "pre-shared-secret-from-cpo",
-    emspIdentity: new PartyIdentity("DE", "ABC"));
+var result = await ocpiClient.Registration.RegisterAsync(new RegistrationRequest(
+    VersionsUrl: "https://cpo.example.com/ocpi/versions",
+    TokenA: "pre-shared-secret-from-cpo",
+    EmspCountryCode: "DE",
+    EmspPartyId: "ABC",
+    EmspVersionsUrl: "https://my-emsp.com/ocpi/versions",
+    EmspBusinessName: "My eMSP"));
 
-if (result.IsSuccess)
-{
-    var conn = result.Data;
-    Console.WriteLine($"Registered with {conn.CpoIdentity}, version {conn.NegotiatedVersion}");
-}
+Console.WriteLine($"Registered with {result.Connection.CpoCountryCode}:{result.Connection.CpoPartyId}");
 ```
 
 For custom flows, the building blocks are available individually:
@@ -654,9 +646,9 @@ classDiagram
 
     class ILocationsReceiver {
         <<interface - consumer implements>>
-        +OnLocationPutAsync(location, cpoId, ct) Task
-        +OnLocationPatchAsync(locationId, patch, cpoId, ct) Task
-        +OnLocationGetAsync(locationId, cpoId, ct) Task~Location?~
+        +OnLocationPutAsync(context, locationId, data, ct) Task
+        +OnLocationPatchAsync(context, locationId, patch, ct) Task
+        +GetLocationAsync(context, locationId, ct) Task~object~
     }
 
     IModuleHandler <|-- ILocationsReceiverHandler
@@ -958,7 +950,7 @@ classDiagram
         <<interface - consumer implements for persistence>>
         +LoadAllAsync(ct) Task~IReadOnlyList~CpoConnection~~
         +SaveAsync(connection, ct) Task
-        +DeleteAsync(cpoId, ct) Task
+        +RemoveAsync(cpoId, ct) Task
     }
 
     ICpoRegistry --> CpoConnection
@@ -1180,8 +1172,7 @@ graph TD
     subgraph "Server handles pagination for Sender modules"
         Req[GET request with offset/limit] --> Parse[Parse query params]
         Parse --> Query["Consumer.GetTokensAsync(<br/>dateFrom, dateTo, offset, limit)"]
-        Query --> Count["Consumer.GetTokenCountAsync(<br/>dateFrom, dateTo)"]
-        Count --> Headers["Set X-Total-Count, X-Limit"]
+        Query --> Headers["Set X-Total-Count from PaginatedResult.TotalCount,<br/>set X-Limit"]
         Headers --> HasMore{offset + count < total?}
         HasMore -->|Yes| Link["Set Link header with next URL"]
         HasMore -->|No| NoLink[Omit Link header]
@@ -1453,7 +1444,7 @@ DotOcpi/
 ├── global.json
 ├── .editorconfig
 ├── nuget.config
-├── DotOcpi.sln
+├── DotOcpi.slnx
 ├── CHANGELOG.md
 ├── README.md
 └── LICENSE
@@ -1493,7 +1484,7 @@ app.Run();
 
 ## 16. Testing Architecture
 
-The `DotOcpi.Simulator` package provides an in-memory OCPI-compliant CPO server for consumer integration tests. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API and usage examples.
+The `DotOcpi.Simulator` package provides an in-memory OCPI-compliant CPO server for consumer integration tests. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpisimulator) for the full API and usage examples.
 
 ```mermaid
 graph TD

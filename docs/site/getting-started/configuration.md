@@ -118,8 +118,8 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
     .AddPullSync(sync =>
     {
         sync.DefaultInterval = TimeSpan.FromHours(1);
-        sync.Modules = ["locations", "tariffs"];
-        sync.RandomJitter = TimeSpan.FromMinutes(5);
+        sync.EnabledModules = ["locations", "tariffs"];
+        sync.MaxJitter = TimeSpan.FromMinutes(5);
     });
 ```
 

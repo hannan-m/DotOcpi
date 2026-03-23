@@ -218,7 +218,7 @@ public static IEnumerable<object[]> AllVersions =>
 [MemberData(nameof(AllVersions))]
 public async Task Registration_Succeeds_ForAllVersions(OcpiVersion version)
 {
-    var server = await OcpiTestCpoServer.CreateAsync(c =>
+    var server = await OcpiCpoSimulator.CreateAsync(c =>
     {
         c.SupportedVersions = [version];
     });

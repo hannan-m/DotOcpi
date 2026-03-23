@@ -313,7 +313,7 @@ public interface ILocationsReceiver
     Task<OcpiResult> OnLocationPutAsync(
         OcpiRequestContext context,
         string locationId,
-        object location,  // V2_0.Location | V2_1_1.Location | V2_2.Location | V2_2_1.Location
+        object data,  // V2_0.Location | V2_1_1.Location | V2_2.Location | V2_2_1.Location
         CancellationToken ct);
 
     Task<OcpiResult> OnLocationPatchAsync(
@@ -326,7 +326,7 @@ public interface ILocationsReceiver
         OcpiRequestContext context,
         string locationId,
         string evseUid,
-        object evse,  // version-specific EVSE model
+        object data,  // version-specific EVSE model
         CancellationToken ct);
 
     Task<OcpiResult> OnEvsePatchAsync(
@@ -341,7 +341,7 @@ public interface ILocationsReceiver
         string locationId,
         string evseUid,
         string connectorId,
-        object connector,  // version-specific Connector model
+        object data,  // version-specific Connector model
         CancellationToken ct);
 
     Task<OcpiResult> OnConnectorPatchAsync(
@@ -352,22 +352,9 @@ public interface ILocationsReceiver
         JsonElement patch,
         CancellationToken ct);
 
-    Task<OcpiResult<object>> OnLocationGetAsync(
+    Task<OcpiResult<object>> GetLocationAsync(
         OcpiRequestContext context,
         string locationId,
-        CancellationToken ct);
-
-    Task<OcpiResult<object>> OnEvseGetAsync(
-        OcpiRequestContext context,
-        string locationId,
-        string evseUid,
-        CancellationToken ct);
-
-    Task<OcpiResult<object>> OnConnectorGetAsync(
-        OcpiRequestContext context,
-        string locationId,
-        string evseUid,
-        string connectorId,
         CancellationToken ct);
 }
 ```

@@ -25,7 +25,7 @@ DotOcpi is distributed as four NuGet packages. Install only what you need:
 | `DotOcpi` | Always required. Core models, interfaces, token management, version negotiation. |
 | `DotOcpi.AspNetCore` | Your eMSP receives pushes from CPOs (locations, sessions, CDRs, tariffs). |
 | `DotOcpi.Client` | Your eMSP pulls data from CPOs or sends commands. |
-| `DotOcpi.Testing` | Integration tests against a fake OCPI-compliant CPO server. |
+| `DotOcpi.Simulator` | Integration tests against a fake OCPI-compliant CPO server. |
 
 ## Install via CLI
 
@@ -40,7 +40,7 @@ dotnet add package DotOcpi.AspNetCore
 dotnet add package DotOcpi.Client
 
 # Testing — integration test helpers (add to test project only)
-dotnet add package DotOcpi.Testing
+dotnet add package DotOcpi.Simulator
 ```
 
 ## Install via PackageReference
@@ -59,7 +59,7 @@ For test projects:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="DotOcpi.Testing" Version="0.1.*" />
+  <PackageReference Include="DotOcpi.Simulator" Version="0.1.*" />
 </ItemGroup>
 ```
 

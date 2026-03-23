@@ -157,7 +157,7 @@ public interface ITariffsReceiver
         string tariffId,
         CancellationToken ct);
 
-    Task<OcpiResult<object>> OnTariffGetAsync(
+    Task<OcpiResult<object>> GetTariffAsync(
         OcpiRequestContext context,
         string tariffId,
         CancellationToken ct);
