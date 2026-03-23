@@ -48,11 +48,9 @@ public sealed record CpoConnection
     /// <summary>Monotonically increasing version for optimistic concurrency.</summary>
     public long ConcurrencyVersion { get; init; }
 
-    private string? _connectionKey;
-
     /// <summary>
     /// Unique key for this connection: "{CpoCountryCode}:{CpoPartyId}".
-    /// Cached after first access to avoid repeated string allocation.
+    /// Computed on access — no mutable cache field that would break record equality.
     /// </summary>
-    public string ConnectionKey => _connectionKey ??= $"{CpoCountryCode}:{CpoPartyId}";
+    public string ConnectionKey => $"{CpoCountryCode}:{CpoPartyId}";
 }
