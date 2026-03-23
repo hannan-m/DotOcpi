@@ -41,11 +41,16 @@ internal static class SsrfGuard
         var ipBytes = address.GetAddressBytes();
         return ipBytes[0] switch
         {
+            0 => true, // 0.0.0.0/8 — "this network", resolves to localhost on many platforms
             10 => true, // 10.0.0.0/8
+            100 when ipBytes[1] >= 64 && ipBytes[1] <= 127 => true, // 100.64.0.0/10 — CGNAT (RFC 6598)
             127 => true, // 127.0.0.0/8 (redundant with IsLoopback, defense-in-depth)
             169 when ipBytes[1] == 254 => true, // 169.254.0.0/16 (link-local + cloud metadata 169.254.169.254)
             172 when ipBytes[1] >= 16 && ipBytes[1] <= 31 => true, // 172.16.0.0/12
+            192 when ipBytes[1] == 0 && ipBytes[2] == 0 => true, // 192.0.0.0/24 — IANA service continuity (RFC 7534)
             192 when ipBytes[1] == 168 => true, // 192.168.0.0/16
+            198 when ipBytes[1] >= 18 && ipBytes[1] <= 19 => true, // 198.18.0.0/15 — benchmark testing (RFC 2544)
+            >= 240 => true, // 240.0.0.0/4 — reserved + 255.255.255.255 broadcast
             _ => false,
         };
     }

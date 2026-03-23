@@ -191,11 +191,16 @@ internal static class ValidationHelpers
         var ipBytes = ip.GetAddressBytes();
         return ipBytes[0] switch
         {
+            0 => true, // 0.0.0.0/8
             10 => true,
+            100 when ipBytes[1] >= 64 && ipBytes[1] <= 127 => true, // 100.64.0.0/10 CGNAT
             127 => true,
             169 when ipBytes[1] == 254 => true,
             172 when ipBytes[1] >= 16 && ipBytes[1] <= 31 => true,
+            192 when ipBytes[1] == 0 && ipBytes[2] == 0 => true, // 192.0.0.0/24
             192 when ipBytes[1] == 168 => true,
+            198 when ipBytes[1] >= 18 && ipBytes[1] <= 19 => true, // 198.18.0.0/15
+            >= 240 => true, // 240.0.0.0/4 reserved + broadcast
             _ => false,
         };
     }
