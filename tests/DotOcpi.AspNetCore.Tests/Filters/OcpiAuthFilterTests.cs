@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using DotOcpi.AspNetCore.Filters;
 using DotOcpi.Observability;
 using DotOcpi.Registry;
@@ -22,13 +23,6 @@ public class OcpiAuthFilterTests
         _tokenValidator = new OcpiTokenValidator(_tokenStore);
         var metrics = new OcpiMetrics(new TestMeterFactory());
         _filter = new OcpiAuthFilter(_tokenValidator, _registry, metrics);
-    }
-
-    private sealed class TestMeterFactory : System.Diagnostics.Metrics.IMeterFactory
-    {
-        public System.Diagnostics.Metrics.Meter Create(System.Diagnostics.Metrics.MeterOptions options) => new(options);
-
-        public void Dispose() { }
     }
 
     private static CpoConnection CreateConnection() =>
@@ -188,5 +182,12 @@ public class OcpiAuthFilterTests
         await _filter.InvokeAsync(filterContext, _ => ValueTask.FromResult<object?>("ok"));
 
         httpContext.Items[typeof(CpoConnection)].Should().BeSameAs(connection);
+    }
+
+    private sealed class TestMeterFactory : IMeterFactory
+    {
+        public Meter Create(MeterOptions options) => new(options);
+
+        public void Dispose() { }
     }
 }

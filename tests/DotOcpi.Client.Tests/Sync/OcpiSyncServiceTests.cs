@@ -1,5 +1,6 @@
 using DotOcpi.Client.Internal;
 using DotOcpi.Client.Sync;
+using DotOcpi.Client.Tests.Fixtures;
 using DotOcpi.Client.Tests.Internal;
 using DotOcpi.Registry;
 using FluentAssertions;
@@ -300,17 +301,5 @@ public class OcpiSyncServiceTests
         await handler
             .Received(1)
             .OnSyncCompletedAsync(Arg.Any<SyncContext>(), Arg.Any<SyncResult>(), Arg.Any<CancellationToken>());
-    }
-
-    private sealed class FakeTimeProvider(DateTimeOffset startTime) : TimeProvider
-    {
-        private DateTimeOffset _utcNow = startTime;
-
-        public FakeTimeProvider()
-            : this(DateTimeOffset.UtcNow) { }
-
-        public override DateTimeOffset GetUtcNow() => _utcNow;
-
-        internal void Advance(TimeSpan duration) => _utcNow += duration;
     }
 }

@@ -122,7 +122,7 @@ public class OcpiTokenValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsync_CancellationToken_IsRespected()
+    public async Task ValidateAsync_WithCancelledToken_DoesNotThrowForInMemoryStore()
     {
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
