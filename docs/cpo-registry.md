@@ -21,33 +21,30 @@ The CPO Registry is the central component that tracks all connected CPOs, their 
 ```mermaid
 classDiagram
     class CpoConnection {
-        +Id: string
-        +CpoIdentity: PartyIdentity
-        +EmspIdentity: PartyIdentity
-        +NegotiatedVersion: OcpiVersion
-        +ModuleEndpoints: IReadOnlyDictionary~string, Uri~
-        +InboundTokenHash: string
-        +OutboundTokenHash: string
+        +ConnectionKey: string
+        +CpoCountryCode: string
+        +CpoPartyId: string
+        +EmspCountryCode: string
+        +EmspPartyId: string
+        +Version: OcpiVersion
+        +ModuleEndpoints: IReadOnlyDictionary~string, string~
+        +TokenBHash: string
         +Status: ConnectionStatus
-        +BusinessDetails: BusinessDetails
-        +Version: long
-        +LastActivity: DateTimeOffset
-        +LastUpdated: DateTimeOffset
+        +CpoVersionsUrl: string?
+        +EmspVersionsUrl: string?
+        +ConcurrencyVersion: long
+        +LastHealthCheckAt: DateTimeOffset?
+        +UpdatedAt: DateTimeOffset
         +CreatedAt: DateTimeOffset
-    }
-
-    class PartyIdentity {
-        +CountryCode: string
-        +PartyId: string
-        +ToString() string
     }
 
     class ConnectionStatus {
         <<enumeration>>
-        PENDING
-        CONNECTED
-        SUSPENDED
-        OFFLINE
+        Pending
+        Connected
+        Suspended
+        Offline
+        Unregistered
     }
 
     class OcpiVersion {
@@ -58,8 +55,6 @@ classDiagram
         V2_2_1
     }
 
-    CpoConnection --> PartyIdentity : CpoIdentity
-    CpoConnection --> PartyIdentity : EmspIdentity
     CpoConnection --> ConnectionStatus
     CpoConnection --> OcpiVersion
 ```
@@ -68,18 +63,20 @@ classDiagram
 
 | Field | Type | Description |
 |---|---|---|
-| `Id` | string | Primary key. Deterministic composite: `"{CountryCode}_{PartyId}"` |
-| `CpoIdentity` | PartyIdentity | The CPO's `country_code` and `party_id` |
-| `EmspIdentity` | PartyIdentity | The eMSP identity presented to this CPO (multi-party support) |
-| `NegotiatedVersion` | OcpiVersion | OCPI version negotiated during registration |
+| `ConnectionKey` | string | Primary key. Deterministic composite: `"{CpoCountryCode}:{CpoPartyId}"` |
+| `CpoCountryCode` | string | The CPO's `country_code` |
+| `CpoPartyId` | string | The CPO's `party_id` |
+| `EmspCountryCode` | string | The eMSP `country_code` presented to this CPO (multi-party support) |
+| `EmspPartyId` | string | The eMSP `party_id` presented to this CPO (multi-party support) |
+| `Version` | OcpiVersion | OCPI version negotiated during registration |
 | `ModuleEndpoints` | Dictionary | CPO's module endpoint URLs (keyed by ModuleID) |
-| `InboundTokenHash` | string | SHA-256 hash of Token B (authenticates CPO→eMSP requests) |
-| `OutboundTokenHash` | string | SHA-256 hash of Token C (authenticates eMSP→CPO requests) |
+| `TokenBHash` | string | SHA-256 hash of Token B (authenticates CPO requests) |
 | `Status` | ConnectionStatus | Current connection state |
-| `BusinessDetails` | BusinessDetails | CPO's company information |
-| `Version` | long | Optimistic concurrency version stamp |
-| `LastActivity` | DateTimeOffset | Last successful inbound or outbound communication |
-| `LastUpdated` | DateTimeOffset | Last registry entry modification |
+| `CpoVersionsUrl` | string? | The CPO's OCPI versions endpoint URL |
+| `EmspVersionsUrl` | string? | The eMSP's OCPI versions endpoint URL presented to this CPO |
+| `ConcurrencyVersion` | long | Optimistic concurrency version stamp |
+| `LastHealthCheckAt` | DateTimeOffset? | Last successful health probe |
+| `UpdatedAt` | DateTimeOffset | Last registry entry modification |
 | `CreatedAt` | DateTimeOffset | Initial registration timestamp |
 
 ---
@@ -91,11 +88,11 @@ classDiagram
 CPOs are identified by the OCPI-standard `(country_code, party_id)` tuple. The registry uses a deterministic composite as the primary key:
 
 ```
-Id = "{country_code}_{party_id}".ToUpperInvariant()
-// Example: "DE_ABC", "NL_XYZ"
+ConnectionKey = "{CpoCountryCode}:{CpoPartyId}"
+// Example: "DE:ABC", "NL:XYZ"
 ```
 
-**Rationale:** Using the OCPI identity as the key (not a GUID) makes re-registration naturally idempotent — if CPO "DE/ABC" re-registers, the existing entry is updated, not duplicated.
+**Rationale:** Using the OCPI identity as the key (not a GUID) makes re-registration naturally idempotent — if CPO "DE:ABC" re-registers, the existing entry is updated, not duplicated.
 
 ### Secondary Indexes
 
@@ -104,21 +101,21 @@ The registry supports three lookup paths, each optimized for a different access 
 ```mermaid
 graph TD
     subgraph "Three Lookup Paths"
-        ById["By ID<br/><code>GetAsync('DE_ABC')</code><br/>Used by: consumer client calls"]
-        ByToken["By Token Hash<br/><code>GetByTokenHashAsync(hash)</code><br/>Used by: inbound auth middleware"]
-        ByParty["By Party Identity<br/><code>GetByCpoPartyAsync('DE', 'ABC')</code><br/>Used by: version negotiation"]
+        ById["By Connection Key<br/><code>FindByConnectionKey('DE:ABC')</code><br/>Used by: consumer client calls"]
+        ByToken["By Token Hash<br/><code>FindByTokenHash(hash)</code><br/>Used by: inbound auth middleware"]
+        ByEmsp["By eMSP Identity<br/><code>FindByEmspIdentity('NL', 'MSP')</code><br/>Used by: multi-party queries"]
     end
 
     ById --> Registry[(CpoConnection)]
     ByToken --> Registry
-    ByParty --> Registry
+    ByEmsp --> Registry
 ```
 
 | Lookup | Use Case | Key Pattern | Hot Path? |
 |---|---|---|---|
-| By `Id` | Consumer calls `client.Locations.GetAllAsync(cpoId)` | `cpo:{id}` | Medium |
+| By `ConnectionKey` | Consumer calls `client.Locations.GetAllAsync(cpoId)` | `cpo:{cc}:{pid}` | Medium |
 | By token hash | Auth middleware on every inbound request | `cpo:by-token:{sha256}` | **Yes** |
-| By party identity | Version negotiation, credentials updates | `cpo:by-party:{cc}:{pid}` | Low |
+| By eMSP identity | Multi-party queries, find all CPOs for an eMSP | `cpo:by-emsp:{cc}:{pid}` | Low |
 
 ### Why Not GUID?
 
@@ -137,7 +134,7 @@ graph TD
 graph TD
     Req[Incoming HTTP Request] --> Extract["Extract Authorization: Token header"]
     Extract --> Hash["SHA-256 hash the raw token"]
-    Hash --> Lookup["registry.GetByTokenHashAsync(hash)"]
+    Hash --> Lookup["registry.FindByTokenHash(hash)"]
     Lookup --> Found{Found?}
     Found -->|No| Reject["401 + OCPI status 2002"]
     Found -->|Yes| Validate["CryptographicOperations.FixedTimeEquals()<br/>(constant-time comparison of stored vs incoming hash)"]
@@ -150,13 +147,11 @@ graph TD
 
 ```mermaid
 graph TD
-    Consumer["Consumer calls client.Locations.GetAllAsync('DE_ABC')"]
-    Consumer --> Lookup["registry.GetAsync('DE_ABC')"]
-    Lookup --> Found{Found?}
+    Consumer["Consumer calls client.Locations.GetAllAsync('DE:ABC')"]
+    Consumer --> Resolve["CpoConnectionContextProvider.ResolveAsync('DE:ABC')<br/><i>Cached per CPO in ConcurrentDictionary.<br/>On miss: registry lookup + token fetch.<br/>Invalidated on register/rotate/unregister.</i>"]
+    Resolve --> Found{Found?}
     Found -->|No| Error["Throw: CPO not registered"]
-    Found -->|Yes| Endpoint["Get module endpoint URL<br/>for negotiated version"]
-    Endpoint --> Token["Retrieve outbound token<br/>from ITokenStore"]
-    Token --> Build["Build HTTP request:<br/>Authorization: Token {raw_token}<br/>X-Request-ID: {new_guid}<br/>X-Correlation-ID: {new_guid}"]
+    Found -->|Yes| Build["Build HTTP request from cached context:<br/>Authorization: Token {raw_token}<br/>X-Request-ID: {new_guid}<br/>X-Correlation-ID: {new_guid}"]
     Build --> Send["Send via IHttpClientFactory"]
 ```
 
@@ -183,14 +178,12 @@ graph TD
 ```csharp
 public interface ICpoRegistry
 {
-    Task<CpoConnection?> GetAsync(string cpoId, CancellationToken ct);
-    Task<CpoConnection?> GetByCpoPartyAsync(string countryCode, string partyId, CancellationToken ct);
-    Task<CpoConnection?> GetByTokenHashAsync(string tokenHash, CancellationToken ct);
-    Task UpsertAsync(CpoConnection connection, CancellationToken ct);
-    Task RemoveAsync(string cpoId, CancellationToken ct);
-    Task<IReadOnlyList<CpoConnection>> GetAllAsync(CancellationToken ct);
-    Task UpdateStatusAsync(string cpoId, ConnectionStatus status, CancellationToken ct);
-    Task UpdateLastActivityAsync(string cpoId, CancellationToken ct);
+    CpoConnection? FindByConnectionKey(string connectionKey);
+    CpoConnection? FindByTokenHash(string tokenBHash);
+    IReadOnlyList<CpoConnection> FindByEmspIdentity(string emspCountryCode, string emspPartyId);
+    IReadOnlyList<CpoConnection> GetAll();
+    bool AddOrUpdate(CpoConnection connection);
+    bool Remove(string connectionKey);
 }
 ```
 
@@ -314,11 +307,11 @@ sequenceDiagram
 | Operation | Consistency | Approach |
 |---|---|---|
 | Token hash lookup (auth) | Eventual (seconds) | Local cache + TTL + pub/sub invalidation |
-| Outbound token lookup | Eventual | Same as above |
+| Outbound context resolve | Eventual | CpoConnectionContextProvider cache + invalidation |
 | Credentials handshake | **Strong** | Distributed lock |
 | Token rotation | **Strong** | Distributed lock + atomic swap |
 | Status updates | Eventual | Local cache + TTL |
-| Last activity tracking | Eventual | Write-through to store, fire-and-forget |
+| Health check tracking | Eventual | Write-through to store, fire-and-forget |
 
 ---
 
@@ -369,7 +362,7 @@ stateDiagram-v2
 
 ### Optimistic Concurrency
 
-Each `CpoConnection` has a `Version` field (monotonically increasing long). On update:
+Each `CpoConnection` has a `ConcurrencyVersion` field (monotonically increasing long). On update:
 
 1. Read the connection (get current `Version`)
 2. Modify fields
@@ -439,10 +432,10 @@ If a CPO updates their credentials via PUT and their `party_id` or `country_code
 
 ### Activity Tracking
 
-Every successful communication updates `LastActivity`:
+Every successful health probe updates `LastHealthCheckAt`:
 
-- **Inbound**: Auth middleware calls `registry.UpdateLastActivityAsync()` after successful authentication
-- **Outbound**: Client pipeline calls it after receiving a successful response
+- **Inbound**: Auth middleware updates the connection's `LastHealthCheckAt` after successful authentication
+- **Outbound**: Client pipeline updates it after receiving a successful response
 
 ### Health Probing
 
@@ -451,10 +444,10 @@ A background service periodically checks stale connections:
 ```mermaid
 graph TD
     Timer["Every 5 minutes"] --> GetAll["Get all CONNECTED entries"]
-    GetAll --> Filter["Filter: LastActivity > 24 hours ago"]
+    GetAll --> Filter["Filter: LastHealthCheckAt > 24 hours ago"]
     Filter --> Probe["For each stale CPO:<br/>GET /ocpi/versions<br/>with Token C"]
     Probe --> Success{Success?}
-    Success -->|Yes| Update["Update LastActivity"]
+    Success -->|Yes| Update["Update LastHealthCheckAt"]
     Success -->|No| MarkOffline["Update Status → OFFLINE"]
 ```
 

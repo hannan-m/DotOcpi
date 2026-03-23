@@ -7,6 +7,7 @@
 - [3. OCPI Version Strategy](#3-ocpi-version-strategy)
 - [4. Server-Side Pipeline (Receiving from CPOs)](#4-server-side-pipeline-receiving-from-cpos)
 - [5. Client-Side Pipeline (Calling CPOs)](#5-client-side-pipeline-calling-cpos)
+- [5.1 Pull Synchronization](#51-pull-synchronization)
 - [6. Credentials & Registration](#6-credentials--registration)
 - [7. Module Architecture](#7-module-architecture)
 - [8. Multi-Party Support](#8-multi-party-support)
@@ -102,7 +103,7 @@ graph TD
         Core["DotOcpi<br/><i>Core models, interfaces,<br/>result types, version negotiation</i>"]
         Client["DotOcpi.Client<br/><i>HttpClient-based OCPI client<br/>for calling CPO endpoints</i>"]
         Server["DotOcpi.AspNetCore<br/><i>ASP.NET Core middleware,<br/>endpoint routing, auth pipeline</i>"]
-        Testing["DotOcpi.Testing<br/><i>In-memory test CPO server</i>"]
+        Testing["DotOcpi.Simulator<br/><i>In-memory test CPO server</i>"]
     end
 
     Client --> Core
@@ -136,7 +137,7 @@ graph TD
 | **DotOcpi** | `M.E.DependencyInjection`, `M.E.Logging`, `M.E.Options`, `System.Text.Json` | Version-specific models, `OcpiResult<T>`, `ITokenStore`, `ICpoRegistry`, `IModuleHandler` interfaces, version negotiation, OCPI status codes, JSON converters, `ActivitySource` |
 | **DotOcpi.Client** | `DotOcpi`, `M.E.Http` | `IOcpiClient`, typed HTTP clients per module, pagination handling, request/response pipeline, `X-Request-ID`/`X-Correlation-ID` generation |
 | **DotOcpi.AspNetCore** | `DotOcpi`, `Microsoft.AspNetCore.*` | OCPI auth middleware, endpoint routing, version/credentials endpoints, module receiver endpoints, request ID middleware |
-| **DotOcpi.Testing** | `DotOcpi`, `Microsoft.AspNetCore.Mvc.Testing` | `OcpiTestCpoServer`, configurable module responses, handshake simulation, failure injection |
+| **DotOcpi.Simulator** | `DotOcpi`, `Microsoft.AspNetCore.Mvc.Testing` | `OcpiCpoSimulator`, configurable module responses, handshake simulation, failure injection |
 
 ---
 
@@ -369,8 +370,8 @@ graph TD
     end
 
     subgraph "DotOcpi.Client Pipeline"
-        Call --> Lookup[CPO Registry Lookup<br/><i>Get version, endpoints, token</i>]
-        Lookup --> Build[Request Builder<br/><i>Set Authorization header<br/>Generate X-Request-ID<br/>Set X-Correlation-ID</i>]
+        Call --> Resolve[CpoConnectionContextProvider Resolve<br/><i>Cached per CPO: connection + token.<br/>Eliminates per-call registry/token lookups.</i>]
+        Resolve --> Build[Request Builder<br/><i>Set Authorization header<br/>Generate X-Request-ID<br/>Set X-Correlation-ID</i>]
         Build --> Serialize[Serialize Body<br/><i>Version-specific JsonContext</i>]
         Serialize --> Send[HttpClient Send<br/><i>Via IHttpClientFactory<br/>with resilience pipeline</i>]
         Send --> Receive[Response Handler<br/><i>Check HTTP status<br/>Deserialize OCPI envelope</i>]
@@ -425,6 +426,54 @@ classDiagram
     IOcpiClient --> ITokensClient
     IOcpiClient --> ICommandsClient
 ```
+
+---
+
+## 5.1 Pull Synchronization
+
+The client package includes a pull sync infrastructure that periodically fetches data from CPO endpoints and delivers it to consumers via a callback interface.
+
+### Data Flow
+
+```
+OcpiPullSyncBackgroundService (PeriodicTimer, 30s tick)
+  │
+  ├── For each Connected CPO in ICpoRegistry:
+  │     ├── Resolve enabled modules (PullSyncOptionsResolver)
+  │     ├── Check if interval has elapsed since last sync (ISyncStateStore)
+  │     └── Call IOcpiSyncService.SyncModuleFromCpoAsync()
+  │
+  └── OcpiSyncService.SyncModuleCoreAsync()
+        ├── Resolve CpoConnectionContext (cached token + registry data)
+        ├── Build initial HTTP request (PullClientHelper)
+        ├── Stream pages (PaginationHandler.StreamPagesAsync)
+        │     ├── Parse OCPI response → OcpiPageResult
+        │     ├── Follow Link headers for next page
+        │     └── Stop after MaxPages (10,000) or no NextLink
+        ├── For each page with items:
+        │     └── IOcpiSyncHandler.OnPageReceivedAsync(context, items)
+        ├── IOcpiSyncHandler.OnSyncCompletedAsync(context, result)
+        └── ISyncStateStore.SetLastSyncAsync() (only on success)
+```
+
+### Configuration Hierarchy
+
+`PullSyncOptions` supports four levels of configuration, resolved in priority order:
+
+1. **CPO + module specific** — `CpoOverrides["DE:ALL"].ModuleOverrides["locations"].Interval`
+2. **CPO default** — `CpoOverrides["DE:ALL"].DefaultInterval`
+3. **Module-level** — `ModuleOverrides["locations"].Interval`
+4. **Global default** — `DefaultInterval` (1 hour)
+
+Each CPO can also override which modules are enabled via `CpoOverrides[cpoId].EnabledModules`.
+
+### Key Design Decisions
+
+- **Page-level delivery**: Items are delivered to `IOcpiSyncHandler` in page-sized batches matching OCPI pagination boundaries, enabling efficient bulk persistence.
+- **Handler is optional**: `IOcpiSyncHandler` is resolved via `GetService<T>()` (nullable). Without a handler, syncs still run and update timestamps — useful for manual invocation via `IOcpiSyncService`.
+- **Timestamp after handler**: `ISyncStateStore` is only updated after `OnSyncCompletedAsync` succeeds. If a handler throws or the sync fails, the next run re-fetches from the same point.
+- **Deterministic jitter**: `OcpiPullSyncBackgroundService` uses `HashCode.Combine(cpoId, moduleId)` for stable per-pair jitter, preventing thundering herd without timer drift.
+- **Startup validation**: `PullSyncOptionsValidator` (IValidateOptions) rejects zero/negative intervals, negative jitter, and invalid module names at startup.
 
 ---
 
@@ -1308,8 +1357,7 @@ DotOcpi/
 │   │   │   ├── OcpiJsonContext_V2_1_1.cs
 │   │   │   ├── OcpiJsonContext_V2_2.cs
 │   │   │   ├── OcpiJsonContext_V2_2_1.cs
-│   │   │   ├── OcpiJsonOptions.cs
-│   │   │   └── OcpiPatchHelper.cs
+│   │   │   └── OcpiJsonOptions.cs
 │   │   └── Extensions/
 │   │       └── ServiceCollectionExtensions.cs
 │   │
@@ -1317,14 +1365,30 @@ DotOcpi/
 │   │   ├── DotOcpi.Client.csproj
 │   │   ├── IOcpiClient.cs
 │   │   ├── OcpiClient.cs
-│   │   ├── OcpiHttpRequestBuilder.cs
-│   │   ├── OcpiResponseParser.cs
-│   │   ├── Pagination/
-│   │   │   ├── PaginatedResponse.cs
-│   │   │   └── PaginationHandler.cs
+│   │   ├── Internal/
+│   │   │   ├── OcpiHttpRequestBuilder.cs
+│   │   │   ├── OcpiResponseParser.cs
+│   │   │   ├── PaginationHandler.cs
+│   │   │   ├── PullClientHelper.cs
+│   │   │   ├── CpoConnectionContextProvider.cs
+│   │   │   ├── SsrfGuard.cs
+│   │   │   ├── InvalidatingRegistrationClient.cs
+│   │   │   └── OcpiModelTypeMap.cs
+│   │   ├── Sync/
+│   │   │   ├── IOcpiSyncService.cs
+│   │   │   ├── OcpiSyncService.cs
+│   │   │   ├── IOcpiSyncHandler.cs
+│   │   │   ├── OcpiPullSyncBackgroundService.cs
+│   │   │   ├── PullSyncOptions.cs
+│   │   │   ├── PullSyncOptionsResolver.cs
+│   │   │   ├── PullSyncOptionsValidator.cs
+│   │   │   ├── CpoSyncOptions.cs
+│   │   │   ├── ModuleSyncOptions.cs
+│   │   │   ├── SyncContext.cs
+│   │   │   ├── SyncResult.cs
+│   │   │   ├── ISyncStateStore.cs
+│   │   │   └── InMemorySyncStateStore.cs
 │   │   ├── Modules/
-│   │   │   ├── VersionsClient.cs
-│   │   │   ├── CredentialsClient.cs
 │   │   │   ├── LocationsClient.cs
 │   │   │   ├── SessionsClient.cs
 │   │   │   ├── CdrsClient.cs
@@ -1333,17 +1397,19 @@ DotOcpi/
 │   │   │   ├── CommandsClient.cs
 │   │   │   └── ChargingProfilesClient.cs
 │   │   └── Extensions/
-│   │       └── ServiceCollectionExtensions.cs
+│   │       └── DotOcpiClientExtensions.cs
 │   │
 │   ├── DotOcpi.AspNetCore/
 │   │   ├── DotOcpi.AspNetCore.csproj
 │   │   ├── Filters/
 │   │   │   ├── OcpiAuthFilter.cs
-│   │   │   ├── OcpiRequestIdFilter.cs
-│   │   │   └── OcpiValidationFilter.cs
+│   │   │   ├── OcpiValidationFilter.cs
+│   │   │   ├── OcpiMetricsFilter.cs
+│   │   │   └── OcpiRateLimitFilter.cs
 │   │   ├── Middleware/
 │   │   │   ├── OcpiExceptionMiddleware.cs
-│   │   │   └── OcpiRateLimitingMiddleware.cs
+│   │   │   ├── OcpiRequestIdMiddleware.cs
+│   │   │   └── OcpiSecurityHeadersMiddleware.cs
 │   │   ├── Endpoints/
 │   │   │   ├── VersionsEndpoints.cs
 │   │   │   ├── CredentialsEndpoints.cs
@@ -1361,10 +1427,10 @@ DotOcpi/
 │   │       ├── ServiceCollectionExtensions.cs
 │   │       └── EndpointRouteBuilderExtensions.cs
 │   │
-│   └── DotOcpi.Testing/
-│       ├── DotOcpi.Testing.csproj
-│       ├── OcpiTestCpoServer.cs
-│       ├── TestCpoConfiguration.cs
+│   └── DotOcpi.Simulator/
+│       ├── DotOcpi.Simulator.csproj
+│       ├── OcpiCpoSimulator.cs
+│       ├── CpoSimulatorConfiguration.cs
 │       └── Handlers/
 │           ├── TestVersionsHandler.cs
 │           ├── TestCredentialsHandler.cs
@@ -1376,7 +1442,7 @@ DotOcpi/
 │   ├── DotOcpi.Client.Tests/             # Unit tests for client
 │   ├── DotOcpi.AspNetCore.Tests/         # Unit + integration for server
 │   ├── DotOcpi.Integration.Tests/        # Full pipeline integration tests
-│   └── DotOcpi.Testing.Tests/            # Tests for the testing package
+│   └── DotOcpi.Simulator.Tests/            # Tests for the testing package
 │
 ├── samples/
 │   └── DotOcpi.Sample/
@@ -1427,14 +1493,14 @@ app.Run();
 
 ## 16. Testing Architecture
 
-The `DotOcpi.Testing` package provides an in-memory OCPI-compliant CPO server for consumer integration tests. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API and usage examples.
+The `DotOcpi.Simulator` package provides an in-memory OCPI-compliant CPO server for consumer integration tests. See [strategies.md — Testing Strategy](strategies.md#17-testing-strategy-dotocpitesting) for the full API and usage examples.
 
 ```mermaid
 graph TD
     subgraph "Consumer Test"
         Test["xUnit Test"]
         Factory["WebApplicationFactory<br/>(in-memory eMSP)"]
-        TestCpo["OcpiTestCpoServer<br/>(in-memory CPO)"]
+        TestCpo["OcpiCpoSimulator<br/>(in-memory CPO)"]
     end
 
     Factory -->|"Register with Token A"| TestCpo

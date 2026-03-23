@@ -20,7 +20,7 @@ Cross-cutting strategies that apply across the library.
 - [14. PATCH Handling Strategy](#14-patch-handling-strategy)
 - [15. Type Convention Strategy](#15-type-convention-strategy)
 - [16. Exception Strategy](#16-exception-strategy)
-- [17. Testing Strategy (DotOcpi.Testing)](#17-testing-strategy-dotocpitesting)
+- [17. Testing Strategy (DotOcpi.Simulator)](#17-testing-strategy-dotocpitesting)
 - [18. Security Strategy](#18-security-strategy)
 
 ---
@@ -243,8 +243,8 @@ public static class EndpointRouteBuilderExtensions
     public static IEndpointRouteBuilder MapOcpiEndpoints(
         this IEndpointRouteBuilder endpoints)
     {
-        var ocpi = endpoints.MapGroup("/ocpi")
-            .AddEndpointFilter<OcpiRequestIdFilter>();
+        // OcpiRequestIdMiddleware runs before routing, covering all requests
+        var ocpi = endpoints.MapGroup("/ocpi");
 
         // Version endpoints (no auth required for discovery)
         ocpi.MapGet("/versions", VersionsEndpoints.GetVersions);
@@ -281,7 +281,7 @@ public static class EndpointRouteBuilderExtensions
 
 | Concern | Implementation | Why |
 |---|---|---|
-| X-Request-ID / X-Correlation-ID | `OcpiRequestIdFilter` (endpoint filter) | Applies only to OCPI endpoints, not the entire app |
+| X-Request-ID / X-Correlation-ID | `OcpiRequestIdMiddleware` (middleware) | Runs before routing so it covers all requests, including 404s and auth rejections |
 | Authentication | `OcpiAuthFilter` (endpoint filter) | Needs access to route parameters for version detection |
 | Validation | `OcpiValidationFilter` (endpoint filter) | Version-aware, operates on deserialized models |
 | Exception handling | `OcpiExceptionMiddleware` (middleware) | Global catch-all, wraps in OCPI response envelope |
@@ -775,6 +775,22 @@ await using var syncLock = await _lockFactory.CreateLockAsync(lockKey, ...);
 if (!syncLock.IsAcquired) return; // Another instance is syncing
 ```
 
+### Implementation Infrastructure
+
+The pull sync system is built from the following components in `DotOcpi.Client.Sync`:
+
+**`IOcpiSyncHandler`** — consumer-provided callback interface that receives pulled data in page-level batches. Two methods: `OnPageReceivedAsync(SyncContext, IReadOnlyList<object>, CancellationToken)` delivers each page of version-specific model objects, and `OnSyncCompletedAsync(SyncContext, SyncResult, CancellationToken)` fires after all pages for a CPO+module cycle complete successfully. Pages with zero items are not delivered.
+
+**`OcpiPullSyncBackgroundService`** — a `BackgroundService` that uses a `PeriodicTimer` with a 30-second tick interval. On each tick it iterates all active CPO connections in the registry and checks whether each configured module's sync interval has elapsed (based on `ISyncStateStore` timestamps). If due, it delegates to `IOcpiSyncService` for the actual pull.
+
+**`PullSyncOptions` / `CpoSyncOptions` / `ModuleSyncOptions`** — hierarchical options with cascading resolution. `PullSyncOptions` sets global defaults (interval, enabled modules). `CpoSyncOptions` overrides per CPO. `ModuleSyncOptions` overrides per module within a CPO. Resolution cascades from most specific to least specific: module -> CPO -> global. `PullSyncOptionsResolver` handles the cascade logic.
+
+**`SyncContext` / `SyncResult`** — `SyncContext` carries the CPO ID, module ID, negotiated OCPI version, date-from watermark, and sync start timestamp. `SyncResult` reports item count, page count, duration, success/failure, and optional error message.
+
+**`PullSyncOptionsValidator`** — startup validation (via `IStartupFilter` or `IHostedLifecycleService`) that fails fast if pull sync configuration is invalid (e.g., unknown module IDs, intervals below minimum, missing required options).
+
+**Max-page guard** — `PaginationHandler` enforces a hard cap of 10,000 pages per sync operation to protect against CPOs that return self-referencing or cyclic `Link` headers.
+
 ---
 
 ## 13. Logging Strategy
@@ -1001,20 +1017,9 @@ Task<OcpiResult> OnLocationPatchAsync(
     CancellationToken ct);
 ```
 
-### Consumer Helper (Optional)
+### Consumer Responsibility for Merge
 
-The library provides a helper for consumers who want to apply JSON merge semantics:
-
-```csharp
-public static class OcpiPatchHelper
-{
-    /// <summary>
-    /// Applies a JSON merge patch to an existing object.
-    /// Uses RFC 7396 semantics: null removes, present overwrites, absent leaves unchanged.
-    /// </summary>
-    public static T ApplyPatch<T>(T existing, JsonElement patch, JsonTypeInfo<T> typeInfo);
-}
-```
+`OcpiPatchHelper` has been removed. The library no longer ships a generic JSON merge utility because patch application is inherently a storage concern — consumers know their data store semantics (SQL `UPDATE SET`, document DB partial update, in-memory merge) better than the library can. The library delivers the raw `JsonElement` patch to the consumer's handler (e.g., `ILocationsReceiver.OnLocationPatchAsync` receives a `JsonElement`), and the consumer applies it in their own domain layer using whatever merge strategy fits their persistence model.
 
 ---
 
@@ -1173,19 +1178,19 @@ catch (Exception ex)
 
 ---
 
-## 17. Testing Strategy (DotOcpi.Testing)
+## 17. Testing Strategy (DotOcpi.Simulator)
 
 ### Purpose
 
-`DotOcpi.Testing` ships an in-memory OCPI-compliant CPO that consumers use in their integration tests. It removes the need for a real CPO during testing while ensuring protocol compliance.
+`DotOcpi.Simulator` ships an in-memory OCPI-compliant CPO that consumers use in their integration tests. It removes the need for a real CPO during testing while ensuring protocol compliance.
 
-### OcpiTestCpoServer
+### OcpiCpoSimulator
 
 ```csharp
-public sealed class OcpiTestCpoServer : IAsyncDisposable
+public sealed class OcpiCpoSimulator : IAsyncDisposable
 {
     /// <summary>Create a test CPO with configurable behavior.</summary>
-    public static OcpiTestCpoServer Create(Action<TestCpoConfiguration>? configure = null);
+    public static OcpiCpoSimulator Create(Action<CpoSimulatorConfiguration>? configure = null);
 
     /// <summary>The base URL of the test CPO (in-memory, no real HTTP).</summary>
     public Uri BaseUrl { get; }
@@ -1194,14 +1199,14 @@ public sealed class OcpiTestCpoServer : IAsyncDisposable
     public string TokenA { get; }
 
     /// <summary>Configure module responses.</summary>
-    public TestCpoConfiguration Configuration { get; }
+    public CpoSimulatorConfiguration Configuration { get; }
 }
 ```
 
 ### Configuration
 
 ```csharp
-public sealed class TestCpoConfiguration
+public sealed class CpoSimulatorConfiguration
 {
     /// <summary>OCPI versions this test CPO supports.</summary>
     public IReadOnlyList<OcpiVersion> SupportedVersions { get; set; } = [OcpiVersion.V2_2_1];
@@ -1228,12 +1233,12 @@ public sealed class TestCpoConfiguration
 ```csharp
 public class MyLocationsHandlerTests : IAsyncLifetime
 {
-    private OcpiTestCpoServer _testCpo = null!;
+    private OcpiCpoSimulator _testCpo = null!;
     private WebApplicationFactory<Program> _factory = null!;
 
     public async Task InitializeAsync()
     {
-        _testCpo = OcpiTestCpoServer.Create(config =>
+        _testCpo = OcpiCpoSimulator.Create(config =>
         {
             config.SupportedVersions = [OcpiVersion.V2_2_1];
             config.Locations.Add(TestData.CreateLocation());
@@ -1276,7 +1281,7 @@ public class MyLocationsHandlerTests : IAsyncLifetime
 ### Failure Injection
 
 ```csharp
-_testCpo = OcpiTestCpoServer.Create(config =>
+_testCpo = OcpiCpoSimulator.Create(config =>
 {
     // Simulate CPO returning errors
     config.FailureInjection = new FailureInjection
