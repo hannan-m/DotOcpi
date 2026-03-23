@@ -1,0 +1,101 @@
+@page
+@model DotOcpi.Sample.Pages.Cpos.IndexModel
+@{
+    ViewData["Title"] = "CPO Registry";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">CPO Registry</h1>
+        <p class="page-subtitle">Manage Charge Point Operator connections</p>
+    </div>
+    <button class="btn btn-primary btn-sm collapsible-trigger" data-target="register-form">
+        + Register New CPO
+    </button>
+</div>
+
+<div class="page-body">
+    <!-- Registration Form (collapsed by default) -->
+    <div id="register-form" class="collapsible-content mb-2">
+        <div class="form-card">
+            <div class="form-card-title">Register New CPO</div>
+            <form hx-post="/api/cpos/register"
+                  hx-target="#register-result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#register-spinner">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Versions URL</label>
+                        <input type="url" name="versionsUrl" class="form-input"
+                               placeholder="https://cpo.example.com/ocpi/versions" required />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Token A</label>
+                        <input type="text" name="tokenA" class="form-input"
+                               placeholder="Pre-shared registration token" required />
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        Register
+                        <span class="spinner htmx-indicator" id="register-spinner"></span>
+                    </button>
+                    <div id="register-result" class="text-sm"></div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CPO Table -->
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Connection Key</th>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Modules</th>
+                    <th>Created</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var cpo in Model.Connections)
+                {
+                    <tr>
+                        <td class="mono">@cpo.ConnectionKey</td>
+                        <td><span class="badge badge-info">@cpo.Version.ToVersionString()</span></td>
+                        <td>
+                            <span class="badge badge-@(cpo.Status.ToString().ToLower())">
+                                <span class="badge-dot"></span>
+                                @cpo.Status
+                            </span>
+                        </td>
+                        <td class="text-sm text-secondary">@cpo.ModuleEndpoints.Count modules</td>
+                        <td class="text-sm text-muted mono">@cpo.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="text-right">
+                            <a href="/Cpos/Detail?key=@cpo.ConnectionKey" class="btn btn-ghost btn-sm">View</a>
+                            <button class="btn btn-outline btn-sm"
+                                    hx-post="/api/sync/@cpo.ConnectionKey"
+                                    hx-swap="none"
+                                    data-success-message="Sync triggered for @cpo.ConnectionKey">
+                                ⟳ Sync
+                            </button>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Connections.Any())
+                {
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">⬡</div>
+                                <div class="empty-state-text">No CPOs registered. Click "Register New CPO" above to get started.</div>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — DotOcpi Dashboard</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Mobile Toggle -->
+        <button class="mobile-toggle">☰</button>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-icon">⚡</div>
+                <div>
+                    <div class="sidebar-brand-text">DotOcpi</div>
+                    <div class="sidebar-brand-version">eMSP Dashboard</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="sidebar-section">Overview</div>
+                <a href="/" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")">
+                    <span class="sidebar-link-icon">◉</span> Dashboard
+                </a>
+
+                <div class="sidebar-section">Connections</div>
+                <a href="/Cpos" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Cpos") == true ? "active" : "")">
+                    <span class="sidebar-link-icon">⬡</span> CPO Registry
+                </a>
+
+                <div class="sidebar-section">Data</div>
+                <a href="/Locations" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Locations" ? "active" : "")">
+                    <span class="sidebar-link-icon">◎</span> Locations
+                </a>
+                <a href="/Sessions" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Sessions" ? "active" : "")">
+                    <span class="sidebar-link-icon">▶</span> Sessions
+                </a>
+                <a href="/Tariffs" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Tariffs" ? "active" : "")">
+                    <span class="sidebar-link-icon">€</span> Tariffs
+                </a>
+                <a href="/Cdrs" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Cdrs" ? "active" : "")">
+                    <span class="sidebar-link-icon">▤</span> CDRs
+                </a>
+
+                <div class="sidebar-section">Operations</div>
+                <a href="/Commands" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Commands" ? "active" : "")">
+                    <span class="sidebar-link-icon">⚡</span> Commands
+                </a>
+                <a href="/Sync" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Sync" ? "active" : "")">
+                    <span class="sidebar-link-icon">⟳</span> Sync Status
+                </a>
+                <a href="/Metrics" class="sidebar-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Metrics" ? "active" : "")">
+                    <span class="sidebar-link-icon">▥</span> Metrics
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                OCPI 2.0 · 2.1.1 · 2.2 · 2.2.1
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            @RenderBody()
+        </main>
+    </div>
+
+    <!-- SSE Connection Indicator -->
+    <div class="sse-indicator">
+        <div class="sse-dot" id="sse-dot"></div>
+        <span id="sse-label">Connecting</span>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- HTMX -->
+    <script src="~/lib/htmx.min.js"></script>
+    <script src="~/js/site.js"></script>
+</body>
+</html>

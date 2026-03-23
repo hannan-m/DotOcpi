@@ -1,0 +1,105 @@
+@page
+@model CommandsModel
+@{
+    ViewData["Title"] = "Commands";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Command Center</h1>
+        <p class="page-subtitle">Send OCPI commands to connected CPOs</p>
+    </div>
+</div>
+
+<div class="page-body">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <!-- Start Session -->
+        <div class="form-card">
+            <div class="form-card-title">⚡ Start Session</div>
+            <form hx-post="/api/commands/start-session"
+                  hx-target="#start-result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#start-spinner">
+                <div class="form-group">
+                    <label class="form-label">CPO</label>
+                    <select name="cpoId" class="form-select" required>
+                        @foreach (var cpo in Model.Connections)
+                        {
+                            <option value="@cpo.ConnectionKey">@cpo.ConnectionKey (@cpo.Version.ToVersionString())</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Location ID</label>
+                        <input type="text" name="locationId" class="form-input" value="LOC1" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">EVSE UID</label>
+                        <input type="text" name="evseUid" class="form-input" value="DE*CPO*E001" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Connector ID</label>
+                        <input type="text" name="connectorId" class="form-input" value="C1" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Token UID</label>
+                        <input type="text" name="tokenUid" class="form-input" value="TOKEN001" />
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    ⚡ Send StartSession
+                    <span class="spinner htmx-indicator" id="start-spinner"></span>
+                </button>
+                <div id="start-result" class="mt-1"></div>
+            </form>
+        </div>
+
+        <!-- Stop Session -->
+        <div class="form-card">
+            <div class="form-card-title">■ Stop Session</div>
+            <form hx-post="/api/commands/stop-session"
+                  hx-target="#stop-result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#stop-spinner">
+                <div class="form-group">
+                    <label class="form-label">CPO</label>
+                    <select name="cpoId" class="form-select" required>
+                        @foreach (var cpo in Model.Connections)
+                        {
+                            <option value="@cpo.ConnectionKey">@cpo.ConnectionKey</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Session ID</label>
+                    <input type="text" name="sessionId" class="form-input" value="SES001" />
+                </div>
+                <button type="submit" class="btn btn-danger">
+                    ■ Send StopSession
+                    <span class="spinner htmx-indicator" id="stop-spinner"></span>
+                </button>
+                <div id="stop-result" class="mt-1"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Command History -->
+    <div class="section mt-2">
+        <h3 class="section-title">Command History</h3>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Time</th><th>CPO</th><th>Type</th><th>Status</th></tr>
+                </thead>
+                <tbody id="command-history"
+                       hx-get="/api/commands/history"
+                       hx-trigger="load, every 5s"
+                       hx-swap="innerHTML">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

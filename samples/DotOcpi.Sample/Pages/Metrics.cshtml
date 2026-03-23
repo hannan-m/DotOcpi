@@ -1,0 +1,96 @@
+@page
+@model MetricsModel
+@{
+    ViewData["Title"] = "Metrics";
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Metrics</h1>
+        <p class="page-subtitle">Operational statistics and data store overview</p>
+    </div>
+</div>
+
+<div class="page-body">
+    <!-- Summary Cards -->
+    <div class="card-grid mb-2">
+        <div class="card stat-card cyan">
+            <div class="stat-label">Total Syncs</div>
+            <div class="stat-value">@Model.TotalSyncs</div>
+        </div>
+        <div class="card stat-card green">
+            <div class="stat-label">Success Rate</div>
+            <div class="stat-value">@(Model.TotalSyncs > 0 ? $"{(double)(Model.TotalSyncs - Model.TotalErrors) / Model.TotalSyncs * 100:F0}%" : "—")</div>
+        </div>
+        <div class="card stat-card red">
+            <div class="stat-label">Total Errors</div>
+            <div class="stat-value">@Model.TotalErrors</div>
+        </div>
+        <div class="card stat-card purple">
+            <div class="stat-label">CPOs Active</div>
+            <div class="stat-value">@Model.TotalCpos</div>
+        </div>
+    </div>
+
+    <!-- Per-CPO Stats -->
+    <div class="section">
+        <h3 class="section-title">Per-CPO Statistics</h3>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>CPO</th>
+                        <th>Requests</th>
+                        <th>Errors</th>
+                        <th>Error Rate</th>
+                        <th>Syncs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in Model.CpoMetrics)
+                    {
+                        <tr>
+                            <td class="mono">@m.ConnectionKey</td>
+                            <td class="mono">@m.Requests</td>
+                            <td class="mono">@m.Errors</td>
+                            <td>
+                                @if (m.Errors > 0)
+                                {
+                                    <span class="badge badge-error">@m.ErrorRate</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">@m.ErrorRate</span>
+                                }
+                            </td>
+                            <td class="mono">@m.Syncs</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Data Store Summary -->
+    <div class="section">
+        <h3 class="section-title">Data Store</h3>
+        <div class="card-grid">
+            <div class="card stat-card green">
+                <div class="stat-label">Locations</div>
+                <div class="stat-value">@Model.TotalLocations</div>
+            </div>
+            <div class="card stat-card blue">
+                <div class="stat-label">Sessions</div>
+                <div class="stat-value">@Model.TotalSessions</div>
+            </div>
+            <div class="card stat-card yellow">
+                <div class="stat-label">Tariffs</div>
+                <div class="stat-value">@Model.TotalTariffs</div>
+            </div>
+            <div class="card stat-card cyan">
+                <div class="stat-label">CDRs</div>
+                <div class="stat-value">@Model.TotalCdrs</div>
+            </div>
+        </div>
+    </div>
+</div>
