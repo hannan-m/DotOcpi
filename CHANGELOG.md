@@ -31,7 +31,15 @@ All notable changes to this project will be documented in this file.
 - Sample dashboard: interactive Razor Pages UI with HTMX, SSE real-time updates, Swagger UI
 - NuGet packaging metadata (author, license, repository URL) in Directory.Build.props
 
+### Added (Security)
+- OcpiRegistrationContext — lightweight request context for initial CPO registration (Token A), used before any CpoConnection exists
+- OcpiTokenAAuthFilter — endpoint filter that validates Token A for credentials POST, rejects Token B (registration requires Token A specifically)
+- OcpiRegistrationContextFilter — builds OcpiRegistrationContext from validated Token A entry
+- MapCredentialsRegistrationEndpoints — maps credentials POST on a separate route group outside the auth-filtered pipeline, fixing registration denial-of-service where OcpiAuthFilter blocked Token A requests that had no CpoConnection
+
 ### Changed
+- ICredentialsHandler.OnCredentialsPostAsync now accepts OcpiRegistrationContext instead of OcpiRequestContext (breaking change — registration has no CpoConnection)
+- MapCredentialsEndpoints now maps only PUT/GET/DELETE (Token B auth); POST is handled by MapCredentialsRegistrationEndpoints
 - DotOcpi.Testing renamed to DotOcpi.Simulator; OcpiTestCpoServer → OcpiCpoSimulator, TestCpoConfiguration → CpoSimulatorConfiguration
 - IOcpiSyncService.SyncModuleFromCpoAsync returns Task<SyncResult> instead of Task
 - OcpiSyncService delivers page-level batches to IOcpiSyncHandler instead of discarding pulled items

@@ -1,5 +1,6 @@
 using System.Text;
 using DotOcpi.Registry;
+using DotOcpi.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -65,6 +66,36 @@ internal static class OcpiEndpointTestHelper
         httpContext.Response.Body.Position = 0;
         using var reader = new StreamReader(httpContext.Response.Body);
         return reader.ReadToEnd();
+    }
+
+    internal static OcpiRegistrationContext CreateRegistrationContext(OcpiVersion version) =>
+        new()
+        {
+            RequestId = "req-1",
+            CorrelationId = "corr-1",
+            Version = version,
+            TokenAEntry = new TokenEntry("token-a-hash", TokenPurpose.TokenA, "NL:TNM"),
+        };
+
+    internal static DefaultHttpContext CreateRegistrationHttpContext<TService>(
+        TService service,
+        OcpiVersion version,
+        string? body = null
+    )
+        where TService : class
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+        httpContext.RequestServices = new ServiceCollection().AddSingleton(service).BuildServiceProvider();
+        httpContext.SetRegistrationContext(CreateRegistrationContext(version));
+
+        if (body is not null)
+        {
+            httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
+            httpContext.Request.ContentType = "application/json";
+        }
+
+        return httpContext;
     }
 
     internal static IEnumerable<object[]> AllVersions =>

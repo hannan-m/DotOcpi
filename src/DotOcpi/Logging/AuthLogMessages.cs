@@ -6,7 +6,7 @@ namespace DotOcpi.Logging;
 /// Source-generated log methods for the DotOcpi.Auth category.
 /// Zero allocation when the log level is disabled.
 /// </summary>
-internal static partial class AuthLogMessages
+public static partial class AuthLogMessages
 {
     [LoggerMessage(
         EventId = OcpiLogEvents.AuthSuccess,
@@ -42,4 +42,16 @@ internal static partial class AuthLogMessages
         Message = "Authentication failed for request {RequestId}: CPO not found in registry for token hash {TruncatedHash}"
     )]
     public static partial void AuthCpoNotFound(this ILogger logger, string requestId, string truncatedHash);
+
+    [LoggerMessage(
+        EventId = OcpiLogEvents.AuthWrongPurpose,
+        Level = LogLevel.Warning,
+        Message = "Authentication failed for request {RequestId}: expected {ExpectedPurpose} but received {ActualPurpose}"
+    )]
+    public static partial void AuthWrongTokenPurpose(
+        this ILogger logger,
+        string requestId,
+        string expectedPurpose,
+        string actualPurpose
+    );
 }

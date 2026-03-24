@@ -178,6 +178,8 @@ tests/
 │   ├── OcpiHttpContextExtensionsTests.cs
 │   ├── Filters/
 │   │   ├── OcpiAuthFilterTests.cs
+│   │   ├── OcpiTokenAAuthFilterTests.cs
+│   │   ├── OcpiRegistrationContextFilterTests.cs
 │   │   ├── OcpiBodySizeLimitFilterTests.cs
 │   │   ├── OcpiRequestIdFilterTests.cs
 │   │   └── OcpiValidationFilterTests.cs

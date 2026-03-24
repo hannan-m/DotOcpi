@@ -210,19 +210,25 @@ Customizes the credentials endpoint behavior. Optional — DotOcpi provides a de
 ```csharp
 public interface ICredentialsHandler
 {
+    // Initial registration — Token A auth, no CpoConnection exists yet
     Task<OcpiResult<object>> OnCredentialsPostAsync(
-        OcpiRequestContext context, object credentials, CancellationToken ct);
+        OcpiRegistrationContext context, object credentials, CancellationToken ct);
 
+    // Credential rotation — Token B auth, established connection
     Task<OcpiResult<object>> OnCredentialsPutAsync(
         OcpiRequestContext context, object credentials, CancellationToken ct);
 
+    // Unregistration — Token B auth, established connection
     Task<OcpiResult> OnCredentialsDeleteAsync(
         OcpiRequestContext context, CancellationToken ct);
 
+    // Retrieve credentials — Token B auth, established connection
     Task<OcpiResult<object>> GetCredentialsAsync(
         OcpiRequestContext context, CancellationToken ct);
 }
 ```
+
+`OnCredentialsPostAsync` receives `OcpiRegistrationContext` because initial registration uses Token A and no `CpoConnection` exists yet. The context provides the validated `TokenEntry` and the OCPI version from the URL path. All other methods receive `OcpiRequestContext` with the full `CpoConnection`.
 
 ---
 

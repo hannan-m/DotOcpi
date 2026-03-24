@@ -17,6 +17,12 @@ public class CredentialsEndpointsTests
         string? body = null
     ) => OcpiEndpointTestHelper.CreateHttpContext(handler, version, "credentials", body);
 
+    private static DefaultHttpContext CreateRegistrationContext(
+        ICredentialsHandler handler,
+        OcpiVersion version,
+        string? body = null
+    ) => OcpiEndpointTestHelper.CreateRegistrationHttpContext(handler, version, body);
+
     private const string CredentialsJsonV221 = """
         {
             "token": "abc123",
@@ -40,10 +46,10 @@ public class CredentialsEndpointsTests
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
-            .OnCredentialsPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
+            .OnCredentialsPostAsync(Arg.Any<OcpiRegistrationContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
             .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"token": "xyz"}""").RootElement));
 
-        var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
+        var httpContext = CreateRegistrationContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
 
@@ -55,7 +61,7 @@ public class CredentialsEndpointsTests
         await handler
             .Received(1)
             .OnCredentialsPostAsync(
-                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<OcpiRegistrationContext>(),
                 Arg.Is<object>(o => o is Models.V2_2_1.Credentials),
                 Arg.Any<CancellationToken>()
             );
@@ -66,10 +72,10 @@ public class CredentialsEndpointsTests
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
-            .OnCredentialsPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
+            .OnCredentialsPostAsync(Arg.Any<OcpiRegistrationContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
             .Returns(OcpiResult<object>.Success(JsonDocument.Parse("""{"token": "xyz"}""").RootElement));
 
-        var httpContext = CreateHttpContext(handler, OcpiVersion.V2_0, CredentialsJsonV20);
+        var httpContext = CreateRegistrationContext(handler, OcpiVersion.V2_0, CredentialsJsonV20);
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
 
@@ -77,7 +83,7 @@ public class CredentialsEndpointsTests
         await handler
             .Received(1)
             .OnCredentialsPostAsync(
-                Arg.Any<OcpiRequestContext>(),
+                Arg.Any<OcpiRegistrationContext>(),
                 Arg.Is<object>(o => o is Models.V2_0.Credentials),
                 Arg.Any<CancellationToken>()
             );
@@ -154,7 +160,7 @@ public class CredentialsEndpointsTests
     public async Task HandleCredentialsPost_EmptyBody_Returns400()
     {
         var handler = Substitute.For<ICredentialsHandler>();
-        var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1);
+        var httpContext = CreateRegistrationContext(handler, OcpiVersion.V2_2_1);
         httpContext.Request.Body = new MemoryStream(Array.Empty<byte>());
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
@@ -167,10 +173,10 @@ public class CredentialsEndpointsTests
     {
         var handler = Substitute.For<ICredentialsHandler>();
         handler
-            .OnCredentialsPostAsync(Arg.Any<OcpiRequestContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
+            .OnCredentialsPostAsync(Arg.Any<OcpiRegistrationContext>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
             .Returns(OcpiResult<object>.Failure(OcpiStatusCode.GenericClientError, "Invalid credentials"));
 
-        var httpContext = CreateHttpContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
+        var httpContext = CreateRegistrationContext(handler, OcpiVersion.V2_2_1, CredentialsJsonV221);
 
         await CredentialsEndpoints.HandleCredentialsPost(httpContext);
 

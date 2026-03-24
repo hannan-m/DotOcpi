@@ -229,21 +229,29 @@ app.Run();
 // Or selectively map modules
 var group = app.MapOcpiEndpoints();
 group.MapLocationsEndpoints();
-group.MapCredentialsEndpoints();
+group.MapCredentialsEndpoints();       // PUT, GET, DELETE (Token B auth)
+// Registration POST needs its own route group (Token A auth, no CpoConnection)
+var regGroup = app.MapGroup("/ocpi");
+regGroup.AddEndpointFilter<OcpiMetricsFilter>();
+regGroup.MapCredentialsRegistrationEndpoints();
 app.Run();
 ```
 
 ### Internal Implementation
 
-`MapOcpiEndpoints()` returns a `RouteGroupBuilder` for selective module registration. `MapAllOcpiEndpoints()` calls `MapOcpiEndpoints()` and then maps all modules in one call.
+`MapOcpiEndpoints()` returns a `RouteGroupBuilder` for selective module registration. `MapAllOcpiEndpoints()` calls `MapOcpiEndpoints()` and then maps all modules in one call. Credentials POST (initial registration with Token A) is mapped on a separate route group outside the auth-filtered pipeline because no `CpoConnection` exists during initial registration.
 
 ```csharp
 // Two-step: get group, then map individual modules
 var group = app.MapOcpiEndpoints(basePath: "/ocpi", rateLimitOptions: myLimits);
 group.MapLocationsEndpoints();
 group.MapSessionsEndpoints();
-group.MapCredentialsEndpoints();
-// ... or map everything at once:
+group.MapCredentialsEndpoints();       // PUT, GET, DELETE only
+// Registration POST: separate group, Token A auth
+var regGroup = app.MapGroup("/ocpi");
+regGroup.AddEndpointFilter<OcpiMetricsFilter>();
+regGroup.MapCredentialsRegistrationEndpoints();
+// ... or map everything at once (handles the split internally):
 app.MapAllOcpiEndpoints();
 ```
 
@@ -252,10 +260,15 @@ The middleware pipeline is registered by `MapOcpiEndpoints()`:
 2. `OcpiSecurityHeadersMiddleware` — X-Content-Type-Options, Cache-Control, X-Frame-Options
 3. `OcpiExceptionMiddleware` — catches unhandled exceptions, returns OCPI 3000
 
-Endpoint filters are added to the returned route group:
-1. `OcpiAuthFilter` — validates token, stores CpoConnection in HttpContext.Items
+Endpoint filters are added to the returned route group (data endpoints + credentials PUT/GET/DELETE):
+1. `OcpiAuthFilter` — validates Token B, stores CpoConnection in HttpContext.Items
 2. `OcpiRateLimitFilter` — (optional, if `rateLimitOptions` provided) buckets by CPO
 3. `OcpiMetricsFilter` — records request count and duration
+
+The registration route group (credentials POST only) uses a separate filter pipeline:
+1. `OcpiTokenAAuthFilter` — validates Token A, rejects Token B, stores TokenEntry
+2. `OcpiMetricsFilter` — records request metrics
+3. `OcpiRegistrationContextFilter` — builds `OcpiRegistrationContext` from Token A entry
 
 ### Endpoint Filters vs Middleware
 

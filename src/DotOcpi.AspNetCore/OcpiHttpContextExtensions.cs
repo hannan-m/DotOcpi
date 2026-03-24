@@ -8,6 +8,7 @@ namespace DotOcpi.AspNetCore;
 public static class OcpiHttpContextExtensions
 {
     private static readonly object RequestContextKey = new();
+    private static readonly object RegistrationContextKey = new();
     private static readonly object RequestIdKey = new();
     private static readonly object CorrelationIdKey = new();
 
@@ -22,6 +23,18 @@ public static class OcpiHttpContextExtensions
     /// </summary>
     public static void SetOcpiContext(this HttpContext httpContext, OcpiRequestContext context) =>
         httpContext.Items[RequestContextKey] = context;
+
+    /// <summary>
+    /// Gets the <see cref="OcpiRegistrationContext"/> from the current request, or null if not set.
+    /// </summary>
+    public static OcpiRegistrationContext? GetRegistrationContext(this HttpContext httpContext) =>
+        httpContext.Items.TryGetValue(RegistrationContextKey, out var value) ? value as OcpiRegistrationContext : null;
+
+    /// <summary>
+    /// Sets the <see cref="OcpiRegistrationContext"/> for the current request.
+    /// </summary>
+    public static void SetRegistrationContext(this HttpContext httpContext, OcpiRegistrationContext context) =>
+        httpContext.Items[RegistrationContextKey] = context;
 
     /// <summary>
     /// Gets the X-Request-ID for the current request, or null if not set.

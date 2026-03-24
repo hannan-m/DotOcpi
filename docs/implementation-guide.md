@@ -1030,11 +1030,21 @@ Cached in `HttpContext.Items` — built once by the auth filter, available to al
 
 #### 9.2 — OcpiAuthFilter
 
-Endpoint filter that runs on every OCPI endpoint:
+Endpoint filter that runs on data endpoints and credentials PUT/GET/DELETE (Token B auth):
 1. Extract `Authorization: Token <base64>` header
 2. Validate via `OcpiTokenValidator`
-3. On success: build `OcpiRequestContext`, store in `HttpContext.Items`
-4. On failure: return `401` with OCPI status 2002
+3. Look up `CpoConnection` via `ICpoRegistry.FindByTokenHash()`
+4. On success: store `CpoConnection` in `HttpContext.Items`
+5. On failure: return `401` with OCPI status 2002
+
+#### 9.2a — OcpiTokenAAuthFilter
+
+Endpoint filter for credentials POST only (Token A auth, initial registration):
+1. Extract `Authorization: Token <base64>` header
+2. Validate via `OcpiTokenValidator`
+3. Verify `TokenEntry.Purpose == TokenA` (reject Token B)
+4. On success: store `TokenEntry` in `HttpContext.Items` (no CpoConnection lookup)
+5. On failure: return `401` with OCPI status 2002
 
 #### 9.3 — OcpiRequestIdMiddleware
 
@@ -1127,13 +1137,18 @@ public static class OcpiEndpointRouteBuilderExtensions
 }
 ```
 
-Registers:
-- `GET /ocpi/versions`
-- `GET /ocpi/versions/{versionId}`
-- `POST /ocpi/{version}/credentials`
+Registers two route groups under the same base path:
+
+**Auth-filtered group** (Token B, requires CpoConnection):
 - `PUT /ocpi/{version}/credentials`
+- `GET /ocpi/{version}/credentials`
 - `DELETE /ocpi/{version}/credentials`
 - Per-module receiver endpoints (Phase 10)
+
+**Registration group** (Token A, no CpoConnection):
+- `POST /ocpi/{version}/credentials`
+
+ASP.NET Core disambiguates by HTTP method — same URL path, different filter pipelines.
 
 Version-specific URL patterns:
 - 2.0/2.1.1: `/ocpi/emsp/{version}/locations/{locationId}`
@@ -1160,6 +1175,8 @@ internal static class OcpiResponseWriter
 tests/DotOcpi.AspNetCore.Tests/
 ├── Filters/
 │   ├── OcpiAuthFilterTests.cs
+│   ├── OcpiTokenAAuthFilterTests.cs
+│   ├── OcpiRegistrationContextFilterTests.cs
 │   ├── OcpiRequestIdFilterTests.cs
 │   ├── OcpiBodySizeLimitFilterTests.cs
 │   └── OcpiValidationFilterTests.cs

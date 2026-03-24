@@ -8,16 +8,19 @@ namespace DotOcpi.Modules;
 public interface ICredentialsHandler
 {
     /// <summary>
-    /// Handles an initial credentials POST from a CPO (registration).
-    /// The consumer should validate the credentials, store the token, and
-    /// return the eMSP's own credentials.
+    /// Handles an initial credentials POST from a CPO (registration with Token A).
+    /// The consumer should validate the credentials, create the CPO connection,
+    /// store the token, and return the eMSP's own credentials.
     /// </summary>
-    /// <param name="context">The OCPI request context.</param>
+    /// <param name="context">
+    /// Registration context with Token A entry and version. No <see cref="Registry.CpoConnection"/>
+    /// exists yet — the connection is created as a result of this handshake.
+    /// </param>
     /// <param name="credentials">The CPO's credentials (version-specific model).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The eMSP's credentials to return (version-specific model), or failure.</returns>
     Task<OcpiResult<object>> OnCredentialsPostAsync(
-        OcpiRequestContext context,
+        OcpiRegistrationContext context,
         object credentials,
         CancellationToken ct
     );

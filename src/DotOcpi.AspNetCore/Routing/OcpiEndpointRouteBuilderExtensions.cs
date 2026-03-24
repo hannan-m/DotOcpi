@@ -70,6 +70,8 @@ public static class OcpiEndpointRouteBuilderExtensions
     /// Maps all OCPI module endpoints in a single call.
     /// Wires Locations, Sessions, CDRs, Tariffs, Tokens, Commands,
     /// ChargingProfiles, and Credentials endpoints for all supported versions.
+    /// Credentials POST (initial registration with Token A) is mapped on a
+    /// separate route group outside the auth-filtered pipeline.
     /// </summary>
     /// <param name="app">The web application.</param>
     /// <param name="basePath">The base path for all OCPI endpoints (default: "/ocpi").</param>
@@ -91,6 +93,14 @@ public static class OcpiEndpointRouteBuilderExtensions
         group.MapCommandsEndpoints();
         group.MapChargingProfilesEndpoints();
         group.MapCredentialsEndpoints();
+
+        // Registration POST: separate route group, same base path.
+        // No OcpiAuthFilter (Token A has no CpoConnection yet).
+        // OcpiMetricsFilter for observability. OcpiTokenAAuthFilter validates Token A.
+        // ASP.NET Core disambiguates by HTTP method (POST vs PUT/GET/DELETE).
+        var registrationGroup = app.MapGroup(basePath);
+        registrationGroup.AddEndpointFilter<OcpiMetricsFilter>();
+        registrationGroup.MapCredentialsRegistrationEndpoints();
 
         return group;
     }

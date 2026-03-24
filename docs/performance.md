@@ -750,15 +750,18 @@ graph TD
     RequestId --> SecurityHeaders["OcpiSecurityHeadersMiddleware<br/><i>nosniff, no-store, DENY</i>"]
     SecurityHeaders --> Exception["OcpiExceptionMiddleware<br/><i>Catches unhandled errors → OCPI 3000</i>"]
     Exception --> Routing["Routing<br/><i>Matches request to endpoint</i>"]
-    Routing --> Auth["OcpiAuthFilter<br/><i>Token validation</i>"]
+    Routing -->|Data endpoints| Auth["OcpiAuthFilter<br/><i>Token B → CpoConnection</i>"]
     Auth --> RateLimit["OcpiRateLimitFilter (optional)<br/><i>Per-CPO rate limiting</i>"]
     RateLimit --> Metrics["OcpiMetricsFilter<br/><i>Request count + duration</i>"]
     Metrics --> Handler["Module Handler"]
+    Routing -->|Credentials POST| TokenA["OcpiTokenAAuthFilter<br/><i>Token A validation</i>"]
+    TokenA --> MetricsReg["OcpiMetricsFilter"]
+    MetricsReg --> RegHandler["Registration Handler"]
 ```
 
 ### Pipeline Registration
 
-`MapOcpiEndpoints()` registers both the middleware and the endpoint filters:
+`MapOcpiEndpoints()` registers the middleware and endpoint filters. `MapAllOcpiEndpoints()` additionally creates a separate registration route group for credentials POST (Token A auth):
 
 ```csharp
 var app = builder.Build();
@@ -768,17 +771,22 @@ var app = builder.Build();
 //   app.UseMiddleware<OcpiSecurityHeadersMiddleware>();
 //   app.UseMiddleware<OcpiExceptionMiddleware>();
 //
-// And applies endpoint filters to the OCPI route group:
-//   group.AddEndpointFilter<OcpiAuthFilter>();
+// And applies endpoint filters to the auth-filtered route group:
+//   group.AddEndpointFilter<OcpiAuthFilter>();           // Token B → CpoConnection
 //   group.AddEndpointFilter(new OcpiRateLimitFilter(...));  // if rateLimitOptions provided
 //   group.AddEndpointFilter<OcpiMetricsFilter>();
+//
+// MapAllOcpiEndpoints also creates a registration group for POST /credentials:
+//   registrationGroup.AddEndpointFilter<OcpiMetricsFilter>();
+//   registrationGroup.MapCredentialsRegistrationEndpoints();  // OcpiTokenAAuthFilter inside
 
-app.MapOcpiEndpoints();              // OCPI auth applied via endpoint filters (fail fast)
+app.MapAllOcpiEndpoints();
 ```
 
 Key insights:
 - Middleware runs on **all** requests (including 404s). Request IDs and security headers are applied even to unmatched routes.
 - OCPI auth runs as an **endpoint filter**, not middleware — it executes after routing selects the endpoint but before the handler. This means unmatched routes never trigger token validation.
+- Credentials POST uses a **separate route group** with `OcpiTokenAAuthFilter` (Token A) instead of `OcpiAuthFilter` (Token B), because no `CpoConnection` exists during initial registration.
 - Health check mapping (`MapHealthChecks`) is the consumer's responsibility — it is not called inside `MapOcpiEndpoints`.
 
 ---

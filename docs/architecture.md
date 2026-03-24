@@ -245,15 +245,24 @@ graph TD
 
 ### Request Pipeline
 
-The pipeline uses a combination of middleware (runs on every request) and endpoint filters (runs per-endpoint). The ordering is:
+The pipeline uses a combination of middleware (runs on every request) and endpoint filters (runs per-endpoint). Two separate filter pipelines exist:
+
+**Data endpoints + Credentials PUT/GET/DELETE** (Token B auth, requires CpoConnection):
 
 1. **OcpiRequestIdMiddleware** (middleware) — Extract/generate `X-Request-ID` and `X-Correlation-ID`
 2. **OcpiSecurityHeadersMiddleware** (middleware) — Add `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `X-Frame-Options: DENY`
 3. **OcpiExceptionMiddleware** (middleware) — Catch unhandled exceptions, return OCPI 3000 error envelope
-4. **OcpiAuthFilter** (endpoint filter) — Extract `Authorization: Token` header, constant-time hash comparison
+4. **OcpiAuthFilter** (endpoint filter) — Extract `Authorization: Token` header, validate Token B, look up CpoConnection
 5. **OcpiRateLimitFilter** (optional endpoint filter) — Rate limiting per CPO
 6. **OcpiMetricsFilter** (endpoint filter) — Record request metrics
 7. Per-module: **OcpiContextFilter** + **OcpiBodySizeLimitFilter** (endpoint filters)
+
+**Credentials POST** (Token A auth, initial registration — no CpoConnection exists):
+
+1–3. Same middleware as above (request IDs, security headers, exception handling)
+4. **OcpiTokenAAuthFilter** (endpoint filter) — Validate Token A, reject Token B, store TokenEntry
+5. **OcpiMetricsFilter** (endpoint filter) — Record request metrics
+6. **OcpiRegistrationContextFilter** + **OcpiBodySizeLimitFilter** (endpoint filters)
 
 ```mermaid
 graph TD
@@ -261,13 +270,20 @@ graph TD
         Req[Incoming HTTP Request] --> ReqId["1. OcpiRequestIdMiddleware<br/><i>Extract/generate X-Request-ID<br/>and X-Correlation-ID</i>"]
         ReqId --> SecHeaders["2. OcpiSecurityHeadersMiddleware<br/><i>nosniff, no-store, DENY</i>"]
         SecHeaders --> ExcMw["3. OcpiExceptionMiddleware<br/><i>Catch unhandled exceptions</i>"]
-        ExcMw --> Auth["4. OcpiAuthFilter (endpoint filter)<br/><i>Extract Authorization: Token header<br/>Constant-time hash comparison</i>"]
-        Auth -->|Invalid| Reject["401 + OCPI 2002<br/>(Not enough information)"]
+        ExcMw --> Route{Route Match}
+        Route -->|Data endpoints<br/>Credentials PUT/GET/DELETE| Auth["4. OcpiAuthFilter<br/><i>Token B → CpoConnection</i>"]
+        Auth -->|Invalid| Reject["401 + OCPI 2002"]
         Auth -->|Valid| RateLimit["5. OcpiRateLimitFilter (optional)"]
         RateLimit --> Metrics["6. OcpiMetricsFilter"]
         Metrics --> Context["7. OcpiContextFilter + OcpiBodySizeLimitFilter"]
-        Context --> Handler[Version-Specific Handler<br/><i>Deserialize, validate,<br/>invoke consumer callback</i>]
-        Handler --> Response[OCPI Response Envelope<br/><i>Wrap in standard format<br/>with status_code, timestamp</i>]
+        Context --> Handler[Version-Specific Handler]
+        Route -->|Credentials POST<br/>Initial registration| TokenA["4. OcpiTokenAAuthFilter<br/><i>Token A only</i>"]
+        TokenA -->|Invalid| RejectReg["401 + OCPI 2002"]
+        TokenA -->|Valid| MetricsReg["5. OcpiMetricsFilter"]
+        MetricsReg --> RegContext["6. OcpiRegistrationContextFilter + OcpiBodySizeLimitFilter"]
+        RegContext --> RegHandler[Credentials POST Handler]
+        Handler --> Response[OCPI Response Envelope]
+        RegHandler --> Response
     end
 ```
 
@@ -280,11 +296,14 @@ graph LR
         V2["GET /ocpi/versions/{id}/"]
     end
 
-    subgraph "Credentials (always registered)"
+    subgraph "Credentials — Auth-filtered group (Token B)"
         C1["GET /ocpi/emsp/{ver}/credentials"]
-        C2["POST /ocpi/emsp/{ver}/credentials"]
         C3["PUT /ocpi/emsp/{ver}/credentials"]
         C4["DELETE /ocpi/emsp/{ver}/credentials"]
+    end
+
+    subgraph "Credentials — Registration group (Token A)"
+        C2["POST /ocpi/emsp/{ver}/credentials"]
     end
 
     subgraph "Receiver Modules (eMSP receives from CPO)"
@@ -1434,8 +1453,10 @@ DotOcpi/
 │   │   ├── OcpiHttpContextExtensions.cs
 │   │   ├── Filters/
 │   │   │   ├── OcpiAuthFilter.cs
+│   │   │   ├── OcpiTokenAAuthFilter.cs
 │   │   │   ├── OcpiValidationFilter.cs
 │   │   │   ├── OcpiContextFilter.cs
+│   │   │   ├── OcpiRegistrationContextFilter.cs
 │   │   │   ├── OcpiBodySizeLimitFilter.cs
 │   │   │   ├── OcpiMetricsFilter.cs
 │   │   │   └── OcpiRateLimitFilter.cs

@@ -43,6 +43,9 @@ public static class OcpiLogEvents
     /// <summary>Token matched but CPO not found in registry.</summary>
     public const int AuthCpoNotFound = 2005;
 
+    /// <summary>Token purpose mismatch (e.g., Token B used for registration).</summary>
+    public const int AuthWrongPurpose = 2006;
+
     // ── Client / Outbound (3000–3099) ───────────────────────────────────
 
     /// <summary>Outbound OCPI request sent to CPO.</summary>

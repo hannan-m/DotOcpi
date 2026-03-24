@@ -26,7 +26,10 @@ namespace DotOcpi.AspNetCore.Handlers.Credentials;
 public static class CredentialsEndpoints
 {
     /// <summary>
-    /// Maps Credentials endpoints under the OCPI route group for all versions.
+    /// Maps Credentials GET/PUT/DELETE endpoints under the auth-filtered OCPI route group.
+    /// These require an established <see cref="Registry.CpoConnection"/> (Token B auth).
+    /// For initial registration (POST with Token A), use
+    /// <see cref="MapCredentialsRegistrationEndpoints"/>.
     /// </summary>
     public static RouteGroupBuilder MapCredentialsEndpoints(this RouteGroupBuilder ocpiGroup)
     {
@@ -36,7 +39,6 @@ public static class CredentialsEndpoints
             module.AddEndpointFilter(new OcpiContextFilter("credentials"));
             module.AddEndpointFilter(new OcpiBodySizeLimitFilter(16 * 1024));
 
-            module.MapPost("", HandleCredentialsPost);
             module.MapPut("", HandleCredentialsPut);
             module.MapDelete("", HandleCredentialsDelete);
             module.MapGet("", HandleCredentialsGet);
@@ -45,12 +47,32 @@ public static class CredentialsEndpoints
         return ocpiGroup;
     }
 
+    /// <summary>
+    /// Maps the Credentials POST endpoint for initial CPO registration (Token A auth).
+    /// Must be called on a route group that is NOT under the <see cref="OcpiAuthFilter"/>
+    /// pipeline, because no <see cref="Registry.CpoConnection"/> exists yet during
+    /// initial registration.
+    /// </summary>
+    public static void MapCredentialsRegistrationEndpoints(this RouteGroupBuilder registrationGroup)
+    {
+        registrationGroup.AddEndpointFilter<OcpiTokenAAuthFilter>();
+
+        foreach (var version in Enum.GetValues<OcpiVersion>())
+        {
+            var module = registrationGroup.MapGroup($"{version.ToVersionString()}/credentials");
+            module.AddEndpointFilter(new OcpiRegistrationContextFilter(version));
+            module.AddEndpointFilter(new OcpiBodySizeLimitFilter(16 * 1024));
+
+            module.MapPost("", HandleCredentialsPost);
+        }
+    }
+
     internal static async Task HandleCredentialsPost(HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetRegistrationContext()!;
 
         var data = await EndpointHelper
-            .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Credentials(ctx.NegotiatedVersion))
+            .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Credentials(ctx.Version))
             .ConfigureAwait(false);
         if (data is null)
             return;
@@ -59,7 +81,7 @@ public static class CredentialsEndpoints
         var result = await handler.OnCredentialsPostAsync(ctx, data, httpContext.RequestAborted).ConfigureAwait(false);
 
         await OcpiResponseWriter
-            .WriteResultObjectAsync(httpContext, result, ctx.NegotiatedVersion, httpContext.RequestAborted)
+            .WriteResultObjectAsync(httpContext, result, ctx.Version, httpContext.RequestAborted)
             .ConfigureAwait(false);
     }
 
