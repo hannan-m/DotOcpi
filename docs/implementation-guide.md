@@ -1601,10 +1601,12 @@ Per [strategies.md #9](strategies.md#9-health-check-strategy) and [cpo-registry.
 
 ```csharp
 // src/DotOcpi.AspNetCore/HealthChecks/OcpiRegistryHealthCheck.cs
+// Reports per-CPO status, version, and last health check time in data dictionary
 public sealed class OcpiRegistryHealthCheck : IHealthCheck { ... }
 
 // src/DotOcpi.AspNetCore/HealthChecks/OcpiCpoHealthCheck.cs
-public sealed class OcpiCpoHealthCheck : IHealthCheck { ... }  // Per-CPO health
+// Reports connection key, status, version, party identity, versions URL in data dictionary
+public sealed class OcpiCpoHealthCheck : IHealthCheck { ... }
 
 // src/DotOcpi.AspNetCore/HealthChecks/OcpiTokenStoreHealthCheck.cs
 public sealed class OcpiTokenStoreHealthCheck : IHealthCheck { ... }

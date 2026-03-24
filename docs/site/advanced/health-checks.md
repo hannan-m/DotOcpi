@@ -24,7 +24,7 @@ DotOcpi provides ASP.NET Core health checks to monitor your OCPI infrastructure.
 
 ### OcpiRegistryHealthCheck
 
-Monitors the overall state of the CPO registry:
+Monitors the overall state of the CPO registry and reports per-CPO status details:
 
 ```csharp
 builder.Services.AddHealthChecks()
@@ -33,9 +33,23 @@ builder.Services.AddHealthChecks()
 
 | Status | Condition |
 |:-------|:----------|
-| Healthy | At least one CPO is `Connected` |
+| Healthy | All active CPOs are `Connected` |
 | Degraded | Some CPOs are `Offline` |
 | Unhealthy | All CPOs are `Offline` or no CPOs registered |
+
+The response includes per-CPO data with status, version, and last health check time:
+
+```json
+{
+  "status": "Degraded",
+  "description": "2/3 CPO connections are active.",
+  "data": {
+    "DE:ALL": { "status": "Connected", "version": "2.2.1", "lastHealthCheck": "2026-03-24T10:00:00Z" },
+    "NL:CPO": { "status": "Offline", "version": "2.1.1", "lastHealthCheck": "2026-03-24T09:55:00Z" },
+    "FR:EDF": { "status": "Connected", "version": "2.2.1", "lastHealthCheck": "2026-03-24T10:00:00Z" }
+  }
+}
+```
 
 ### OcpiTokenStoreHealthCheck
 
@@ -48,7 +62,7 @@ builder.Services.AddHealthChecks()
 
 ### OcpiCpoHealthCheck
 
-Checks a specific CPO connection:
+Checks a specific CPO connection with detailed status data (connection key, version, party identity, last health check time, versions URL):
 
 ```csharp
 builder.Services.AddHealthChecks()
@@ -96,6 +110,7 @@ The `CpoHealthMonitor` background service:
 2. Sends a `GET /versions` probe to the CPO's versions endpoint
 3. After `maxConsecutiveFailures` (default: 3) consecutive failures, marks the connection as `Offline`
 4. If a previously offline CPO responds, marks it as `Connected`
+5. Logs a cycle summary: total checked, healthy, failed, restored, marked offline
 
 ```mermaid
 flowchart TD

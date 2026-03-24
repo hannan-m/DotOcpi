@@ -186,3 +186,4 @@ The `CpoHealthMonitor` background service:
 2. Sends a `GET` probe to the CPO's versions endpoint
 3. After consecutive failures (default: 3), marks the connection as `Offline`
 4. Marks recovered connections as `Connected`
+5. Logs a cycle summary with per-CPO results (total checked, healthy, failed, restored, marked offline)

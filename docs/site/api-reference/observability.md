@@ -179,13 +179,20 @@ builder.Services.AddHealthChecks()
 
 ### Health Check Responses
 
+Health checks include per-CPO status details in the `data` dictionary:
+
 ```json
 {
-  "status": "Healthy",
+  "status": "Degraded",
   "results": {
     "ocpi-registry": {
-      "status": "Healthy",
-      "description": "3 CPOs connected, 0 offline"
+      "status": "Degraded",
+      "description": "2/3 CPO connections are active.",
+      "data": {
+        "DE:ALL": { "status": "Connected", "version": "2.2.1", "lastHealthCheck": "2026-03-24T10:00:00Z" },
+        "NL:CPO": { "status": "Offline", "version": "2.1.1", "lastHealthCheck": "2026-03-24T09:55:00Z" },
+        "FR:EDF": { "status": "Connected", "version": "2.2.1", "lastHealthCheck": "2026-03-24T10:00:00Z" }
+      }
     },
     "ocpi-tokens": {
       "status": "Healthy"

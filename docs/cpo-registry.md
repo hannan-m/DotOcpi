@@ -448,7 +448,7 @@ graph TD
     Threshold -->|No| Wait["Wait for next cycle"]
 ```
 
-There is no staleness filter — all connections that are not Unregistered or Pending are checked on every cycle. The failure threshold (default 3 consecutive failures) is configurable.
+There is no staleness filter — all connections that are not Unregistered or Pending are checked on every cycle. The failure threshold (default 3 consecutive failures) is configurable. Each cycle logs a summary with total checked, healthy, failed, restored, and marked-offline counts.
 
 > **Note:** The health monitor does not use distributed locking or leader election. Each instance runs its health checks independently. In multi-instance deployments, this means multiple instances may probe the same CPO concurrently, which is safe but redundant.
 
@@ -465,3 +465,5 @@ Reports:
 - **Healthy**: All CPOs in CONNECTED status
 - **Degraded**: Some CPOs OFFLINE or SUSPENDED
 - **Unhealthy**: All CPOs OFFLINE or registry unavailable
+
+The health check response includes per-CPO data (status, version, last health check timestamp) in the `data` dictionary, enabling operators to identify exactly which CPOs are healthy and which are degraded.
