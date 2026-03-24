@@ -32,6 +32,10 @@
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <!-- Sample -->
+    <PackageVersion Include="DotOcpi" Version="0.0.0-alpha.0.28" />
+    <PackageVersion Include="DotOcpi.AspNetCore" Version="0.0.0-alpha.0.28" />
+    <PackageVersion Include="DotOcpi.Client" Version="0.0.0-alpha.0.28" />
+    <PackageVersion Include="DotOcpi.Simulator" Version="0.0.0-alpha.0.28" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
 </Project>

@@ -10,13 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DotOcpi\DotOcpi.csproj" />
-    <ProjectReference Include="..\..\src\DotOcpi.AspNetCore\DotOcpi.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\src\DotOcpi.Client\DotOcpi.Client.csproj" />
-    <ProjectReference Include="..\..\src\DotOcpi.Simulator\DotOcpi.Simulator.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <PackageReference Include="DotOcpi" />
+    <PackageReference Include="DotOcpi.AspNetCore" />
+    <PackageReference Include="DotOcpi.Client" />
+    <PackageReference Include="DotOcpi.Simulator" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
   </ItemGroup>
 </Project>
