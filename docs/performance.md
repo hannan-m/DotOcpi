@@ -54,27 +54,35 @@ graph TD
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    GenerationMode = JsonSourceGenerationMode.Default)]  // Both metadata + fast-path
-[JsonSerializable(typeof(OcpiResponse<Location>))]
-[JsonSerializable(typeof(OcpiResponse<List<Location>>))]
-[JsonSerializable(typeof(OcpiResponse<Evse>))]
-[JsonSerializable(typeof(OcpiResponse<Connector>))]
-[JsonSerializable(typeof(OcpiResponse<Session>))]
-[JsonSerializable(typeof(OcpiResponse<List<Session>>))]
-[JsonSerializable(typeof(OcpiResponse<Cdr>))]
-[JsonSerializable(typeof(OcpiResponse<List<Cdr>>))]
-[JsonSerializable(typeof(OcpiResponse<Token>))]
-[JsonSerializable(typeof(OcpiResponse<List<Token>>))]
-[JsonSerializable(typeof(OcpiResponse<Tariff>))]
-[JsonSerializable(typeof(OcpiResponse<List<Tariff>>))]
-[JsonSerializable(typeof(OcpiResponse<AuthorizationInfo>))]
-[JsonSerializable(typeof(OcpiResponse<CommandResponse>))]
+    WriteIndented = false,
+    UseStringEnumConverter = true)]
+// Model types (deserialized individually from PUT/PATCH bodies)
+[JsonSerializable(typeof(Location))]
+[JsonSerializable(typeof(Evse))]
+[JsonSerializable(typeof(Connector))]
+[JsonSerializable(typeof(Session))]
+[JsonSerializable(typeof(Cdr))]
+[JsonSerializable(typeof(Tariff))]
+[JsonSerializable(typeof(Token))]
+[JsonSerializable(typeof(AuthorizationInfo))]
 [JsonSerializable(typeof(Credentials))]
-[JsonSerializable(typeof(OcpiResponse<Credentials>))]
 [JsonSerializable(typeof(VersionDetail))]
-[JsonSerializable(typeof(OcpiResponse<VersionDetail>))]
-[JsonSerializable(typeof(List<Version>))]
-[JsonSerializable(typeof(OcpiResponse<List<Version>>))]
+// OcpiResponse wrappers (single-object responses)
+[JsonSerializable(typeof(OcpiResponse<Location>))]
+[JsonSerializable(typeof(OcpiResponse<Session>))]
+[JsonSerializable(typeof(OcpiResponse<Cdr>))]
+[JsonSerializable(typeof(OcpiResponse<Tariff>))]
+[JsonSerializable(typeof(OcpiResponse<Token>))]
+[JsonSerializable(typeof(OcpiResponse<AuthorizationInfo>))]
+[JsonSerializable(typeof(OcpiResponse<Credentials>))]
+[JsonSerializable(typeof(OcpiResponse<CommandResponse>))]
+[JsonSerializable(typeof(OcpiResponse<ChargingProfileResponse>))]
+// Collection types (paginated GET responses)
+[JsonSerializable(typeof(IReadOnlyList<Location>))]
+[JsonSerializable(typeof(IReadOnlyList<Session>))]
+[JsonSerializable(typeof(IReadOnlyList<Cdr>))]
+[JsonSerializable(typeof(IReadOnlyList<Tariff>))]
+[JsonSerializable(typeof(IReadOnlyList<Token>))]
 // Commands (request bodies)
 [JsonSerializable(typeof(StartSession))]
 [JsonSerializable(typeof(StopSession))]
@@ -82,25 +90,14 @@ graph TD
 [JsonSerializable(typeof(UnlockConnector))]
 // PATCH operations use JsonElement
 [JsonSerializable(typeof(JsonElement))]
-public partial class OcpiJsonContext_V2_2_1 : JsonSerializerContext { }
+public sealed partial class OcpiJsonContext_V2_2_1 : JsonSerializerContext;
 ```
+
+> **Note:** Version-agnostic registration types (`VersionInfo`, `VersionDetailInfo`) are handled by a separate `OcpiRegistrationJsonContext`, which is used during version discovery before a per-version context is selected.
 
 ### Enum Serialization
 
-Use the generic, AOT-safe `JsonStringEnumConverter<TEnum>`:
-
-```csharp
-[JsonConverter(typeof(JsonStringEnumConverter<ConnectorType>))]
-public enum ConnectorType
-{
-    CHADEMO,
-    IEC_62196_T1,
-    IEC_62196_T1_COMBO,
-    IEC_62196_T2,
-    IEC_62196_T2_COMBO,
-    // ...
-}
-```
+Standard OCPI enums use `UseStringEnumConverter = true` on the context-level `[JsonSourceGenerationOptions]` attribute (shown above). No per-enum `[JsonConverter]` attributes are needed — the context-level setting applies to all enums in the context.
 
 For enums with custom OCPI string values (e.g., names that differ from C# identifiers), use custom `JsonConverter<T>` implementations — not `JsonStringEnumConverter`:
 
@@ -194,27 +191,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 ### Stream-Based Deserialization (Never Read to String)
 
-```csharp
-// Server-side: deserialize from request body stream (no ConfigureAwait — ASP.NET Core context)
-public static async ValueTask<T?> ReadOcpiBodyAsync<T>(
-    HttpRequest request,
-    JsonTypeInfo<T> typeInfo,
-    CancellationToken ct)
-{
-    return await JsonSerializer.DeserializeAsync(request.Body, typeInfo, ct);
-}
+Deserialization is handled through two paths — neither uses standalone helper methods:
 
-// Client-side: deserialize from response stream
-public static async ValueTask<OcpiResponse<T>?> ReadOcpiResponseAsync<T>(
-    HttpResponseMessage response,
-    JsonTypeInfo<OcpiResponse<T>> typeInfo,
-    CancellationToken ct)
-{
-    var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-    return await JsonSerializer.DeserializeAsync(
-        stream, typeInfo, ct).ConfigureAwait(false);
-}
-```
+- **Server-side**: `IModuleHandler.DeserializeAsync` reads the request body stream via `JsonSerializer.DeserializeAsync` using the version-specific `JsonSerializerOptions`. Called from `EndpointHelper.DeserializeOrRejectAsync`.
+- **Client-side**: `OcpiResponseParser` deserializes response streams into `OcpiResponse<T>` using the version-appropriate options. Called from module client methods.
 
 ---
 
@@ -226,9 +206,31 @@ Use `readonly record struct` for types that are small, immutable, and frequently
 
 ```csharp
 // Stack-allocated, no GC pressure, value semantics
-public readonly record struct PartyIdentity(string CountryCode, string PartyId)
+public readonly record struct PartyIdentity
 {
-    public override string ToString() => $"{CountryCode}_{PartyId}";
+    public string CountryCode { get; }
+    public string PartyId { get; }
+
+    public PartyIdentity(string CountryCode, string PartyId)
+    {
+        ArgumentNullException.ThrowIfNull(CountryCode);
+        ArgumentNullException.ThrowIfNull(PartyId);
+        this.CountryCode = CountryCode;
+        this.PartyId = PartyId;
+    }
+
+    public string ToCompositeId() =>
+        string.Create(
+            CountryCode.Length + 1 + PartyId.Length,
+            (CountryCode, PartyId),
+            static (span, state) =>
+            {
+                state.CountryCode.AsSpan().ToUpperInvariant(span);
+                span[state.CountryCode.Length] = '_';
+                state.PartyId.AsSpan().ToUpperInvariant(span[(state.CountryCode.Length + 1)..]);
+            });
+
+    public override string ToString() => ToCompositeId();
 }
 
 public readonly record struct GeoLocation(string Latitude, string Longitude);
@@ -246,7 +248,7 @@ public readonly record struct OcpiStatusCode(int Value)
 
 ### Span-Based Header Parsing
 
-Token extraction from the Authorization header using Span-based parsing:
+Token extraction from the Authorization header using Span-based parsing. The prefix check and trimming are zero-allocation via `ReadOnlySpan<char>`, but the extracted token is materialized as a `string` (via `.ToString()`) because downstream hashing and store lookup require it:
 
 ```csharp
 public static class AuthorizationHeaderParser
@@ -271,41 +273,38 @@ public static class AuthorizationHeaderParser
         if (tokenSpan.IsEmpty)
             return false;
 
-        token = tokenSpan.ToString();
+        token = tokenSpan.ToString(); // One allocation: token string for hashing
         return true;
     }
 }
 ```
 
-### ArrayPool for Temporary Buffers
+### Token Hashing
+
+Token hashing uses `stackalloc` for small tokens and falls back to a `new byte[]` allocation for larger ones. `ArrayPool` is not used — the allocation is bounded by token size and infrequent enough (once per request) that pool overhead is not justified:
 
 ```csharp
-// Token hashing with rented buffers
-internal static class TokenHasher
+public static class TokenHasher
 {
-    public static string ComputeHash(ReadOnlySpan<char> rawToken)
+    public static string Hash(string token)
     {
-        int maxByteCount = Encoding.UTF8.GetMaxByteCount(rawToken.Length);
-        byte[]? rented = null;
-        Span<byte> utf8Bytes = maxByteCount <= 256
-            ? stackalloc byte[maxByteCount]
-            : (rented = ArrayPool<byte>.Shared.Rent(maxByteCount));
+        var byteCount = Encoding.UTF8.GetByteCount(token);
+        Span<byte> tokenBytes = byteCount <= 256 ? stackalloc byte[byteCount] : new byte[byteCount];
+        Encoding.UTF8.GetBytes(token, tokenBytes);
 
-        try
-        {
-            int bytesWritten = Encoding.UTF8.GetBytes(rawToken, utf8Bytes);
-            Span<byte> hash = stackalloc byte[32]; // SHA-256 output
-            SHA256.HashData(utf8Bytes[..bytesWritten], hash);
-            return Convert.ToHexString(hash);
-        }
-        finally
-        {
-            if (rented is not null)
-                ArrayPool<byte>.Shared.Return(rented);
-        }
+        Span<byte> hash = stackalloc byte[32]; // SHA-256 = 256 bits = 32 bytes
+        SHA256.HashData(tokenBytes, hash);
+
+#if NET9_0_OR_GREATER
+        return Convert.ToHexStringLower(hash);
+#else
+        return Convert.ToHexString(hash).ToLowerInvariant();
+#endif
     }
 }
 ```
+
+The output is lowercase hex (64 characters for SHA-256). On net9.0+, `Convert.ToHexStringLower` avoids the `ToLowerInvariant()` allocation.
 
 ### Avoid Closure Allocations
 
@@ -404,7 +403,7 @@ public async IAsyncEnumerable<Location> GetAllLocationsAsyncEnumerable(
 Background services (pull sync, health monitoring) must link the host shutdown token with per-operation timeouts. Without linking, a running sync continues after shutdown is requested.
 
 ```csharp
-public class PullSyncService(
+public class OcpiPullSyncBackgroundService(
     IOcpiClient client,
     IHostApplicationLifetime lifetime) : BackgroundService
 {
@@ -441,77 +440,32 @@ public class PullSyncService(
 ### Connection Pooling Configuration
 
 ```csharp
-services.AddHttpClient("OcpiClient")
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+services.AddHttpClient("OcpiClient", static client =>
     {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(5),    // Force DNS refresh
-        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2), // Clean up idle connections
-        MaxConnectionsPerServer = 20,                           // Per CPO host
-        EnableMultipleHttp2Connections = true                   // Scale beyond stream limit
-    });
+        client.DefaultRequestHeaders.Add("Accept", "application/json");
+    })
+    .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),  // Force DNS refresh
+        MaxConnectionsPerServer = 20,                         // Per CPO host
+        ConnectCallback = ValidateAndConnectAsync,            // SSRF prevention (see Security)
+    })
+    .SetHandlerLifetime(Timeout.InfiniteTimeSpan);            // Disable factory rotation
 ```
+
+Key configuration choices:
+
+- **`PooledConnectionLifetime`** handles DNS rotation at the socket level. Factory-level handler rotation (`SetHandlerLifetime`) is disabled (`Timeout.InfiniteTimeSpan`) so the singleton `HttpClient` retains its resilience handler state.
+- **`ConnectCallback`** (`ValidateAndConnectAsync`) resolves DNS, validates resolved IPs against private/loopback/link-local ranges (SSRF prevention), then connects. See [strategies.md — Security Strategy](strategies.md#18-security-strategy).
+- **Standard resilience handler** (`AddStandardResilienceHandler()` from `Microsoft.Extensions.Http.Resilience`) provides retry, circuit breaker, and timeout policies.
 
 ### Connection Context Caching
 
 Module clients resolve CPO connection metadata and auth tokens through `CpoConnectionContextProvider`, which caches the result per CPO in a `ConcurrentDictionary`. This eliminates 2 registry lookups + 1 token fetch on every outbound call. The cache is invalidated automatically after registration, credential rotation, and unregistration operations. Consumers who modify the registry or rotate tokens outside the library call `IOcpiClient.InvalidateConnection(cpoId)` or `InvalidateAllConnections()`.
 
-### HTTP/2 for Multiplexing
-
-```csharp
-services.AddHttpClient("OcpiClient", client =>
-{
-    client.DefaultRequestVersion = HttpVersion.Version20;
-    client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
-});
-```
-
 ### Stream-Based Request/Response
 
-```csharp
-// Send: serialize directly to request content stream
-public static HttpContent CreateJsonContent<T>(T value, JsonTypeInfo<T> typeInfo)
-{
-    return JsonContent.Create(value, typeInfo);
-    // JsonContent streams serialization — no intermediate string/byte[]
-}
-
-// Receive: deserialize directly from response stream
-public static async ValueTask<T?> ReadResponseAsync<T>(
-    HttpResponseMessage response,
-    JsonTypeInfo<T> typeInfo,
-    CancellationToken ct)
-{
-    // ReadAsStream — synchronous, no buffering
-    // DeserializeAsync — reads from stream directly
-    await using var stream = response.Content.ReadAsStream();
-    return await JsonSerializer.DeserializeAsync(stream, typeInfo, ct)
-        .ConfigureAwait(false);
-}
-```
-
-### Streaming Large Responses
-
-When pulling paginated data from CPOs, use `HttpCompletionOption.ResponseHeadersRead` to begin deserialization as soon as headers arrive. The default `ResponseContentRead` buffers the entire response body first, defeating stream-based deserialization:
-
-```csharp
-public async ValueTask<OcpiResponse<List<Location>>?> PullLocationsPageAsync(
-    string url, CancellationToken ct)
-{
-    using var request = new HttpRequestMessage(HttpMethod.Get, url);
-    // Start reading as soon as headers arrive — don't buffer body
-    using var response = await _httpClient
-        .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-        .ConfigureAwait(false);
-
-    response.EnsureSuccessStatusCode();
-
-    await using var stream = await response.Content.ReadAsStreamAsync(ct)
-        .ConfigureAwait(false);
-    return await JsonSerializer.DeserializeAsync(
-        stream, OcpiJsonContext_V2_2_1.Default.OcpiResponseListLocation, ct)
-        .ConfigureAwait(false);
-}
-```
+Response deserialization goes through `OcpiResponseParser`, which reads from the response content stream using `JsonSerializer.DeserializeAsync` with version-specific `JsonSerializerOptions`. There are no standalone `CreateJsonContent<T>` or `ReadResponseAsync<T>` helper methods — serialization and deserialization are handled within the module client and response parser classes.
 
 ---
 
@@ -519,49 +473,50 @@ public async ValueTask<OcpiResponse<List<Location>>?> PullLocationsPageAsync(
 
 Token validation runs on every inbound request. It must be as fast as possible.
 
+The flow is split across two components: `OcpiAuthFilter` parses the Authorization header and extracts the raw token, then delegates to `OcpiTokenValidator` for hashing and store lookup. The validator does not parse headers itself.
+
 ```mermaid
 graph LR
-    Extract["Extract token<br/>(Span-based, zero-alloc)"]
+    Extract["OcpiAuthFilter<br/>Extract token (Span-based)"]
     Hash["SHA-256 hash<br/>(stackalloc + SHA256.HashData)"]
-    Lookup["Registry lookup<br/>(local cache first)"]
+    Lookup["ITokenStore.FindAsync<br/>(by hash)"]
     Compare["Constant-time compare<br/>(FixedTimeEquals)"]
+    Registry["ICpoRegistry.FindByTokenHash<br/>(sync, in-memory)"]
 
-    Extract --> Hash --> Lookup --> Compare
+    Extract --> Hash --> Lookup --> Compare --> Registry
 ```
 
 ### Optimized Implementation
 
 ```csharp
-internal sealed class TokenValidator
+public sealed class OcpiTokenValidator
 {
-    private readonly ICpoRegistry _registry;
+    private readonly ITokenStore _tokenStore;
 
     public async ValueTask<TokenValidationResult> ValidateAsync(
-        StringValues authHeader, CancellationToken ct)
+        string rawToken, CancellationToken cancellationToken = default)
     {
-        // 1. Span-based extraction (zero allocation)
-        if (!AuthorizationHeaderParser.TryParse(authHeader[0].AsSpan(), out var rawToken))
-            return TokenValidationResult.Missing;
+        if (string.IsNullOrEmpty(rawToken))
+            return TokenValidationResult.Failed("Token is empty.");
 
-        // 2. Hash with stackalloc (zero allocation for small tokens)
-        var tokenHash = TokenHasher.ComputeHash(rawToken);
+        // 1. Hash with stackalloc (zero allocation for small tokens)
+        var incomingHash = TokenHasher.Hash(rawToken);
 
-        // 3. Local cache lookup first (ValueTask, sync path)
-        var connection = await _registry
-            .GetByTokenHashAsync(tokenHash, ct)
+        // 2. Token store lookup (async — may hit database for persistent stores)
+        var entry = await _tokenStore
+            .FindAsync(incomingHash, cancellationToken)
             .ConfigureAwait(false);
 
-        if (connection is null)
-            return TokenValidationResult.Invalid;
+        if (entry is null)
+            return TokenValidationResult.Failed("Token not recognized.");
 
-        // 4. Constant-time comparison (timing-attack resistant)
-        var storedHash = Convert.FromHexString(connection.TokenBHash);
-        var incomingHash = Convert.FromHexString(tokenHash);
+        // 3. Constant-time comparison (timing-attack resistant)
+        if (!CryptographicOperations.FixedTimeEquals(
+            MemoryMarshal.AsBytes(incomingHash.AsSpan()),
+            MemoryMarshal.AsBytes(entry.TokenHash.AsSpan())))
+            return TokenValidationResult.Failed("Token validation failed.");
 
-        if (!CryptographicOperations.FixedTimeEquals(storedHash, incomingHash))
-            return TokenValidationResult.Invalid;
-
-        return new TokenValidationResult(connection);
+        return TokenValidationResult.Valid(entry); // Holds TokenEntry, not CpoConnection
     }
 }
 ```
@@ -572,112 +527,71 @@ internal sealed class TokenValidator
 
 ### FrozenDictionary for Static Lookups
 
-Module maps, version strings, and status code descriptions are immutable after startup. With net8.0 as the minimum target, `FrozenDictionary` and `FrozenSet` are always available:
+Version strings and validator type maps are immutable after startup. With net8.0 as the minimum target, `FrozenDictionary` is always available. There is no centralized `OcpiConstants` class — frozen collections are used where needed:
+
+**`VersionNegotiator.VersionMap`** — maps version strings to `OcpiVersion` values for negotiation:
 
 ```csharp
-using System.Collections.Frozen;
-
-internal static class OcpiConstants
-{
-    public static readonly FrozenDictionary<string, ModuleId> ModuleIdMap =
-        new Dictionary<string, ModuleId>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["cdrs"] = ModuleId.Cdrs,
-            ["chargingprofiles"] = ModuleId.ChargingProfiles,
-            ["commands"] = ModuleId.Commands,
-            ["credentials"] = ModuleId.Credentials,
-            ["locations"] = ModuleId.Locations,
-            ["sessions"] = ModuleId.Sessions,
-            ["tariffs"] = ModuleId.Tariffs,
-            ["tokens"] = ModuleId.Tokens,
-        }.ToFrozenDictionary();
-
-    public static readonly FrozenDictionary<OcpiVersion, string> VersionUrls =
-        new Dictionary<OcpiVersion, string>
-        {
-            [OcpiVersion.V2_0] = "2.0",
-            [OcpiVersion.V2_1_1] = "2.1.1",
-            [OcpiVersion.V2_2] = "2.2",
-            [OcpiVersion.V2_2_1] = "2.2.1",
-        }.ToFrozenDictionary();
-
-    public static readonly FrozenSet<string> SupportedVersionStrings =
-        new[] { "2.0", "2.1.1", "2.2", "2.2.1" }
-            .ToFrozenSet(StringComparer.Ordinal);
-}
+// In VersionNegotiator
+private static readonly FrozenDictionary<string, OcpiVersion> VersionMap =
+    new Dictionary<string, OcpiVersion>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["2.2.1"] = OcpiVersion.V2_2_1,
+        ["2.2"] = OcpiVersion.V2_2,
+        ["2.1.1"] = OcpiVersion.V2_1_1,
+        ["2.1"] = OcpiVersion.V2_1_1,  // Deprecated — steers to 2.1.1
+        ["2.0"] = OcpiVersion.V2_0,
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 ```
 
-FrozenDictionary provides **2.5–3.5x faster reads** than Dictionary for these static lookup tables.
+**`EndpointHelper.ValidatorServiceTypes`** — maps model types to their `IOcpiValidator<T>` service types for protocol-level validation (AOT-safe, no `MakeGenericType`):
+
+```csharp
+// In EndpointHelper
+private static readonly FrozenDictionary<Type, Type> ValidatorServiceTypes =
+    new Dictionary<Type, Type>
+    {
+        [typeof(Models.V2_0.Location)] = typeof(IOcpiValidator<Models.V2_0.Location>),
+        [typeof(Models.V2_0.Session)] = typeof(IOcpiValidator<Models.V2_0.Session>),
+        // ... all model types across all versions
+        [typeof(Models.V2_2_1.Credentials)] = typeof(IOcpiValidator<Models.V2_2_1.Credentials>),
+    }.ToFrozenDictionary();
+```
+
+`FrozenDictionary` provides **2.5-3.5x faster reads** than `Dictionary` for these static lookup tables. `FrozenSet` is not currently used.
 
 ---
 
 ## 7. ASP.NET Core Endpoint Performance
 
-### Direct TypeInfo Serialization
+### Handler Style
+
+Handlers accept `HttpContext` and resolve services from `RequestServices`. There is no `OcpiTypeInfoResolver` — deserialization goes through `EndpointHelper.DeserializeOrRejectAsync`, which delegates to `IModuleHandler.DeserializeAsync` for version-specific deserialization:
 
 ```csharp
-internal static class LocationsEndpoints
+public static class LocationsEndpoints
 {
-    public static async Task<IResult> HandlePut(
-        HttpContext httpContext,
-        string countryCode,
-        string partyId,
-        string locationId,
-        ILocationsReceiver receiver,
-        ICpoRegistry registry,
-        CancellationToken ct)
+    internal static async Task HandleLocationPut(string locationId, HttpContext httpContext)
     {
-        var context = httpContext.GetOcpiContext(); // Extension method, cached in HttpContext.Items
-        var version = context.Connection.NegotiatedVersion;
+        var ctx = httpContext.GetOcpiContext()!;
 
-        // Deserialize using version-specific TypeInfo (source-gen)
-        var typeInfo = OcpiTypeInfoResolver.GetLocationTypeInfo(version);
-        var location = await JsonSerializer.DeserializeAsync(
-            httpContext.Request.Body, typeInfo, ct);
+        var data = await EndpointHelper
+            .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Location(ctx.NegotiatedVersion))
+            .ConfigureAwait(false);
+        if (data is null)
+            return;
 
-        // Process...
-        var result = await receiver.OnLocationPutAsync(context, locationId, location, ct);
+        var receiver = httpContext.RequestServices.GetRequiredService<ILocationsReceiver>();
+        var result = await receiver
+            .OnLocationPutAsync(ctx, locationId, data, httpContext.RequestAborted)
+            .ConfigureAwait(false);
 
-        // Serialize response using source-gen
-        var responseTypeInfo = OcpiTypeInfoResolver.GetResponseTypeInfo(version);
-        return Results.Json(result.ToResponse(), responseTypeInfo);
+        // ...
     }
 }
 ```
 
-### IParsable for Route Parameters
-
-```csharp
-public readonly record struct CountryCode : IParsable<CountryCode>
-{
-    public string Value { get; }
-
-    private CountryCode(string value) => Value = value;
-
-    public static CountryCode Parse(string s, IFormatProvider? provider) =>
-        TryParse(s, provider, out var result)
-            ? result
-            : throw new FormatException($"Invalid country code: {s}");
-
-    public static bool TryParse(string? s, IFormatProvider? provider, out CountryCode result)
-    {
-        if (s is { Length: 2 })
-        {
-            result = new CountryCode(s.ToUpperInvariant());
-            return true;
-        }
-        result = default;
-        return false;
-    }
-}
-
-// Route binding with automatic validation
-endpoints.MapPut("/locations/{country}/{partyId}/{locationId}",
-    static async (CountryCode country, string partyId, string locationId, ...) =>
-    {
-        // 'country' is already validated and parsed
-    });
-```
+Country codes are plain `string` route parameters, not `IParsable<T>` types — validation is the consumer's responsibility in receiver implementations.
 
 ---
 
@@ -695,59 +609,51 @@ benchmarks/
     └── RegistryBenchmarks.cs
 ```
 
-### Multi-Framework Benchmarks
+### Benchmark Classes
+
+All benchmark classes use `[MemoryDiagnoser]` only — no `[SimpleJob]`, `[ThreadingDiagnoser]`, or reflection comparison benchmarks:
 
 ```csharp
-[SimpleJob(RuntimeMoniker.Net80, baseline: true)]
-[SimpleJob(RuntimeMoniker.Net100)]
 [MemoryDiagnoser]
-[ThreadingDiagnoser]
 public class SerializationBenchmarks
 {
-    private Location_V2_2_1 _location = null!;
-    private string _json = null!;
-    private byte[] _jsonBytes = null!;
+    private byte[] _locationJson = null!;
+    private Location _location = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        _location = TestData.CreateLocation();
-        _json = JsonSerializer.Serialize(_location, OcpiJsonContext_V2_2_1.Default.Location);
-        _jsonBytes = Encoding.UTF8.GetBytes(_json);
+        _location = new Location { /* ... */ };
+        _locationJson = JsonSerializer.SerializeToUtf8Bytes(
+            _location, OcpiJsonOptions.GetOptions(OcpiVersion.V2_2_1));
     }
 
-    [Benchmark(Baseline = true)]
-    public string Serialize_SourceGen() =>
-        JsonSerializer.Serialize(_location, OcpiJsonContext_V2_2_1.Default.Location);
+    [Benchmark]
+    public byte[] Serialize() =>
+        JsonSerializer.SerializeToUtf8Bytes(
+            _location, OcpiJsonOptions.GetOptions(OcpiVersion.V2_2_1));
 
     [Benchmark]
-    public Location_V2_2_1? Deserialize_SourceGen() =>
-        JsonSerializer.Deserialize(_jsonBytes, OcpiJsonContext_V2_2_1.Default.Location);
-
-    [Benchmark]
-    public string Serialize_Reflection() =>
-        JsonSerializer.Serialize(_location, _reflectionOptions);
-
-    [Benchmark]
-    public Location_V2_2_1? Deserialize_Reflection() =>
-        JsonSerializer.Deserialize<Location_V2_2_1>(_json, _reflectionOptions);
+    public Location? Deserialize() =>
+        JsonSerializer.Deserialize<Location>(
+            _locationJson, OcpiJsonOptions.GetOptions(OcpiVersion.V2_2_1));
 }
 ```
+
+`TokenBenchmarks` covers token generation, hashing, and store lookup. `RegistryBenchmarks` covers `FindByConnectionKey`, `FindByTokenHash`, and `GetAll` on `InMemoryCpoRegistry`.
 
 ### Key Metrics to Track
 
 | Benchmark | Target | Metric |
 |---|---|---|
-| Token validation | < 1 μs (cache hit) | Mean time, zero allocations |
-| Location serialization | < 200 ns | Mean time vs reflection baseline |
+| Token validation | < 1 us (cache hit) | Mean time, zero allocations |
+| Location serialization | < 200 ns | Mean time |
 | Registry lookup (by token hash) | < 100 ns (local cache) | Mean time, zero allocations |
 | OCPI response envelope creation | Zero allocations | Allocated bytes |
-| Pagination (100 items) | < 50 μs | Mean time, minimal allocations |
 
 ### Statistical Rigor
 
 - Use `[WarmupCount(3)]` and `[IterationCount(15)]` minimum for stable results
-- Add `[ThreadingDiagnoser]` alongside `[MemoryDiagnoser]` to detect lock contention in concurrent token validation
 - Reject benchmark results with relative standard deviation > 5% — re-run with fewer background processes
 - Use `--statisticalTest 5%` in CI to detect regressions: `dotnet run -c Release -- --statisticalTest 5% --artifacts ./benchmark-results`
 - Preserve `--artifacts` output for cross-run regression comparison
@@ -787,93 +693,99 @@ OCPI endpoints have predictable payload sizes. Apply tighter limits per category
 
 | Endpoint Category | Max Body Size | Rationale |
 |---|---|---|
-| PUT Location/Session/Token/Tariff | 256 KB | Single object; largest is Location with many EVSEs |
+| PUT Location/Session/Token/Tariff | 256 KB | Single object; largest is Location with many EVSEs. PATCH inherits this module-level limit. |
 | POST CDR | 1 MB | CDR with detailed charging periods and signed data |
-| PATCH (any) | 64 KB | Partial update — should be small |
 | POST /credentials | 16 KB | Credentials object is small |
 | POST /authorize | 8 KB | Token UID + LocationReferences |
 | POST command callback | 16 KB | CommandResult is small |
 
+The filter is applied at the module group level (not per-endpoint for PATCH), so all routes in a module share the same limit:
+
 ```csharp
-internal sealed class OcpiBodySizeLimitFilter(long maxBytes) : IEndpointFilter
+public sealed class OcpiBodySizeLimitFilter : IEndpointFilter
 {
+    private readonly long _maxBodySize;
+
+    public OcpiBodySizeLimitFilter(long maxBodySizeBytes = 10 * 1024 * 1024)
+    {
+        _maxBodySize = maxBodySizeBytes;
+    }
+
     public async ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context,
         EndpointFilterDelegate next)
     {
-        var feature = context.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
-        if (feature is { IsReadOnly: false })
-            feature.MaxRequestBodySize = maxBytes;
+        var contentLength = context.HttpContext.Request.ContentLength;
+        if (contentLength > _maxBodySize)
+        {
+            return OcpiResponseWriter.ErrorResult(
+                StatusCodes.Status413PayloadTooLarge,
+                2000,
+                $"Request body exceeds maximum size of {_maxBodySize} bytes.");
+        }
 
-        return await next(context);
+        // Enforce at the Kestrel level for chunked requests without Content-Length
+        var bodySizeFeature = context.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (bodySizeFeature is { IsReadOnly: false })
+            bodySizeFeature.MaxRequestBodySize = _maxBodySize;
+
+        return await next(context).ConfigureAwait(false);
     }
 }
 
-// Registration
-group.MapPut("/locations/{countryCode}/{partyId}/{locationId}", HandlePut)
-    .AddEndpointFilter(new OcpiBodySizeLimitFilter(256 * 1024));
+// Registration — applied per module group
+module.AddEndpointFilter(new OcpiBodySizeLimitFilter(256 * 1024));
 ```
 
 ---
 
 ## 10. Middleware Pipeline Ordering
 
-Middleware order determines when expensive operations run — and whether they run at all on rejected requests.
+Middleware order determines when expensive operations run — and whether they run at all on rejected requests. The pipeline splits into two layers: **middleware** (runs on all requests) and **endpoint filters** (runs only on matched OCPI endpoints).
 
 ```mermaid
 graph TD
     Request["Incoming Request"]
-    Request --> Exception["Exception Handler<br/><i>Wraps everything — catches unhandled errors</i>"]
-    Exception --> Compression["Response Compression<br/><i>Must wrap response body before writing</i>"]
-    Compression --> Routing["Routing<br/><i>Matches request to endpoint</i>"]
-    Routing --> Health["Health Checks<br/><i>/health — bypasses OCPI auth</i>"]
-    Routing --> OcpiAuth["OCPI Endpoint Filters<br/><i>Auth → Validation → Deserialization → Handler</i>"]
+    Request --> RequestId["OcpiRequestIdMiddleware<br/><i>X-Request-ID / X-Correlation-ID</i>"]
+    RequestId --> SecurityHeaders["OcpiSecurityHeadersMiddleware<br/><i>nosniff, no-store, DENY</i>"]
+    SecurityHeaders --> Exception["OcpiExceptionMiddleware<br/><i>Catches unhandled errors → OCPI 3000</i>"]
+    Exception --> Routing["Routing<br/><i>Matches request to endpoint</i>"]
+    Routing --> Auth["OcpiAuthFilter<br/><i>Token validation</i>"]
+    Auth --> RateLimit["OcpiRateLimitFilter (optional)<br/><i>Per-CPO rate limiting</i>"]
+    RateLimit --> Metrics["OcpiMetricsFilter<br/><i>Request count + duration</i>"]
+    Metrics --> Handler["Module Handler"]
 ```
 
-### Consumer Pipeline Example
+### Pipeline Registration
+
+`MapOcpiEndpoints()` registers both the middleware and the endpoint filters:
 
 ```csharp
 var app = builder.Build();
 
-app.UseExceptionHandler();           // Outermost — catches everything
-app.UseOcpiExceptionHandler();       // OCPI-aware error envelope (3xxx responses)
-app.UseResponseCompression();        // Before any body is written
-app.UseRouting();
+// MapOcpiEndpoints registers middleware internally:
+//   app.UseMiddleware<OcpiRequestIdMiddleware>();
+//   app.UseMiddleware<OcpiSecurityHeadersMiddleware>();
+//   app.UseMiddleware<OcpiExceptionMiddleware>();
+//
+// And applies endpoint filters to the OCPI route group:
+//   group.AddEndpointFilter<OcpiAuthFilter>();
+//   group.AddEndpointFilter(new OcpiRateLimitFilter(...));  // if rateLimitOptions provided
+//   group.AddEndpointFilter<OcpiMetricsFilter>();
 
-app.MapHealthChecks("/health");      // No OCPI auth — infra-only
 app.MapOcpiEndpoints();              // OCPI auth applied via endpoint filters (fail fast)
 ```
 
 Key insights:
-- OCPI auth runs as **endpoint filters**, not middleware — it executes after routing selects the endpoint but before the handler. This means unmatched routes never trigger token validation.
-- Health checks are mapped before OCPI endpoints and do not inherit OCPI auth filters.
-- Response compression wraps the response stream before endpoint execution, so it compresses the OCPI JSON output transparently.
+- Middleware runs on **all** requests (including 404s). Request IDs and security headers are applied even to unmatched routes.
+- OCPI auth runs as an **endpoint filter**, not middleware — it executes after routing selects the endpoint but before the handler. This means unmatched routes never trigger token validation.
+- Health check mapping (`MapHealthChecks`) is the consumer's responsibility — it is not called inside `MapOcpiEndpoints`.
 
 ---
 
 ## 11. Response Compression
 
-Paginated GET responses (locations, sessions, CDRs, tariffs) can be large. Compression reduces transfer size significantly for JSON payloads.
-
-```csharp
-builder.Services.AddResponseCompression(options =>
-{
-    options.EnableForHttps = true; // OCPI is HTTPS-only
-    options.Providers.Add<BrotliCompressionProvider>();
-    options.Providers.Add<GzipCompressionProvider>();
-    // application/json is included in ResponseCompressionDefaults.MimeTypes by default
-});
-
-builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
-{
-    options.Level = CompressionLevel.Fastest; // Latency over ratio for API responses
-});
-```
-
-When to compress vs. skip:
-- **Compress**: GET list endpoints returning paginated data (typically 1-100 KB+)
-- **Skip**: Single-object response envelopes (PUT/POST responses, typically <1 KB) — compression overhead exceeds savings below ~860 bytes (a single TCP segment)
-- The `Content-Length` header is unavailable when compression is active; OCPI `X-Total-Count` and `X-Limit` headers are unaffected since they describe item counts, not byte sizes
+> **Not yet implemented.** Response compression is not currently configured by the library. Consumers who need compression for large paginated responses can add ASP.NET Core response compression middleware (`AddResponseCompression`/`UseResponseCompression`) in their own pipeline. The library's middleware pipeline does not include compression.
 
 ---
 
@@ -900,7 +812,7 @@ Objects >= 85 KB are allocated on the LOH, which is only collected during Gen2 (
 Mitigations already in the library:
 - **Stream-based serialization** (Section 1) — never materializes entire response as a single byte[]
 - **IAsyncEnumerable pagination** (Section 3) — yields items without buffering the full collection
-- **ArrayPool** (Section 2) — rents and returns buffers instead of allocating
+- **stackalloc** for small temporary buffers (e.g., token hashing) — avoids heap allocation entirely for typical token sizes
 
 If consumers buffer responses (e.g., for caching), they should use `RecyclableMemoryStream` from `Microsoft.IO.RecyclableMemoryStream` to avoid LOH allocations.
 
@@ -930,7 +842,7 @@ DotOcpi uses `System.Diagnostics.ActivitySource` for distributed tracing and `Sy
 | Listener attached, sampled out | ~20 ns | 0 bytes |
 | Listener attached, sampled in | ~100 ns | ~50 bytes per span |
 
-The library checks `ActivitySource.HasListeners()` before constructing tag values, avoiding string formatting when tracing is disabled.
+The library calls `ActivitySource.StartActivity()`, which returns `null` when no listener is attached. Tag values are only set when the activity is non-null (`if (activity is not null) { activity.SetTag(...); }`), avoiding string formatting when tracing is disabled.
 
 ### Metrics Cost
 
