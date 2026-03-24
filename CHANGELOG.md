@@ -49,7 +49,18 @@ All notable changes to this project will be documented in this file.
 - Client module internals refactored to cache CPO connection context per CPO, eliminating redundant per-call lookups
 - OcpiHttpRequestBuilder is now stateless and no longer depends on ICpoRegistry
 
+### Fixed
+- CDR Location header now uses eMSP party identity instead of CPO's
+- Sync state persisted on partial failure to prevent duplicate page re-delivery
+- Simulator: JSON merge patch now correctly writes scalar replacements (RFC 7386)
+- Simulator: default pagination limit is 50 instead of returning all items
+- Simulator: charging profiles PUT returns standard OCPI success (no fabricated data object)
+- Simulator: EVSE state Update() uses explicit clear flags instead of asymmetric null semantics
+- Simulator: token PATCH correctly rejects unknown tokens instead of unreachable error path
+
 ### Removed
+- OcpiValidationFilter — dead code; validation runs inline via EndpointHelper.DeserializeOrRejectAsync
+- ICacheInvalidationNotifier, IDistributedLockProvider — unintegrated extension points; will be reintroduced with proper wiring when multi-instance support is implemented
 - OcpiPatchHelper — consumers handle JSON PATCH merge in their own domain layer
 - NullableCiStringConverter, OcpiEnumConverterFactory, OcpiNullableDateTimeConverter — consolidated into simpler converters
 - OcpiRequestIdFilter — replaced by OcpiRequestIdMiddleware

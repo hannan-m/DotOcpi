@@ -8,6 +8,7 @@ using Xunit;
 
 namespace DotOcpi.AspNetCore.Tests.HealthChecks;
 
+[Trait("Category", "Security")]
 public class OcpiTokenStoreHealthCheckTests
 {
     private readonly ITokenStore _tokenStore = Substitute.For<ITokenStore>();

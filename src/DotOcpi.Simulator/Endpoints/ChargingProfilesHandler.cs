@@ -20,18 +20,7 @@ internal static class ChargingProfilesHandler
         var body = RequestRecordingMiddleware.GetParsedBody(ctx) ?? default;
         state.ChargingProfiles[sessionId] = body;
 
-        await OcpiResponseWriter
-            .WriteSuccessAsync(
-                ctx,
-                static (writer, _) =>
-                {
-                    writer.WriteStartObject("data"u8);
-                    writer.WriteString("result"u8, "ACCEPTED");
-                    writer.WriteEndObject();
-                },
-                0
-            )
-            .ConfigureAwait(false);
+        await OcpiResponseWriter.WriteSuccessAsync(ctx).ConfigureAwait(false);
     }
 
     public static async Task HandleDelete(

@@ -178,6 +178,16 @@ internal sealed partial class OcpiSyncService : IOcpiSyncService
         catch (Exception ex)
         {
             LogSyncFailed(cpoId, moduleId, ex);
+
+            // Persist sync state even on failure so the next cycle resumes from where
+            // this one started, avoiding re-delivery of pages the handler already processed.
+            if (pageCount > 0)
+            {
+                await _syncStateStore
+                    .SetLastSyncAsync(cpoId, moduleId, syncStart, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             return new SyncResult
             {
                 ItemCount = itemCount,

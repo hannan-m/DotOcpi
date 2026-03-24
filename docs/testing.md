@@ -182,7 +182,6 @@ tests/
 │   │   ├── OcpiRegistrationContextFilterTests.cs
 │   │   ├── OcpiBodySizeLimitFilterTests.cs
 │   │   ├── OcpiRequestIdFilterTests.cs
-│   │   └── OcpiValidationFilterTests.cs
 │   ├── Handlers/
 │   │   ├── OcpiEndpointTestHelper.cs   # Shared test infrastructure
 │   │   ├── Locations/LocationsEndpointsTests.cs

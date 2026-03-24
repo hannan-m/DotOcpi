@@ -33,14 +33,29 @@ internal sealed class EvseState
             return (Status, ActiveSessionId, ActiveReservationId, LastUpdated);
     }
 
-    /// <summary>Atomically updates status and related fields.</summary>
-    public void Update(EvseStatus status, string? activeSessionId = null, string? activeReservationId = null)
+    /// <summary>
+    /// Atomically updates status and optionally sets session/reservation IDs.
+    /// Pass a value to set it, or omit to leave unchanged.
+    /// </summary>
+    public void Update(
+        EvseStatus status,
+        string? activeSessionId = null,
+        string? activeReservationId = null,
+        bool clearSession = false,
+        bool clearReservation = false
+    )
     {
         lock (_lock)
         {
             Status = status;
-            ActiveSessionId = activeSessionId ?? ActiveSessionId;
-            ActiveReservationId = activeReservationId;
+            if (clearSession)
+                ActiveSessionId = null;
+            else if (activeSessionId is not null)
+                ActiveSessionId = activeSessionId;
+            if (clearReservation)
+                ActiveReservationId = null;
+            else if (activeReservationId is not null)
+                ActiveReservationId = activeReservationId;
             LastUpdated = DateTimeOffset.UtcNow;
         }
     }

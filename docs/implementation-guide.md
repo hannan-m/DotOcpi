@@ -822,43 +822,19 @@ public interface ICpoRegistryStore
 
 On app startup, if an `ICpoRegistryStore` is registered, call `LoadAllAsync()` and populate the in-memory registry + secondary indexes.
 
-#### 7.6 — Multi-Instance Support Interfaces
-
-Per [cpo-registry.md #5-7](cpo-registry.md#5-multi-instance-architecture), provide interfaces consumers implement for distributed deployments:
-
-```csharp
-// src/DotOcpi/Registry/ICacheInvalidationNotifier.cs
-public interface ICacheInvalidationNotifier
-{
-    Task PublishAsync(string eventType, string cpoId, CancellationToken ct);
-    IAsyncEnumerable<CacheInvalidationEvent> SubscribeAsync(CancellationToken ct);
-}
-
-// src/DotOcpi/Registry/IDistributedLockProvider.cs
-public interface IDistributedLockProvider
-{
-    Task<IAsyncDisposable?> TryAcquireAsync(string key, TimeSpan ttl, CancellationToken ct);
-}
-```
-
-The `InMemoryCpoRegistry` works without these (single-instance). When registered, the registry uses them for:
-- Cache invalidation on upsert/delete (pub/sub notification to other instances)
-- Distributed locking during registration and token rotation
-- Local cache TTL (60s safety net)
-
-#### 7.7 — Health Monitoring Background Service
+#### 7.6 — Health Monitoring Background Service
 
 Per [cpo-registry.md #9](cpo-registry.md#9-health-monitoring):
 
 ```csharp
 // src/DotOcpi/Registry/CpoHealthMonitor.cs
-internal sealed class CpoHealthMonitor : BackgroundService
+public sealed class CpoHealthMonitor : BackgroundService
 ```
 
 - Periodically probes stale CPOs (`LastActivity > threshold`)
-- Uses `IDistributedLockProvider` for leader election in multi-instance
 - Marks unreachable CPOs as `OFFLINE`
 - Configurable via `DotOcpiOptions.EnableHealthMonitoring` and `HealthMonitoringInterval`
+- Not yet registered as a hosted service — consumers can manually register if needed
 
 ### Tests
 
@@ -1053,15 +1029,9 @@ ASP.NET Core middleware (runs before routing):
 2. Store in `HttpContext.Items` for downstream access
 3. Echo both in response headers
 
-#### 9.4 — OcpiValidationFilter
+#### 9.4 — Validation via EndpointHelper
 
-Per [strategies.md #3](strategies.md#3-minimal-api-integration):
-
-```csharp
-// src/DotOcpi.AspNetCore/Filters/OcpiValidationFilter.cs
-```
-
-Endpoint filter that invokes `IOcpiValidator<T>` on deserialized request bodies before they reach the handler. Returns OCPI 2001 (Invalid parameters) on validation failure. This connects Phase 5's validators to the endpoint pipeline.
+Validation runs inline via `EndpointHelper.DeserializeOrRejectAsync()` at the start of each endpoint handler. It deserializes the request body, runs DataAnnotations validation, then invokes `IOcpiValidator<T>` for protocol-level rules. Returns OCPI 2001 (Invalid parameters) on validation failure.
 
 #### 9.5 — Rate Limiting Filter
 
@@ -1179,7 +1149,6 @@ tests/DotOcpi.AspNetCore.Tests/
 │   ├── OcpiRegistrationContextFilterTests.cs
 │   ├── OcpiRequestIdFilterTests.cs
 │   ├── OcpiBodySizeLimitFilterTests.cs
-│   └── OcpiValidationFilterTests.cs
 ├── Middleware/
 │   ├── OcpiExceptionMiddlewareTests.cs
 │   └── OcpiRateLimitingMiddlewareTests.cs

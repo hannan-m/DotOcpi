@@ -61,8 +61,9 @@ public static class CdrsEndpoints
         {
             var cdrResult = result.Data;
             var basePath = httpContext.Request.PathBase + httpContext.Request.Path;
+            // Location header points to the eMSP's namespace (receiver), not the CPO's
             var prefix = ctx.NegotiatedVersion.UsesPartyIdInUrls()
-                ? $"{ctx.Connection.CpoCountryCode}/{ctx.Connection.CpoPartyId}/"
+                ? $"{ctx.EmspIdentity.CountryCode}/{ctx.EmspIdentity.PartyId}/"
                 : "";
             httpContext.Response.Headers["Location"] = $"{basePath}/{prefix}{cdrResult.CdrId}";
 

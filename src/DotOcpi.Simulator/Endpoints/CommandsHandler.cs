@@ -254,7 +254,7 @@ internal static class CommandsHandler
         if (state.Evses.TryGetValue(evseKey, out var evseState))
         {
             var (newStatus, _) = EvseStateMachine.Transition(evseState.Status, EvseEvent.CancelReservation);
-            evseState.Update(newStatus, activeReservationId: null);
+            evseState.Update(newStatus, clearReservation: true);
         }
     }
 

@@ -166,58 +166,6 @@ public class SqlCpoRegistryStore : ICpoRegistryStore
 }
 ```
 
-## Multi-Instance Support
-
-{: .warning }
-> These interfaces are defined as extension points but are **not yet integrated** into any built-in component. Registering implementations has no effect until a future release wires them in.
-
-For deployments with multiple application instances:
-
-### ICacheInvalidationNotifier
-
-Notify other instances when the registry changes:
-
-```csharp
-public interface ICacheInvalidationNotifier
-{
-    Task NotifyChangedAsync(string connectionKey, CancellationToken ct);
-    Task NotifyRemovedAsync(string connectionKey, CancellationToken ct);
-}
-```
-
-### IDistributedLockProvider
-
-Prevent concurrent registration handshakes:
-
-```csharp
-public interface IDistributedLockProvider
-{
-    Task<IAsyncDisposable> AcquireAsync(
-        string resourceKey, TimeSpan timeout, CancellationToken ct);
-}
-```
-
-### Example: Redis-Backed
-
-```csharp
-public class RedisCacheInvalidationNotifier : ICacheInvalidationNotifier
-{
-    private readonly IConnectionMultiplexer _redis;
-
-    public async Task NotifyChangedAsync(string connectionKey, CancellationToken ct)
-    {
-        await _redis.GetSubscriber()
-            .PublishAsync("ocpi:registry:changed", connectionKey);
-    }
-
-    public async Task NotifyRemovedAsync(string connectionKey, CancellationToken ct)
-    {
-        await _redis.GetSubscriber()
-            .PublishAsync("ocpi:registry:removed", connectionKey);
-    }
-}
-```
-
 ## Health Monitoring
 
 {: .warning }

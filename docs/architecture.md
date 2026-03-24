@@ -1321,8 +1321,6 @@ DotOcpi/
 │   │   ├── Registry/
 │   │   │   ├── ICpoRegistry.cs
 │   │   │   ├── ICpoRegistryStore.cs
-│   │   │   ├── ICacheInvalidationNotifier.cs
-│   │   │   ├── IDistributedLockProvider.cs
 │   │   │   ├── ConnectionStatus.cs
 │   │   │   ├── CpoConnection.cs
 │   │   │   ├── CpoHealthMonitor.cs
@@ -1454,7 +1452,6 @@ DotOcpi/
 │   │   ├── Filters/
 │   │   │   ├── OcpiAuthFilter.cs
 │   │   │   ├── OcpiTokenAAuthFilter.cs
-│   │   │   ├── OcpiValidationFilter.cs
 │   │   │   ├── OcpiContextFilter.cs
 │   │   │   ├── OcpiRegistrationContextFilter.cs
 │   │   │   ├── OcpiBodySizeLimitFilter.cs

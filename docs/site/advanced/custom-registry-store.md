@@ -115,66 +115,6 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
     .AddCpoRegistryStore<EfCpoRegistryStore>();
 ```
 
-## Multi-Instance Deployments
-
-{: .warning }
-> `ICacheInvalidationNotifier` and `IDistributedLockProvider` are defined as extension points but are **not yet integrated** into any built-in component. Registering implementations has no effect until a future release wires them into the registry and registration flows. The interfaces and examples below are provided for consumers who want to build their own coordination layer on top of these contracts.
-
-When running multiple application instances, you need cache invalidation to keep in-memory registries in sync.
-
-### Implement ICacheInvalidationNotifier
-
-```csharp
-public class RedisCacheNotifier : ICacheInvalidationNotifier
-{
-    private readonly IConnectionMultiplexer _redis;
-
-    public RedisCacheNotifier(IConnectionMultiplexer redis) => _redis = redis;
-
-    public async Task NotifyChangedAsync(string connectionKey, CancellationToken ct)
-    {
-        var sub = _redis.GetSubscriber();
-        await sub.PublishAsync("ocpi:registry:changed", connectionKey);
-    }
-
-    public async Task NotifyRemovedAsync(string connectionKey, CancellationToken ct)
-    {
-        var sub = _redis.GetSubscriber();
-        await sub.PublishAsync("ocpi:registry:removed", connectionKey);
-    }
-}
-
-// Register
-builder.Services.AddSingleton<ICacheInvalidationNotifier, RedisCacheNotifier>();
-```
-
-### Implement IDistributedLockProvider
-
-Prevent concurrent registration handshakes across instances:
-
-```csharp
-public class RedisLockProvider : IDistributedLockProvider
-{
-    private readonly IConnectionMultiplexer _redis;
-
-    public RedisLockProvider(IConnectionMultiplexer redis) => _redis = redis;
-
-    public async Task<IAsyncDisposable> AcquireAsync(
-        string resourceKey, TimeSpan timeout, CancellationToken ct)
-    {
-        var db = _redis.GetDatabase();
-        var lockKey = $"ocpi:lock:{resourceKey}";
-        var lockValue = Guid.NewGuid().ToString();
-
-        var acquired = await db.StringSetAsync(lockKey, lockValue, timeout, When.NotExists);
-        if (!acquired)
-            throw new InvalidOperationException($"Could not acquire lock for {resourceKey}");
-
-        return new RedisLock(db, lockKey, lockValue);
-    }
-}
-```
-
 ## Data Flow
 
 ```mermaid
@@ -182,12 +122,8 @@ flowchart TD
     A[Startup] -->|LoadAllAsync| B[InMemoryCpoRegistry]
     C[Registration] -->|AddOrUpdate| B
     B -->|SaveAsync| D[ICpoRegistryStore]
-    D -->|NotifyChangedAsync| E[Other Instances]
-    E -->|Reload| B
 ```
 
 1. On startup, `LoadAllAsync()` populates the in-memory cache
 2. Registration adds/updates the in-memory registry
 3. Changes are written through to `ICpoRegistryStore`
-4. `ICacheInvalidationNotifier` tells other instances to reload
-5. Other instances refresh their in-memory cache

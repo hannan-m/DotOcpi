@@ -131,7 +131,7 @@ internal static class LocationsHandler
         {
             snapshotCount = items.Count;
         }
-        var limit = int.TryParse(query["limit"], out var l) ? Math.Max(1, l) : Math.Max(snapshotCount, 1);
+        var limit = int.TryParse(query["limit"], out var l) ? Math.Max(1, l) : 50;
 
         List<object> snapshot;
         lock (items)
@@ -168,7 +168,7 @@ internal static class LocationsHandler
     {
         var query = ctx.Request.Query;
         var offset = int.TryParse(query["offset"], out var o) ? Math.Max(0, o) : 0;
-        var limit = int.TryParse(query["limit"], out var l) ? Math.Max(1, l) : Math.Max(items.Count, 1);
+        var limit = int.TryParse(query["limit"], out var l) ? Math.Max(1, l) : 50;
         var totalCount = items.Count;
         var page = items.Skip(offset).Take(limit).ToList();
         await OcpiResponseWriter.WriteListAsync(ctx, version, page, totalCount, offset, limit).ConfigureAwait(false);

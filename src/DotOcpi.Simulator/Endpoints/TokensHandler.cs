@@ -45,25 +45,15 @@ internal static class TokensHandler
             return;
         }
 
-        var updated = false;
-        state.ReceivedTokens.AddOrUpdate(
-            tokenUid,
-            _ => default,
-            (_, existing) =>
-            {
-                updated = true;
-                return MergeJsonPatch(existing, patch);
-            }
-        );
-
-        if (!updated)
+        if (!state.ReceivedTokens.TryGetValue(tokenUid, out var existing))
         {
-            state.ReceivedTokens.TryRemove(tokenUid, out _);
             await OcpiResponseWriter
                 .WriteErrorAsync(ctx, 404, 2003, $"Token '{tokenUid}' not found.")
                 .ConfigureAwait(false);
             return;
         }
+
+        state.ReceivedTokens[tokenUid] = MergeJsonPatch(existing, patch);
 
         await OcpiResponseWriter.WriteSuccessAsync(ctx).ConfigureAwait(false);
     }
@@ -111,8 +101,10 @@ internal static class TokensHandler
             {
                 if (patch.TryGetProperty(prop.Name, out var patchValue))
                 {
+                    // RFC 7386: null in patch means remove the field
                     if (patchValue.ValueKind == JsonValueKind.Null)
                         continue;
+                    // Both objects: recurse
                     if (prop.Value.ValueKind == JsonValueKind.Object && patchValue.ValueKind == JsonValueKind.Object)
                     {
                         writer.WritePropertyName(prop.Name);
@@ -120,19 +112,20 @@ internal static class TokensHandler
                         merged.WriteTo(writer);
                         continue;
                     }
+                    // Scalar replacement: write the patch value
+                    writer.WritePropertyName(prop.Name);
+                    patchValue.WriteTo(writer);
                     continue;
                 }
                 prop.WriteTo(writer);
             }
+            // Write new properties from the patch that don't exist in the target.
+            // Properties that exist in both were already handled in the first loop.
             foreach (var prop in patch.EnumerateObject())
             {
                 if (prop.Value.ValueKind == JsonValueKind.Null)
                     continue;
-                if (
-                    target.TryGetProperty(prop.Name, out var tv)
-                    && tv.ValueKind == JsonValueKind.Object
-                    && prop.Value.ValueKind == JsonValueKind.Object
-                )
+                if (target.TryGetProperty(prop.Name, out _))
                     continue;
                 prop.WriteTo(writer);
             }

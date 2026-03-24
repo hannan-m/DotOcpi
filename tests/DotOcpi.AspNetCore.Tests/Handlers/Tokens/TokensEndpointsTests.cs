@@ -11,6 +11,7 @@ using static DotOcpi.AspNetCore.Tests.Handlers.OcpiEndpointTestHelper;
 
 namespace DotOcpi.AspNetCore.Tests.Handlers.Tokens;
 
+[Trait("Category", "Security")]
 public class TokensEndpointsTests
 {
     private static DefaultHttpContext CreateTokensGetContext(

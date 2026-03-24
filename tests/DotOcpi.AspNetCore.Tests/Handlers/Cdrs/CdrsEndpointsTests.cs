@@ -120,7 +120,8 @@ public class CdrsEndpointsTests
         await CdrsEndpoints.HandleCdrPost(httpContext);
 
         var location = httpContext.Response.Headers["Location"].ToString();
-        location.Should().Contain("DE/ALL/CDR1");
+        // Location header uses the eMSP's identity (receiver), not the CPO's
+        location.Should().Contain("NL/TNM/CDR1");
     }
 
     [Fact]

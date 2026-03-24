@@ -6,6 +6,7 @@ using Xunit;
 
 namespace DotOcpi.Client.Tests;
 
+[Trait("Category", "Security")]
 public class TokensClientTests
 {
     private static CpoConnection CreateConnection()

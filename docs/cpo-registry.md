@@ -313,7 +313,7 @@ sequenceDiagram
 | Status updates | Eventual | Local cache + TTL |
 | Health check tracking | Eventual | Write-through to store, fire-and-forget |
 
-> **Note:** The library defines `IDistributedLockProvider` and `ICacheInvalidationNotifier` interfaces as extension points, but they are not yet integrated into any built-in component. No built-in implementation uses them. They are available for consumers who need distributed coordination in multi-instance deployments.
+> **Note:** Multi-instance cache invalidation and distributed locking are not yet provided by the library. Consumers running multiple instances should implement their own coordination layer (e.g., Redis pub/sub for cache invalidation, distributed locks for registration).
 
 ---
 
@@ -450,7 +450,7 @@ graph TD
 
 There is no staleness filter — all connections that are not Unregistered or Pending are checked on every cycle. The failure threshold (default 3 consecutive failures) is configurable.
 
-> **Note:** The health monitor does not use distributed locking or leader election. Each instance runs its health checks independently. In multi-instance deployments, this means multiple instances may probe the same CPO concurrently, which is safe but redundant. Consumers who need single-leader health checking can implement coordination using `IDistributedLockProvider`.
+> **Note:** The health monitor does not use distributed locking or leader election. Each instance runs its health checks independently. In multi-instance deployments, this means multiple instances may probe the same CPO concurrently, which is safe but redundant.
 
 ### Consumer Health Check
 

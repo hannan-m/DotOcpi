@@ -6,6 +6,7 @@ using Xunit;
 
 namespace DotOcpi.Tests.Validation;
 
+[Trait("Category", "Security")]
 public class TokenValidatorTests
 {
     private readonly TokenValidator _validator = new();

@@ -531,7 +531,7 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("data").GetProperty("result").GetString().Should().Be("ACCEPTED");
+        body.GetProperty("status_code").GetInt32().Should().Be(1000);
     }
 
     [Fact]

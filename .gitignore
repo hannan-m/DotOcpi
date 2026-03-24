@@ -28,3 +28,6 @@ appsettings.*.local.json
 coverage/
 TestResults/
 *.trx
+
+# Benchmarks
+BenchmarkDotNet.Artifacts/
