@@ -168,10 +168,9 @@ public class SqlCpoRegistryStore : ICpoRegistryStore
 
 ## Health Monitoring
 
-{: .warning }
-> `CpoHealthMonitor` exists but is **not yet registered as a hosted service**. These options configure thresholds but do not start background probing. Consumers can manually register it via `builder.Services.AddHostedService<CpoHealthMonitor>()` if needed.
+`CpoHealthMonitor` is registered automatically by `AddAspNetCoreServer()` and respects `EnableHealthMonitoring` (default: `true`).
 
-Configure health probing thresholds for stale connections:
+Configure health probing thresholds:
 
 ```csharp
 builder.Services.AddDotOcpi(options =>

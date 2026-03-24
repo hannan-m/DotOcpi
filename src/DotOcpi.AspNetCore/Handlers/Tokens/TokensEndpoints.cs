@@ -49,7 +49,7 @@ public static class TokensEndpoints
 
     internal static async Task HandleTokensGet(HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var dateFrom = ParseDateTimeOffset(httpContext.Request.Query["date_from"]);
         var dateTo = ParseDateTimeOffset(httpContext.Request.Query["date_to"]);
@@ -83,7 +83,7 @@ public static class TokensEndpoints
 
     internal static async Task HandleTokenAuthorize(string tokenUid, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         // Body is optional — LocationReferences may be null for authorization without location filter
         object? locationReferences = null;

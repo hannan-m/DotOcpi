@@ -50,6 +50,7 @@ All notable changes to this project will be documented in this file.
 - OcpiHttpRequestBuilder is now stateless and no longer depends on ICpoRegistry
 
 ### Fixed
+- CpoHealthMonitor registered as a hosted service by AddAspNetCoreServer(); respects EnableHealthMonitoring option
 - CDR Location header now uses eMSP party identity instead of CPO's
 - Sync state persisted on partial failure to prevent duplicate page re-delivery
 - Simulator: JSON merge patch now correctly writes scalar replacements (RFC 7386)
@@ -57,6 +58,9 @@ All notable changes to this project will be documented in this file.
 - Simulator: charging profiles PUT returns standard OCPI success (no fabricated data object)
 - Simulator: EVSE state Update() uses explicit clear flags instead of asymmetric null semantics
 - Simulator: token PATCH correctly rejects unknown tokens instead of unreachable error path
+- Simulator: UNLOCK_CONNECTOR command now clears active session and sets EVSE to Available
+- Simulator: expired reservations are cleaned up during charging tick loop
+- Added null-suppression justification comments to all GetOcpiContext()! calls in endpoint handlers
 
 ### Removed
 - OcpiValidationFilter — dead code; validation runs inline via EndpointHelper.DeserializeOrRejectAsync

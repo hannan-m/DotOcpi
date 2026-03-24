@@ -105,6 +105,24 @@ public static class DotOcpiAspNetCoreExtensions
 
         builder.Services.AddHostedService<DotOcpiStartupValidator>();
 
+        // CpoHealthMonitor probes CPO connections in the background.
+        // It respects EnableHealthMonitoring from DotOcpiOptions — when disabled,
+        // ExecuteAsync returns immediately without starting the timer loop.
+        builder.Services.AddHostedService(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DotOcpiOptions>>().Value;
+            return new Registry.CpoHealthMonitor(
+                sp.GetRequiredService<Registry.ICpoRegistry>(),
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient("OcpiHealthCheck"),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Registry.CpoHealthMonitor>>(),
+                sp.GetService<TimeProvider>(),
+                options.HealthMonitoringInterval
+            )
+            {
+                Enabled = options.EnableHealthMonitoring,
+            };
+        });
+
         return builder;
     }
 }

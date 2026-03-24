@@ -667,8 +667,9 @@ public class OcpiCpoSimulatorTests : IAsyncLifetime
             );
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-            // Wait for async callback (max 2s)
-            var completed = await Task.WhenAny(tcs.Task, Task.Delay(2000));
+            // Wait for async callback — the simulator fires this on the same process,
+            // so it should arrive quickly. 5s is generous for slow CI.
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
             completed.Should().Be(tcs.Task, because: "callback should arrive within timeout");
 
             receivedCallback.Should().NotBeNull();

@@ -79,10 +79,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 ## Background Health Monitoring
 
-{: .warning }
-> `CpoHealthMonitor` exists in the library but is **not yet registered as a hosted service**. Enabling these options configures the thresholds but does not start background probing. This will be wired in a future release. For now, consumers can manually instantiate and register `CpoHealthMonitor` as a hosted service if needed.
-
-DotOcpi can be configured to probe stale CPO connections:
+`CpoHealthMonitor` is registered automatically by `AddAspNetCoreServer()` and respects `EnableHealthMonitoring` (default: `true`). Set to `false` to disable background probing.
 
 ```csharp
 builder.Services.AddDotOcpi(options =>

@@ -430,8 +430,32 @@ public sealed class OcpiCpoSimulator : IAsyncDisposable
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
                 TickActiveSessions();
+                ExpireReservations();
             }
         });
+    }
+
+    private void ExpireReservations()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (id, reservation) in _state.Reservations)
+        {
+            if (reservation.ExpiryDate > now)
+                continue;
+
+            if (_state.Reservations.TryRemove(id, out _))
+            {
+                var evseKey = $"{reservation.LocationId}:{reservation.EvseUid}";
+                if (_state.Evses.TryGetValue(evseKey, out var evseState))
+                {
+                    var (newStatus, _) = Charging.EvseStateMachine.Transition(
+                        evseState.Status,
+                        Charging.EvseEvent.CancelReservation
+                    );
+                    evseState.Update(newStatus, clearReservation: true);
+                }
+            }
+        }
     }
 
     private void TickActiveSessions()

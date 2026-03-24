@@ -42,7 +42,7 @@ public static class CommandsEndpoints
 
     internal static async Task HandleCommandCallback(string correlationId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.CommandResult(ctx.NegotiatedVersion))

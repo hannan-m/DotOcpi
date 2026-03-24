@@ -46,7 +46,7 @@ public static class ChargingProfilesEndpoints
 
     internal static async Task HandleChargingProfileResult(string correlationId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.ChargingProfileResult(ctx.NegotiatedVersion))
@@ -66,7 +66,7 @@ public static class ChargingProfilesEndpoints
 
     internal static async Task HandleActiveChargingProfileUpdate(string sessionId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.ActiveChargingProfile(ctx.NegotiatedVersion))

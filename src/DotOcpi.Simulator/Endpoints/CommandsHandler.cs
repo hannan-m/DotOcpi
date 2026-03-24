@@ -35,6 +35,8 @@ internal static class CommandsHandler
                 HandleReserveNow(body.Value, state, config);
             else if (path.Contains("CANCEL_RESERVATION"))
                 HandleCancelReservation(body.Value, state, config, onSessionEvent);
+            else if (path.Contains("UNLOCK_CONNECTOR"))
+                HandleUnlockConnector(body.Value, state);
         }
         else if (config.IsLegacyMode && responseStatus == "ACCEPTED" && body.HasValue)
         {
@@ -255,6 +257,21 @@ internal static class CommandsHandler
         {
             var (newStatus, _) = EvseStateMachine.Transition(evseState.Status, EvseEvent.CancelReservation);
             evseState.Update(newStatus, clearReservation: true);
+        }
+    }
+
+    private static void HandleUnlockConnector(JsonElement body, SimulatorState state)
+    {
+        var locationId = body.TryGetProperty("location_id", out var loc) ? loc.GetString() : null;
+        var evseUid = body.TryGetProperty("evse_uid", out var evse) ? evse.GetString() : null;
+        if (locationId is null || evseUid is null)
+            return;
+
+        var evseKey = $"{locationId}:{evseUid}";
+        if (state.Evses.TryGetValue(evseKey, out var evseState))
+        {
+            // Unlock clears any active session and sets EVSE to Available
+            evseState.ClearSession(EvseStatus.Available);
         }
     }
 

@@ -46,7 +46,7 @@ public static class CdrsEndpoints
 
     internal static async Task HandleCdrPost(HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Cdr(ctx.NegotiatedVersion))
@@ -95,7 +95,7 @@ public static class CdrsEndpoints
 
     internal static async Task HandleCdrGet(string cdrId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var receiver = httpContext.RequestServices.GetRequiredService<ICdrsReceiver>();
         var result = await receiver.GetCdrAsync(ctx, cdrId, httpContext.RequestAborted).ConfigureAwait(false);

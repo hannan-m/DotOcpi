@@ -42,9 +42,15 @@ public sealed partial class CpoHealthMonitor : BackgroundService
         _timeout = healthCheckTimeout ?? TimeSpan.FromSeconds(10);
     }
 
+    /// <summary>Whether health monitoring is enabled.</summary>
+    public bool Enabled { get; init; } = true;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!Enabled)
+            return;
+
         using var timer = new PeriodicTimer(_interval);
 
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))

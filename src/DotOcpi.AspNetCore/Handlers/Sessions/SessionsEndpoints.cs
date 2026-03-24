@@ -44,7 +44,7 @@ public static class SessionsEndpoints
 
     internal static async Task HandleSessionPut(string sessionId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Session(ctx.NegotiatedVersion))
@@ -64,7 +64,7 @@ public static class SessionsEndpoints
 
     internal static async Task HandleSessionPatch(string sessionId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -82,7 +82,7 @@ public static class SessionsEndpoints
 
     internal static async Task HandleSessionGet(string sessionId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var receiver = httpContext.RequestServices.GetRequiredService<ISessionsReceiver>();
         var result = await receiver.GetSessionAsync(ctx, sessionId, httpContext.RequestAborted).ConfigureAwait(false);

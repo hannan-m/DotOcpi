@@ -87,7 +87,7 @@ public static class CredentialsEndpoints
 
     internal static async Task HandleCredentialsPut(HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Credentials(ctx.NegotiatedVersion))
@@ -105,7 +105,7 @@ public static class CredentialsEndpoints
 
     internal static async Task HandleCredentialsDelete(HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var handler = httpContext.RequestServices.GetRequiredService<ICredentialsHandler>();
         var result = await handler.OnCredentialsDeleteAsync(ctx, httpContext.RequestAborted).ConfigureAwait(false);
@@ -117,7 +117,7 @@ public static class CredentialsEndpoints
 
     internal static async Task HandleCredentialsGet(HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var handler = httpContext.RequestServices.GetRequiredService<ICredentialsHandler>();
         var result = await handler.GetCredentialsAsync(ctx, httpContext.RequestAborted).ConfigureAwait(false);

@@ -66,7 +66,7 @@ public static class LocationsEndpoints
 
     internal static async Task HandleLocationPut(string locationId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Location(ctx.NegotiatedVersion))
@@ -86,7 +86,7 @@ public static class LocationsEndpoints
 
     internal static async Task HandleLocationPatch(string locationId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -104,7 +104,7 @@ public static class LocationsEndpoints
 
     internal static async Task HandleLocationGet(string locationId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var receiver = httpContext.RequestServices.GetRequiredService<ILocationsReceiver>();
         var result = await receiver.GetLocationAsync(ctx, locationId, httpContext.RequestAborted).ConfigureAwait(false);
@@ -116,7 +116,7 @@ public static class LocationsEndpoints
 
     internal static async Task HandleEvsePut(string locationId, string evseUid, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Evse(ctx.NegotiatedVersion))
@@ -136,7 +136,7 @@ public static class LocationsEndpoints
 
     internal static async Task HandleEvsePatch(string locationId, string evseUid, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -159,7 +159,7 @@ public static class LocationsEndpoints
         HttpContext httpContext
     )
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Connector(ctx.NegotiatedVersion))
@@ -184,7 +184,7 @@ public static class LocationsEndpoints
         HttpContext httpContext
     )
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)

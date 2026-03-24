@@ -56,7 +56,7 @@ public static class TariffsEndpoints
 
     internal static async Task HandleTariffPut(string tariffId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var data = await EndpointHelper
             .DeserializeOrRejectAsync(httpContext, ModuleHandlerFactory.Tariff(ctx.NegotiatedVersion))
@@ -76,7 +76,7 @@ public static class TariffsEndpoints
 
     internal static async Task HandleTariffPatch(string tariffId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var patch = await EndpointHelper.ReadPatchAsync(httpContext).ConfigureAwait(false);
         if (patch is null)
@@ -105,7 +105,7 @@ public static class TariffsEndpoints
 
     internal static async Task HandleTariffDelete(string tariffId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var receiver = httpContext.RequestServices.GetRequiredService<ITariffsReceiver>();
         var result = await receiver
@@ -119,7 +119,7 @@ public static class TariffsEndpoints
 
     internal static async Task HandleTariffGet(string tariffId, HttpContext httpContext)
     {
-        var ctx = httpContext.GetOcpiContext()!;
+        var ctx = httpContext.GetOcpiContext()!; // Safe: OcpiContextFilter runs before handler
 
         var receiver = httpContext.RequestServices.GetRequiredService<ITariffsReceiver>();
         var result = await receiver.GetTariffAsync(ctx, tariffId, httpContext.RequestAborted).ConfigureAwait(false);

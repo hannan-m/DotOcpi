@@ -834,7 +834,7 @@ public sealed class CpoHealthMonitor : BackgroundService
 - Periodically probes stale CPOs (`LastActivity > threshold`)
 - Marks unreachable CPOs as `OFFLINE`
 - Configurable via `DotOcpiOptions.EnableHealthMonitoring` and `HealthMonitoringInterval`
-- Not yet registered as a hosted service — consumers can manually register if needed
+- Registered as a hosted service by `AddAspNetCoreServer()`; no-ops when `EnableHealthMonitoring` is `false`
 
 ### Tests
 
