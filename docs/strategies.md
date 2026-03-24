@@ -382,7 +382,7 @@ app.MapAllOcpiEndpoints(rateLimitOptions: new OcpiRateLimitOptions
 });
 ```
 
-`OcpiRateLimitOptions` has two properties: `MaxRequestsPerWindow` (default 100) and `Window` (default 1 minute). The rate limit is partitioned per CPO using a sliding window.
+`OcpiRateLimitOptions` has two properties: `MaxRequestsPerWindow` (default 100) and `Window` (default 1 minute). The rate limit is partitioned per CPO using a fixed window.
 
 Implementation uses ASP.NET Core's built-in `AddRateLimiter()` with partitioning by CPO identity:
 
@@ -1479,11 +1479,12 @@ public interface ITokenStore
     /// If the store supports transactions, both operations are in one transaction.
     /// If not, store-first-delete-second ensures no zero-validity window.
     /// </summary>
-    Task RotateTokenAsync(
-        string cpoId,
+    ValueTask RotateTokenAsync(
         string oldTokenHash,
         string newTokenHash,
-        CancellationToken ct);
+        TokenPurpose purpose,
+        string partyId,
+        CancellationToken cancellationToken = default);
 }
 ```
 

@@ -50,6 +50,7 @@ All notable changes to this project will be documented in this file.
 - OcpiHttpRequestBuilder is now stateless and no longer depends on ICpoRegistry
 
 ### Fixed
+- eMSP versions discovery endpoints: GET /ocpi/versions and GET /ocpi/versions/{versionId} now mapped by MapAllOcpiEndpoints() — required for CPOs to discover supported versions during registration handshake
 - CpoHealthMonitor registered as a hosted service by AddAspNetCoreServer(); respects EnableHealthMonitoring option
 - CDR Location header now uses eMSP party identity instead of CPO's
 - Sync state persisted on partial failure to prevent duplicate page re-delivery

@@ -426,10 +426,7 @@ If a CPO updates their credentials via PUT and their `party_id` or `country_code
 
 ### Activity Tracking
 
-Every successful health probe updates `LastHealthCheckAt`:
-
-- **Inbound**: Auth middleware updates the connection's `LastHealthCheckAt` after successful authentication
-- **Outbound**: Client pipeline updates it after receiving a successful response
+`LastHealthCheckAt` is updated by `CpoHealthMonitor` on each successful health probe. Inbound auth and outbound client calls do not currently update this field.
 
 ### Health Probing
 
@@ -448,7 +445,7 @@ graph TD
     Threshold -->|No| Wait["Wait for next cycle"]
 ```
 
-There is no staleness filter — all connections that are not Unregistered or Pending are checked on every cycle. The failure threshold (default 3 consecutive failures) is configurable. Each cycle logs a summary with total checked, healthy, failed, restored, and marked-offline counts.
+There is no staleness filter — all connections that are not Unregistered or Pending are checked on every cycle. `DotOcpiOptions.StaleConnectionThreshold` is defined but not yet consumed by the health monitor; it is available for consumers who want to implement their own staleness logic. The failure threshold (default 3 consecutive failures) is configurable. Each cycle logs a summary with total checked, healthy, failed, restored, and marked-offline counts.
 
 > **Note:** The health monitor does not use distributed locking or leader election. Each instance runs its health checks independently. In multi-instance deployments, this means multiple instances may probe the same CPO concurrently, which is safe but redundant.
 

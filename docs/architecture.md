@@ -297,35 +297,35 @@ graph LR
     end
 
     subgraph "Credentials — Auth-filtered group (Token B)"
-        C1["GET /ocpi/emsp/{ver}/credentials"]
-        C3["PUT /ocpi/emsp/{ver}/credentials"]
-        C4["DELETE /ocpi/emsp/{ver}/credentials"]
+        C1["GET /ocpi/{ver}/credentials"]
+        C3["PUT /ocpi/{ver}/credentials"]
+        C4["DELETE /ocpi/{ver}/credentials"]
     end
 
     subgraph "Credentials — Registration group (Token A)"
-        C2["POST /ocpi/emsp/{ver}/credentials"]
+        C2["POST /ocpi/{ver}/credentials"]
     end
 
     subgraph "Receiver Modules (eMSP receives from CPO)"
-        L1["GET /ocpi/emsp/{ver}/locations/{...}"]
-        L2["PUT /ocpi/emsp/{ver}/locations/{...}"]
-        L3["PATCH /ocpi/emsp/{ver}/locations/{...}"]
-        S1["PUT /ocpi/emsp/{ver}/sessions/{...}"]
-        S2["PATCH /ocpi/emsp/{ver}/sessions/{...}"]
-        CDR1["POST /ocpi/emsp/{ver}/cdrs"]
-        CDR2["GET /ocpi/emsp/{ver}/cdrs"]
-        T1["PUT /ocpi/emsp/{ver}/tariffs/{...}"]
-        T2["DELETE /ocpi/emsp/{ver}/tariffs/{...}"]
+        L1["GET /ocpi/{ver}/locations/{...}"]
+        L2["PUT /ocpi/{ver}/locations/{...}"]
+        L3["PATCH /ocpi/{ver}/locations/{...}"]
+        S1["PUT /ocpi/{ver}/sessions/{...}"]
+        S2["PATCH /ocpi/{ver}/sessions/{...}"]
+        CDR1["POST /ocpi/{ver}/cdrs"]
+        CDR2["GET /ocpi/{ver}/cdrs"]
+        T1["PUT /ocpi/{ver}/tariffs/{...}"]
+        T2["DELETE /ocpi/{ver}/tariffs/{...}"]
     end
 
     subgraph "Sender Modules (CPO pulls from eMSP)"
-        TK1["GET /ocpi/emsp/{ver}/tokens"]
-        TK2["POST /ocpi/emsp/{ver}/tokens/{uid}/authorize"]
+        TK1["GET /ocpi/{ver}/tokens"]
+        TK2["POST /ocpi/{ver}/tokens/{uid}/authorize"]
     end
 
     subgraph "Callback Endpoints"
-        CMD1["POST /ocpi/emsp/{ver}/commands/{uid}"]
-        CP1["POST /ocpi/emsp/{ver}/chargingprofiles/{id}"]
+        CMD1["POST /ocpi/{ver}/commands/{uid}"]
+        CP1["POST /ocpi/{ver}/chargingprofiles/{id}"]
     end
 ```
 

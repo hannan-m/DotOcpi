@@ -597,11 +597,12 @@ public sealed class OcpiValidationResult
     public IReadOnlyList<OcpiValidationError> Errors { get; }
 }
 
-public sealed class OcpiValidationError
+public sealed record OcpiValidationError(
+    string Code,
+    string Message,
+    string Suggestion)
 {
-    public string Field { get; init; }
-    public string Message { get; init; }
-    public OcpiStatusCode StatusCode { get; init; }
+    public string? PropertyPath { get; init; }
 }
 ```
 
@@ -698,7 +699,8 @@ public interface ITokenStore
     ValueTask RotateTokenAsync(string oldTokenHash, string newTokenHash, TokenPurpose purpose, string partyId, CancellationToken ct);
 }
 
-public enum TokenPurpose { TokenA, TokenB, TokenC }
+public enum TokenPurpose { TokenA, TokenB }
+// Token C is stored separately via ITokenStore.StoreCpoTokenAsync/GetCpoTokenAsync/RemoveCpoTokenAsync
 ```
 
 #### 6.4 — InMemoryTokenStore
@@ -708,7 +710,21 @@ public enum TokenPurpose { TokenA, TokenB, TokenC }
 public sealed class InMemoryTokenStore : ITokenStore { ... }  // ConcurrentDictionary
 ```
 
-#### 6.5 — OcpiTokenValidator
+#### 6.5 — ITokenProtector
+
+```csharp
+// src/DotOcpi/Security/ITokenProtector.cs
+public interface ITokenProtector
+{
+    string Protect(string plaintext);
+    string Unprotect(string protectedData);
+}
+// Default: PlaintextTokenProtector (development only)
+// AddAspNetCoreServer() registers DataProtectionTokenProtector (production)
+// Consumers can override via AddTokenProtector<T>()
+```
+
+#### 6.6 — OcpiTokenValidator
 
 ```csharp
 // src/DotOcpi/Security/OcpiTokenValidator.cs

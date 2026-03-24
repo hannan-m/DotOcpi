@@ -7,6 +7,7 @@ using DotOcpi.AspNetCore.Handlers.Locations;
 using DotOcpi.AspNetCore.Handlers.Sessions;
 using DotOcpi.AspNetCore.Handlers.Tariffs;
 using DotOcpi.AspNetCore.Handlers.Tokens;
+using DotOcpi.AspNetCore.Handlers.Versions;
 using DotOcpi.AspNetCore.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -93,6 +94,10 @@ public static class OcpiEndpointRouteBuilderExtensions
         group.MapCommandsEndpoints();
         group.MapChargingProfilesEndpoints();
         group.MapCredentialsEndpoints();
+
+        // Versions discovery: public endpoints, no auth required.
+        // CPOs call these before registration to discover supported versions and endpoints.
+        app.MapVersionsEndpoints(basePath);
 
         // Registration POST: separate route group, same base path.
         // No OcpiAuthFilter (Token A has no CpoConnection yet).

@@ -403,32 +403,14 @@ public async IAsyncEnumerable<Location> GetAllLocationsAsyncEnumerable(
 Background services (pull sync, health monitoring) must link the host shutdown token with per-operation timeouts. Without linking, a running sync continues after shutdown is requested.
 
 ```csharp
-public class OcpiPullSyncBackgroundService(
-    IOcpiClient client,
-    IHostApplicationLifetime lifetime) : BackgroundService
+// Actual implementation uses PeriodicTimer for clean shutdown semantics:
+protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+    while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
     {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(5)); // per-sync timeout
-
-            try
-            {
-                await SyncLocationsAsync(cts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return; // host shutdown — exit gracefully
-            }
-            catch (OperationCanceledException)
-            {
-                // per-operation timeout — log and continue to next cycle
-            }
-
-            await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken).ConfigureAwait(false);
-        }
+        // Sync all CPOs for all enabled modules
+        // PeriodicTimer handles graceful cancellation — no Task.Delay needed
     }
 }
 ```

@@ -182,6 +182,10 @@ tests/
 │   │   ├── OcpiRegistrationContextFilterTests.cs
 │   │   ├── OcpiBodySizeLimitFilterTests.cs
 │   │   ├── OcpiRequestIdFilterTests.cs
+│   ├── Security/
+│   │   └── DataProtectionTokenProtectorTests.cs
+│   ├── OcpiResponseWriterTests.cs
+│   ├── DotOcpiStartupValidatorTests.cs
 │   ├── Handlers/
 │   │   ├── OcpiEndpointTestHelper.cs   # Shared test infrastructure
 │   │   ├── Locations/LocationsEndpointsTests.cs
@@ -533,75 +537,42 @@ Multi-version behaviors are currently tested within `ModuleDataFlowTests` and ve
 
 ### Test Data Factories
 
-A `TestData` static class provides factory methods for creating valid OCPI objects per version:
+A `TestData` static class provides factory methods for creating valid OCPI V2.2.1 model objects:
 
 ```csharp
 public static class TestData
 {
-    // Version-specific factories
-    public static V2_2_1.Location CreateLocationV221(
-        string id = "LOC001",
-        string countryCode = "DE",
-        string partyId = "CPO") => new()
+    private static readonly DateTimeOffset DefaultTimestamp = new(2026, 1, 15, 12, 0, 0, TimeSpan.Zero);
+
+    public static Location CreateLocation(
+        string countryCode = "NL", string partyId = "TNM", string id = "LOC1",
+        bool publish = true, Evse? evse = null) => new()
     {
-        CountryCode = countryCode,
-        PartyId = partyId,
-        Id = id,
-        Publish = true,
-        Address = "Hauptstraße 1",
-        City = "Berlin",
-        Country = "DEU",
-        PostalCode = "10115",
-        Coordinates = new GeoLocation("52.520008", "13.404954"),
-        TimeZone = "Europe/Berlin",
-        LastUpdated = DateTimeOffset.UtcNow,
-        Evses =
-        [
-            CreateEvseV221()
-        ]
+        CountryCode = countryCode, PartyId = partyId, Id = id, Publish = publish,
+        Address = "Keizersgracht 585", City = "Amsterdam", Country = "NLD",
+        Coordinates = new GeoLocation("52.364115", "4.891860"),
+        TimeZone = "Europe/Amsterdam", Evses = evse is not null ? [evse] : null,
+        LastUpdated = DefaultTimestamp,
     };
 
-    public static V2_1_1.Location CreateLocationV211(string id = "LOC001") => new()
+    public static Evse CreateEvse(string uid = "3256", Status status = Status.AVAILABLE) => new()
     {
-        Id = id,
-        Type = LocationType.ON_STREET,
-        Address = "Hauptstraße 1",
-        City = "Berlin",
-        PostalCode = "10115",
-        Country = "DEU",
-        Coordinates = new GeoLocation("52.520008", "13.404954"),
-        LastUpdated = DateTimeOffset.UtcNow
+        Uid = uid, Status = status, Connectors = [CreateConnector()],
+        LastUpdated = DefaultTimestamp,
     };
 
-    // Dynamic version factory
-    public static object CreateLocation(OcpiVersion version, string id = "LOC001") =>
-        version switch
-        {
-            OcpiVersion.V2_0 => CreateLocationV20(id),
-            OcpiVersion.V2_1_1 => CreateLocationV211(id),
-            OcpiVersion.V2_2 => CreateLocationV22(id),
-            OcpiVersion.V2_2_1 => CreateLocationV221(id),
-            _ => throw new ArgumentOutOfRangeException(nameof(version))
-        };
+    public static Connector CreateConnector(string id = "1") => new()
+    {
+        Id = id, Standard = ConnectorType.IEC_62196_T2, Format = ConnectorFormat.SOCKET,
+        PowerType = PowerType.AC_3_PHASE, MaxVoltage = 230, MaxAmperage = 32,
+        LastUpdated = DefaultTimestamp,
+    };
 
-    // Pre-built JSON payloads for deserialization tests
-    public static string LocationJsonV221 => """
-        {
-            "country_code": "DE",
-            "party_id": "CPO",
-            "id": "LOC001",
-            "publish": true,
-            "address": "Hauptstraße 1",
-            "city": "Berlin",
-            "postal_code": "10115",
-            "country": "DEU",
-            "coordinates": {"latitude": "52.520008", "longitude": "13.404954"},
-            "time_zone": "Europe/Berlin",
-            "last_updated": "2026-01-15T10:00:00Z"
-        }
-        """;
+    // Also provides: CreateSession, CreateCdr, CreateTariff, CreateToken, CreateCredentials
 }
 ```
+
+Tests for other OCPI versions use the same factories or construct version-specific models inline. There are no per-version factory methods — tests target V2.2.1 models by default and create version-specific models explicitly when testing version-dependent behavior.
 
 ### Test Data Principles
 
