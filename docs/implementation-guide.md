@@ -937,18 +937,25 @@ Implements `IRegistrationClient`:
 ```csharp
 public interface IRegistrationClient
 {
-    Task<OcpiResult<CpoConnection>> RegisterAsync(
-        Uri cpoVersionsUrl, string tokenA,
-        PartyIdentity? emspIdentity = null,
-        OcpiVersion? preferredVersion = null,
-        CancellationToken ct = default);
+    Task<RegistrationResult> RegisterAsync(
+        RegistrationRequest request, CancellationToken ct = default);
 
-    Task<OcpiResult<CpoConnection>> RotateCredentialsAsync(
-        string cpoId, CancellationToken ct = default);
+    Task<RegistrationResult> RotateCredentialsAsync(
+        CredentialRotationRequest request, CancellationToken ct = default);
 
-    Task<OcpiResult> UnregisterAsync(
-        string cpoId, CancellationToken ct = default);
+    Task UnregisterAsync(
+        UnregisterRequest request, CancellationToken ct = default);
 }
+
+public sealed record RegistrationRequest(
+    string VersionsUrl, string TokenA,
+    string EmspCountryCode, string EmspPartyId,
+    string EmspVersionsUrl, string EmspBusinessName,
+    IReadOnlySet<OcpiVersion>? SupportedVersions = null);
+
+public sealed record RegistrationResult(CpoConnection Connection, string CpoToken);
+public sealed record CredentialRotationRequest(string ConnectionKey, string CurrentCpoToken, string EmspBusinessName);
+public sealed record UnregisterRequest(string ConnectionKey, string CurrentCpoToken);
 ```
 
 The `RegisterAsync` flow:
@@ -964,7 +971,7 @@ The `RegisterAsync` flow:
 10. Store `CpoConnection` in registry (with token hashes, endpoints, version)
 11. Store Token B hash (inbound — authenticates CPO→eMSP) and Token C hash (outbound — authenticates eMSP→CPO)
 12. Delete Token A from store
-13. Return `OcpiResult<CpoConnection>`
+13. Return `RegistrationResult(Connection, CpoToken)`
 
 ### Tests
 
@@ -1110,10 +1117,13 @@ Middleware that catches unhandled exceptions and converts to OCPI response envel
 #### 9.7 — Endpoint Routing
 
 ```csharp
-// src/DotOcpi.AspNetCore/Routing/OcpiEndpointRouteBuilder.cs
+// src/DotOcpi.AspNetCore/Routing/OcpiEndpointRouteBuilderExtensions.cs
 public static class OcpiEndpointRouteBuilderExtensions
 {
-    public static IEndpointRouteBuilder MapOcpiEndpoints(this IEndpointRouteBuilder endpoints);
+    public static RouteGroupBuilder MapOcpiEndpoints(this WebApplication app,
+        string basePath = "/ocpi", OcpiRateLimitOptions? rateLimitOptions = null);
+    public static RouteGroupBuilder MapAllOcpiEndpoints(this WebApplication app,
+        string basePath = "/ocpi", OcpiRateLimitOptions? rateLimitOptions = null);
 }
 ```
 
@@ -1131,7 +1141,7 @@ Version-specific URL patterns:
 
 Both patterns registered; the auth filter determines which version applies based on the authenticated CPO's negotiated version.
 
-Per [performance.md #7](performance.md#7-iparsable-for-route-parameters): Use `IParsable<T>` for strongly-typed route parameter parsing (e.g., `CountryCode`, `PartyId` as readonly record structs) to avoid string allocations on hot paths (available on net8.0+, the minimum target).
+Country codes and party IDs are plain strings in route parameters.
 
 #### 9.8 — OCPI Response Writer
 
@@ -1150,16 +1160,15 @@ internal static class OcpiResponseWriter
 tests/DotOcpi.AspNetCore.Tests/
 ├── Filters/
 │   ├── OcpiAuthFilterTests.cs
-│   ├── OcpiRateLimitFilterTests.cs
+│   ├── OcpiRequestIdFilterTests.cs
+│   ├── OcpiBodySizeLimitFilterTests.cs
 │   └── OcpiValidationFilterTests.cs
 ├── Middleware/
 │   ├── OcpiExceptionMiddlewareTests.cs
-│   └── OcpiRequestIdMiddlewareTests.cs
+│   └── OcpiRateLimitingMiddlewareTests.cs
 ├── Routing/
-│   ├── OcpiEndpointRoutingTests.cs
-│   └── OcpiVersionRouterTests.cs
-├── OcpiRequestContextTests.cs
-└── OcpiResponseWriterTests.cs
+│   └── OcpiEndpointRouteBuilderExtensionsTests.cs
+└── OcpiHttpContextExtensionsTests.cs
 ```
 
 ### Acceptance Criteria
@@ -1288,8 +1297,8 @@ group.MapPut("/chargingprofiles/{sessionId}", ChargingProfilesEndpoints.HandleAc
 ### Tests
 
 ```
-tests/DotOcpi.AspNetCore.Tests/Endpoints/
-├── LocationsEndpointsTests.cs
+tests/DotOcpi.AspNetCore.Tests/Handlers/
+├── Locations/LocationsEndpointsTests.cs
 ├── SessionsEndpointsTests.cs
 ├── CdrsEndpointsTests.cs
 ├── TariffsEndpointsTests.cs
@@ -1465,12 +1474,12 @@ public interface IOcpiSyncService
 public sealed class PullSyncOptions
 {
     public TimeSpan DefaultInterval { get; set; } = TimeSpan.FromHours(1);
-    public IReadOnlyList<string> Modules { get; set; } = ["locations", "tariffs"];
-    public TimeSpan RandomJitter { get; set; } = TimeSpan.FromMinutes(5);
+    public List<string> EnabledModules { get; set; } = ["locations", "tariffs"];
+    public TimeSpan MaxJitter { get; set; } = TimeSpan.FromMinutes(5);
 }
 ```
 
-Background service that periodically pulls data from CPOs. Uses `IDistributedLockProvider` for leader election in multi-instance deployments.
+Background service (`OcpiPullSyncBackgroundService`) that periodically pulls data from CPOs.
 
 ```csharp
 // src/DotOcpi.Client/Sync/ISyncStateStore.cs
@@ -1672,7 +1681,7 @@ public sealed class DotOcpiOptions
 }
 ```
 
-The library uses `IOptionsMonitor<DotOcpiOptions>` internally for dynamic configuration reloads.
+The library uses standard `IOptions<DotOcpiOptions>` internally.
 
 #### 13.2 — Extension Methods
 
@@ -1691,8 +1700,8 @@ public sealed class DotOcpiBuilder
     public DotOcpiBuilder AddTokenStore<TStore>() where TStore : class, ITokenStore;
     public DotOcpiBuilder AddInMemoryCpoRegistry();
     public DotOcpiBuilder AddCpoRegistryStore<TStore>() where TStore : class, ICpoRegistryStore;
-    public DotOcpiBuilder AddRateLimiting(Action<OcpiRateLimitOptions>? configure = null);  // Strategy #5
-    public DotOcpiBuilder AddPullSync(Action<PullSyncOptions>? configure = null);           // Strategy #12
+    // Rate limiting is passed to MapOcpiEndpoints(rateLimitOptions: ...) instead
+    // Pull sync is registered via DotOcpiClientExtensions.AddPullSync()
 }
 ```
 
@@ -1734,7 +1743,7 @@ builder.Services.AddScoped<ISessionsReceiver, MySessionsReceiver>();
 builder.Services.AddScoped<ICdrsReceiver, MyCdrsReceiver>();
 
 var app = builder.Build();
-app.MapOcpiEndpoints();
+app.MapAllOcpiEndpoints();
 app.Run();
 ```
 
@@ -1771,7 +1780,7 @@ tests/DotOcpi.Tests/Configuration/
 // src/DotOcpi.Simulator/OcpiCpoSimulator.cs
 public sealed class OcpiCpoSimulator : IAsyncDisposable
 {
-    public static OcpiCpoSimulator Create(Action<CpoSimulatorConfiguration>? configure = null);
+    public static Task<OcpiCpoSimulator> CreateAsync(Action<CpoSimulatorConfiguration>? configure = null);
 
     public Uri BaseUrl { get; }
     public string TokenA { get; }
@@ -1809,8 +1818,9 @@ public sealed class CpoSimulatorConfiguration
 #### 14.3 — DI Integration
 
 ```csharp
-// src/DotOcpi.Simulator/TestingExtensions.cs
-public static DotOcpiBuilder AddTestCpoServer(this DotOcpiBuilder builder, OcpiCpoSimulator server);
+// src/DotOcpi.Simulator/SimulatorExtensions.cs
+public static IServiceCollection AddTestCpoServer(this IServiceCollection services, Action<CpoSimulatorConfiguration>? configure = null);
+public static Task<IServiceCollection> AddTestCpoServerAsync(this IServiceCollection services, Action<CpoSimulatorConfiguration>? configure = null);
 ```
 
 ### Tests (testing the testing package)
@@ -1818,7 +1828,9 @@ public static DotOcpiBuilder AddTestCpoServer(this DotOcpiBuilder builder, OcpiC
 ```
 tests/DotOcpi.Simulator.Tests/
 ├── OcpiCpoSimulatorTests.cs
-└── FailureInjectionTests.cs
+├── ChargingSimulationTests.cs
+├── EvseStateMachineTests.cs
+└── TypedModeTests.cs
 ```
 
 ### Acceptance Criteria
@@ -1852,19 +1864,13 @@ Per [testing.md #4](testing.md#4-integration-testing-strategy).
 ```
 tests/DotOcpi.Integration.Tests/
 ├── RegistrationFlowTests.cs       // Full handshake, token exchange
-├── LocationPushFlowTests.cs       // PUT/PATCH/GET location
-├── SessionPushFlowTests.cs        // PUT/PATCH session
-├── CdrPushFlowTests.cs            // POST CDR + Location header
-├── TariffPushFlowTests.cs         // PUT/DELETE tariff, PATCH rejection in 2.2+
-├── TokenPullFlowTests.cs          // GET /tokens pagination
-├── AuthorizeFlowTests.cs          // POST /tokens/{uid}/authorize
-├── CommandFlowTests.cs            // Send command + async callback
-├── ChargingProfileFlowTests.cs    // Set profile + async callback
-├── PaginationFlowTests.cs         // Link header following
-├── MultiVersionFlowTests.cs       // Two CPOs, different versions
-├── MultiPartyFlowTests.cs         // Two CPOs, different eMSP identities
-├── CredentialRotationFlowTests.cs // PUT /credentials, token swap
-└── UnregistrationFlowTests.cs     // DELETE /credentials
+├── SecurityFlowTests.cs           // Auth, token validation, SSRF, headers
+├── ModuleDataFlowTests.cs         // Push/pull across modules
+├── OcpiStatusCodeTests.cs         // Status code handling
+└── Fixtures/
+    ├── IntegrationTestBase.cs     // OcpiCpoSimulator wrapper
+    ├── TestCredentialsHelper.cs
+    └── CapturingLocationsReceiver.cs
 ```
 
 #### 15.3 — Security Tests
@@ -1876,16 +1882,15 @@ Per [testing.md #7](testing.md#7-security-testing): all tagged `[Trait("Category
 Per [testing.md #10](testing.md#10-cicd-pipeline):
 - Matrix: net8.0 × net10.0 × ubuntu × windows
 - Coverage threshold: 80% on core packages
-- Test traits for filtering
+- format-check (CSharpier) and aot-check (trim analyzer) jobs
 
 #### 15.5 — Benchmarks
 
 ```
 benchmarks/DotOcpi.Benchmarks/
 ├── SerializationBenchmarks.cs
-├── TokenValidationBenchmarks.cs
-├── RegistryLookupBenchmarks.cs
-└── PaginationBenchmarks.cs
+├── TokenBenchmarks.cs
+└── RegistryBenchmarks.cs
 ```
 
 Per [performance.md #8](performance.md#8-benchmarking).

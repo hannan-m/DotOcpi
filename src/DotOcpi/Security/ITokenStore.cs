@@ -54,6 +54,43 @@ public interface ITokenStore
         await StoreAsync(newTokenHash, purpose, partyId, cancellationToken).ConfigureAwait(false);
         await RemoveAsync(oldTokenHash, cancellationToken).ConfigureAwait(false);
     }
+
+    // ── Outbound CPO token storage (Token C) ────────────────────────────
+    //
+    // These methods store opaque (protected) CPO tokens for outbound requests.
+    // The caller protects tokens via ITokenProtector before storing and
+    // unprotects after retrieval — ITokenStore implementations never see
+    // raw tokens.
+    //
+    // Default implementations are no-op so existing custom ITokenStore
+    // implementations compile without changes. Override them to enable
+    // automatic outbound token management.
+
+    /// <summary>
+    /// Stores a protected CPO token for outbound requests to a specific CPO.
+    /// </summary>
+    /// <param name="cpoId">The CPO connection key (e.g., "DE:ALL").</param>
+    /// <param name="protectedToken">The token after <see cref="ITokenProtector.Protect"/>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask StoreCpoTokenAsync(string cpoId, string protectedToken, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
+
+    /// <summary>
+    /// Retrieves the protected CPO token for outbound requests.
+    /// </summary>
+    /// <param name="cpoId">The CPO connection key.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The protected token string, or null if not found.</returns>
+    ValueTask<string?> GetCpoTokenAsync(string cpoId, CancellationToken cancellationToken = default) =>
+        new(default(string?));
+
+    /// <summary>
+    /// Removes a stored CPO token (e.g., during unregistration).
+    /// </summary>
+    /// <param name="cpoId">The CPO connection key.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the token was found and removed.</returns>
+    ValueTask<bool> RemoveCpoTokenAsync(string cpoId, CancellationToken cancellationToken = default) => new(false);
 }
 
 /// <summary>

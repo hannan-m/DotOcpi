@@ -18,6 +18,7 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
     private readonly ICredentialsClient _credentialsClient;
     private readonly ICpoRegistry _registry;
     private readonly ITokenStore _tokenStore;
+    private readonly ITokenProtector _protector;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -28,6 +29,7 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
         ICredentialsClient credentialsClient,
         ICpoRegistry registry,
         ITokenStore tokenStore,
+        ITokenProtector protector,
         TimeProvider timeProvider
     )
     {
@@ -35,6 +37,7 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
         _credentialsClient = credentialsClient;
         _registry = registry;
         _tokenStore = tokenStore;
+        _protector = protector;
         _timeProvider = timeProvider;
     }
 
@@ -116,10 +119,16 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
 
         if (!_registry.AddOrUpdate(connection))
         {
+            await _tokenStore.RemoveAsync(tokenBHash, cancellationToken).ConfigureAwait(false);
             throw new OcpiRegistrationException(
                 $"Failed to register CPO connection {connection.ConnectionKey} due to concurrency conflict."
             );
         }
+
+        // Store the CPO's token (Token C) for outbound requests, protected at rest
+        await _tokenStore
+            .StoreCpoTokenAsync(connection.ConnectionKey, _protector.Protect(cpoResponse.Token), cancellationToken)
+            .ConfigureAwait(false);
 
         return new RegistrationResult(connection, cpoResponse.Token);
     }
@@ -148,13 +157,13 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
 
         var credentialsUrl = FindCredentialsEndpoint(versionDetail);
 
-        // Generate new Token C (becomes new Token B)
-        var tokenC = TokenGenerator.Generate();
-        var tokenCHash = TokenHasher.Hash(tokenC);
+        // Generate new Token B to replace the current one
+        var newTokenB = TokenGenerator.Generate();
+        var newTokenBHash = TokenHasher.Hash(newTokenB);
 
         var ourCredentials = BuildCredentials(
             existing.Version,
-            tokenC,
+            newTokenB,
             existing.EmspVersionsUrl
                 ?? throw new OcpiRegistrationException(
                     $"CPO connection '{request.ConnectionKey}' has no stored eMSP versions URL."
@@ -177,20 +186,22 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
 
         // Store new hash first (brief dual-validity window: both old and new hashes are valid)
         var partyId = $"{existing.EmspCountryCode}:{existing.EmspPartyId}";
-        await _tokenStore.StoreAsync(tokenCHash, TokenPurpose.TokenB, partyId, cancellationToken).ConfigureAwait(false);
+        await _tokenStore
+            .StoreAsync(newTokenBHash, TokenPurpose.TokenB, partyId, cancellationToken)
+            .ConfigureAwait(false);
 
         // Update registry before removing the old hash — prevents a zero-validity window
         // where FindByTokenHash(newHash) returns null because the registry still maps the old hash
         var updated = existing with
         {
-            TokenBHash = tokenCHash,
+            TokenBHash = newTokenBHash,
             UpdatedAt = _timeProvider.GetUtcNow(),
         };
 
         if (!_registry.AddOrUpdate(updated))
         {
             // Rollback: remove orphaned new hash since registry update failed
-            await _tokenStore.RemoveAsync(tokenCHash, cancellationToken).ConfigureAwait(false);
+            await _tokenStore.RemoveAsync(newTokenBHash, cancellationToken).ConfigureAwait(false);
             throw new OcpiRegistrationException(
                 $"Failed to update CPO connection {request.ConnectionKey} due to concurrency conflict."
             );
@@ -198,6 +209,11 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
 
         // Safe to remove old hash now — registry points to the new one
         await _tokenStore.RemoveAsync(existing.TokenBHash, cancellationToken).ConfigureAwait(false);
+
+        // Store the CPO's new token (Token C) for outbound requests, protected at rest
+        await _tokenStore
+            .StoreCpoTokenAsync(updated.ConnectionKey, _protector.Protect(cpoResponse.Token), cancellationToken)
+            .ConfigureAwait(false);
 
         return new RegistrationResult(updated, cpoResponse.Token);
     }
@@ -227,6 +243,7 @@ public sealed class RegistrationOrchestrator : IRegistrationClient
             .ConfigureAwait(false);
 
         await _tokenStore.RemoveAsync(existing.TokenBHash, cancellationToken).ConfigureAwait(false);
+        await _tokenStore.RemoveCpoTokenAsync(request.ConnectionKey, cancellationToken).ConfigureAwait(false);
         _registry.Remove(request.ConnectionKey);
     }
 
