@@ -1,0 +1,8 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running CSharpier formatter..."
+csharpier format .
+
+# Stage any formatting changes so they're included in the commit
+git diff --name-only --diff-filter=M | xargs -r git add

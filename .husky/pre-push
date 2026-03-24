@@ -1,0 +1,13 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running tests before push..."
+dotnet test --no-restore --verbosity minimal
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Tests failed. Push cancelled."
+    exit 1
+fi
+
+echo "All tests passed."
