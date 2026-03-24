@@ -118,3 +118,14 @@ flowchart LR
 | `charging_periods` | Yes | Yes | Yes | Yes |
 | Charging preferences | - | - | Yes | Yes |
 | Location reference | Embedded | Embedded | `location_id` | `location_id` |
+
+## Error Handling
+
+| Scenario | Return |
+|:---------|:-------|
+| Session stored successfully | `OcpiResult.Success()` |
+| Unknown session (GET) | `OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Session not found")` |
+| Charging preferences not supported (2.0/2.1.1) | The endpoint is not mapped for pre-2.2 versions |
+
+{: .tip }
+> Session data is updated frequently. If you reject a PUT with an error, the CPO may stop sending updates for that session. Accept and store even if the data seems stale — use `last_updated` to resolve conflicts.

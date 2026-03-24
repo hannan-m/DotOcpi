@@ -27,20 +27,20 @@ The central data model for a CPO connection.
 ```csharp
 public sealed record CpoConnection
 {
-    public string CpoCountryCode { get; }
-    public string CpoPartyId { get; }
-    public string EmspCountryCode { get; }
-    public string EmspPartyId { get; }
-    public OcpiVersion Version { get; }
-    public IReadOnlyDictionary<string, string> ModuleEndpoints { get; }
-    public string TokenBHash { get; }
-    public ConnectionStatus Status { get; }
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; }
-    public string? CpoVersionsUrl { get; }
-    public string? EmspVersionsUrl { get; }
-    public DateTimeOffset? LastHealthCheckAt { get; }
-    public long ConcurrencyVersion { get; }
+    public required string CpoCountryCode { get; init; }
+    public required string CpoPartyId { get; init; }
+    public required string EmspCountryCode { get; init; }
+    public required string EmspPartyId { get; init; }
+    public required OcpiVersion Version { get; init; }
+    public required IReadOnlyDictionary<string, string> ModuleEndpoints { get; init; }
+    public required string TokenBHash { get; init; }
+    public required ConnectionStatus Status { get; init; }
+    public required DateTimeOffset CreatedAt { get; init; }
+    public required DateTimeOffset UpdatedAt { get; init; }
+    public string? CpoVersionsUrl { get; init; }
+    public string? EmspVersionsUrl { get; init; }
+    public DateTimeOffset? LastHealthCheckAt { get; init; }
+    public long ConcurrencyVersion { get; init; }
 
     // Computed property
     public string ConnectionKey { get; }  // "{CpoCountryCode}:{CpoPartyId}"
@@ -56,7 +56,7 @@ public enum ConnectionStatus
     Connected,     // Active and healthy
     Offline,       // Health check failures
     Unregistered,  // Disconnected
-    Suspended,     // Admin-suspended
+    Suspended,     // Suspended due to repeated failures
 }
 ```
 
@@ -126,9 +126,9 @@ Persistent backing for the CPO registry. Implement this for production deploymen
 ```csharp
 public interface ICpoRegistryStore
 {
-    Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct);
-    Task SaveAsync(CpoConnection connection, CancellationToken ct);
-    Task RemoveAsync(string connectionKey, CancellationToken ct);
+    Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken cancellationToken = default);
+    Task SaveAsync(CpoConnection connection, CancellationToken cancellationToken = default);
+    Task RemoveAsync(string connectionKey, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -229,7 +229,7 @@ builder.Services.AddDotOcpi(options =>
 ```
 
 The `CpoHealthMonitor` background service:
-1. Checks for connections with no activity for `StaleConnectionThreshold`
-2. Probes the CPO's versions endpoint
-3. Marks unresponsive connections as `Offline`
+1. Every `HealthMonitoringInterval`, probes all non-pending/non-unregistered CPO connections
+2. Sends a `GET` probe to the CPO's versions endpoint
+3. After consecutive failures (default: 3), marks the connection as `Offline`
 4. Marks recovered connections as `Connected`

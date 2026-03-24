@@ -109,14 +109,30 @@ Abstraction for secure token hash storage.
 ```csharp
 public interface ITokenStore
 {
+    // Inbound token hash storage (Token B)
     ValueTask StoreAsync(
-        string tokenHash, TokenPurpose purpose, string partyId, CancellationToken ct);
+        string tokenHash, TokenPurpose purpose, string partyId,
+        CancellationToken cancellationToken = default);
 
     ValueTask<TokenEntry?> FindAsync(
-        string tokenHash, CancellationToken ct);
+        string tokenHash, CancellationToken cancellationToken = default);
 
     ValueTask<bool> RemoveAsync(
-        string tokenHash, CancellationToken ct);
+        string tokenHash, CancellationToken cancellationToken = default);
+
+    // Atomic rotation: stores new hash, then removes old (default implementation)
+    ValueTask RotateTokenAsync(
+        string oldTokenHash, string newTokenHash, TokenPurpose purpose, string partyId,
+        CancellationToken cancellationToken = default);
+
+    // Outbound CPO token storage (Token C) — protected via ITokenProtector
+    // Default implementations are no-op; override for persistent storage
+    ValueTask StoreCpoTokenAsync(
+        string cpoId, string protectedToken, CancellationToken cancellationToken = default);
+    ValueTask<string?> GetCpoTokenAsync(
+        string cpoId, CancellationToken cancellationToken = default);
+    ValueTask<bool> RemoveCpoTokenAsync(
+        string cpoId, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -136,9 +152,48 @@ public enum TokenPurpose
 {
     TokenA,  // Pre-shared registration token
     TokenB,  // Ongoing communication token
-    TokenC,  // Credential rotation token
 }
 ```
+
+{: .note }
+> Token C (credential rotation) reuses `TokenPurpose.TokenB` since it replaces Token B and serves the same purpose once the rotation is complete.
+
+### OcpiTokenValidator
+
+Validates incoming request tokens against the store using constant-time comparison:
+
+```csharp
+public sealed class OcpiTokenValidator
+{
+    public OcpiTokenValidator(ITokenStore tokenStore);
+    public ValueTask<TokenValidationResult> ValidateAsync(
+        string rawToken, CancellationToken cancellationToken = default);
+}
+
+public sealed record TokenValidationResult
+{
+    public bool IsValid { get; }
+    public TokenEntry? Entry { get; }
+    public string? Error { get; }
+
+    public static TokenValidationResult Valid(TokenEntry entry);
+    public static TokenValidationResult Failed(string error);
+}
+```
+
+### ITokenProtector
+
+Encrypts outbound CPO tokens for at-rest storage:
+
+```csharp
+public interface ITokenProtector
+{
+    string Protect(string plaintext);
+    string Unprotect(string protectedData);
+}
+```
+
+`AddAspNetCoreServer()` registers a Data Protection-backed implementation automatically. The default `PlaintextTokenProtector` stores tokens unencrypted (development only). Use `AddTokenProtector<T>()` for a custom implementation.
 
 ### Built-in Implementation
 
@@ -156,20 +211,26 @@ dotOcpiBuilder.AddTokenStore<MyTokenStore>();
 public class MyTokenStore : ITokenStore
 {
     public async ValueTask StoreAsync(
-        string tokenHash, TokenPurpose purpose, string partyId, CancellationToken ct)
+        string tokenHash, TokenPurpose purpose, string partyId,
+        CancellationToken cancellationToken)
     {
         // Store in Azure Key Vault, database, etc.
     }
 
-    public async ValueTask<TokenEntry?> FindAsync(string tokenHash, CancellationToken ct)
+    public async ValueTask<TokenEntry?> FindAsync(
+        string tokenHash, CancellationToken cancellationToken)
     {
         // Look up by hash
     }
 
-    public async ValueTask<bool> RemoveAsync(string tokenHash, CancellationToken ct)
+    public async ValueTask<bool> RemoveAsync(
+        string tokenHash, CancellationToken cancellationToken)
     {
         // Remove token hash
     }
+
+    // Override RotateTokenAsync for transactional rotation in database-backed stores
+    // Override StoreCpoTokenAsync/GetCpoTokenAsync/RemoveCpoTokenAsync for persistent outbound token storage
 }
 ```
 
@@ -189,10 +250,9 @@ Request → Extract Authorization header → Parse "Token {value}"
 
 | Condition | HTTP | OCPI Status | Message |
 |:----------|:-----|:------------|:--------|
-| Missing `Authorization` header | 401 | 2002 | Not enough information |
-| Malformed header (not `Token xxx`) | 401 | 2002 | Invalid authorization format |
-| Invalid token (hash not found) | 401 | 2002 | Invalid or expired token |
-| Wrong token purpose | 401 | 2002 | Token not authorized for this operation |
+| Missing or malformed `Authorization` header | 401 | 2002 | Missing or malformed Authorization header. |
+| Invalid token (hash not found) | 401 | 2002 | Invalid or unrecognized token. |
+| Token valid but no CPO connection in registry | 401 | 2002 | No CPO connection associated with this token. |
 
 ---
 

@@ -25,9 +25,9 @@ The built-in `InMemoryCpoRegistry` loses all CPO connections on restart. For pro
 ```csharp
 public interface ICpoRegistryStore
 {
-    Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken ct);
-    Task SaveAsync(CpoConnection connection, CancellationToken ct);
-    Task RemoveAsync(string connectionKey, CancellationToken ct);
+    Task<IReadOnlyList<CpoConnection>> LoadAllAsync(CancellationToken cancellationToken = default);
+    Task SaveAsync(CpoConnection connection, CancellationToken cancellationToken = default);
+    Task RemoveAsync(string connectionKey, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -101,6 +101,9 @@ public class CpoConnectionEntity
     public string Status { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public string? CpoVersionsUrl { get; set; }
+    public string? EmspVersionsUrl { get; set; }
+    public DateTimeOffset? LastHealthCheckAt { get; set; }
     public long ConcurrencyVersion { get; set; }
 }
 ```

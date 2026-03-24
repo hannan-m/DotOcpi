@@ -225,3 +225,10 @@ catch (OcpiTransportException ex)
     // Retry with the same Token A (it wasn't consumed)
 }
 ```
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div></div>
+  <div><a href="/DotOcpi/guides/receiving-data/">Receiving Data</a> →</div>
+</div>

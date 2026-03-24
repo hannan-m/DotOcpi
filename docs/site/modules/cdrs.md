@@ -114,3 +114,16 @@ A CDR contains:
 | `last_updated` | - | Yes | Yes | Yes |
 | `signed_data` | - | - | Yes | Yes |
 | `credit` | - | - | - | Yes |
+
+## Error Handling
+
+CDRs are immutable — they're POSTed once and never updated. The `CdrPostResult` distinguishes between new and duplicate CDRs:
+
+| Scenario | Return |
+|:---------|:-------|
+| New CDR stored | `OcpiResult<CdrPostResult>.Success(CdrPostResult.Created)` → HTTP 201 |
+| Duplicate CDR (already exists) | `OcpiResult<CdrPostResult>.Success(CdrPostResult.AlreadyExists)` → HTTP 200 |
+| Invalid CDR data | `OcpiResult<CdrPostResult>.Failure(OcpiStatusCode.InvalidParameters, "...")` |
+
+{: .tip }
+> Always check for duplicates before storing. A CPO may retry a POST if it didn't receive your response. Return `CdrPostResult.AlreadyExists` rather than an error.

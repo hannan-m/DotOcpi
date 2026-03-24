@@ -187,4 +187,18 @@ DotOcpi routes both URL patterns to the same handler — you don't need to handl
 | `last_updated` | - | Yes | Yes | Yes |
 | `energy_mix` | - | Yes | Yes | Yes |
 | `facilities` | - | Yes | Yes | Yes |
-| `time_zone` | - | - | Yes | Yes |
+| `time_zone` | - | Yes | Yes | Yes |
+
+## Error Handling
+
+### Return Codes
+
+| Scenario | Return | What the CPO sees |
+|:---------|:-------|:------------------|
+| Location stored successfully | `OcpiResult.Success()` | HTTP 200, OCPI 1000 |
+| Location not found (GET/PATCH) | `OcpiResult.Failure(OcpiStatusCode.UnknownLocation, "...")` | HTTP 200, OCPI 2003 |
+| Invalid data | `OcpiResult.Failure(OcpiStatusCode.InvalidParameters, "...")` | HTTP 200, OCPI 2001 |
+| Unhandled exception in handler | Caught by middleware | HTTP 500, OCPI 3000 (no details exposed) |
+
+{: .tip }
+> OCPI always returns HTTP 200 for business-level responses. The OCPI status code inside the response body indicates success (1xxx) or error (2xxx/3xxx). HTTP 4xx/5xx is only for transport-level errors (auth, rate limiting, server crash).

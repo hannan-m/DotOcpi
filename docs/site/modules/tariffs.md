@@ -128,3 +128,12 @@ A tariff contains pricing elements with restrictions:
 | `FLAT` | Fixed fee per session |
 | `PARKING_TIME` | Per time unit while parked |
 | `TIME` | Per time unit while charging |
+
+## Error Handling
+
+| Scenario | Return |
+|:---------|:-------|
+| Tariff stored/updated | `OcpiResult.Success()` |
+| Tariff deleted | `OcpiResult.Success()` |
+| Unknown tariff (GET/PATCH/DELETE) | `OcpiResult.Failure(OcpiStatusCode.UnknownLocation, "Tariff not found")` |
+| PATCH on 2.2+ (not supported) | DotOcpi returns HTTP 405 automatically |

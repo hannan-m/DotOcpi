@@ -18,3 +18,5 @@ These guides walk you through the core operations your eMSP will perform:
 - **[Sending Commands](/DotOcpi/guides/sending-commands/)** — Start/stop sessions, reserve connectors, unlock connectors
 - **[Token Management](/DotOcpi/guides/token-management/)** — Understand the Token A/B/C lifecycle
 - **[Multi-Version Support](/DotOcpi/guides/multi-version/)** — Run multiple OCPI versions side-by-side
+- **[Working with Data](/DotOcpi/guides/working-with-data/)** — Deserialize, store, and query OCPI data
+- **[Error Handling](/DotOcpi/guides/error-handling/)** — Troubleshooting, status codes, and common issues

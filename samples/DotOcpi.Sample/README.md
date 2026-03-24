@@ -31,7 +31,6 @@ Two simulated CPOs (DE:CPO on OCPI 2.2.1, FR:ION on OCPI 2.1.1) auto-register on
 
 | Method | URL | Description |
 |--------|-----|-------------|
-| GET | `/api/status` | JSON overview of connections and data counts |
 | GET | `/api/metrics` | Aggregated operational metrics |
 | GET | `/api/events` | SSE stream for real-time updates |
 | POST | `/api/cpos/register` | Register a new CPO (form: versionsUrl, tokenA) |
@@ -41,8 +40,6 @@ Two simulated CPOs (DE:CPO on OCPI 2.2.1, FR:ION on OCPI 2.1.1) auto-register on
 | POST | `/api/sync/{cpoId}/{module}` | Trigger sync for one CPO module |
 | POST | `/api/sync/{cpoId}` | Trigger sync for all modules of a CPO |
 | POST | `/api/sync/all` | Trigger sync for all CPOs |
-| GET | `/api/data/locations` | Stored locations as OCPI JSON |
-| GET | `/api/data/tariffs` | Stored tariffs as OCPI JSON |
 | GET | `/swagger` | Swagger UI for API documentation |
 
 ## Features Demonstrated
@@ -69,7 +66,7 @@ Services/
   MetricsCollector   → Per-CPO request/error/sync tracking
   CommandHistory     → Recent command tracking
   CredentialsHelper  → Version-aware credential building
-  SampleTokenProvider → In-memory outbound token storage
+  (ITokenStore handles outbound CPO token storage automatically)
 Handlers/
   SampleLocationsReceiver, SampleSessionsReceiver, etc.
   SampleSyncHandler  → Stores synced data + broadcasts SSE events

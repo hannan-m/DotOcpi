@@ -32,6 +32,8 @@ Configure per-component log levels in `appsettings.json`:
       "DotOcpi.Auth": "Warning",
       "DotOcpi.Registration": "Debug",
       "DotOcpi.Client": "Information",
+      "DotOcpi.Client.Versions": "Information",
+      "DotOcpi.Client.Credentials": "Information",
       "DotOcpi.Client.Locations": "Debug",
       "DotOcpi.Client.Sessions": "Information",
       "DotOcpi.Client.Cdrs": "Information",
@@ -102,9 +104,9 @@ builder.Services.AddOpenTelemetry()
 
 | Span | Description | Tags |
 |:-----|:------------|:-----|
-| `DotOcpi.Client.{Method}` | Outbound HTTP request | `cpo.id`, `ocpi.module`, `ocpi.version`, `http.status_code`, `ocpi.status_code` |
-| `DotOcpi.Server.{Method}` | Inbound HTTP request | `cpo.id`, `ocpi.module`, `ocpi.version`, `http.method`, `http.route` |
-| `DotOcpi.Registration` | Registration handshake | `cpo.id`, `ocpi.version`, `registration.result` |
+| `OCPI {method} {module}` | Outbound HTTP request | `ocpi.direction`, `ocpi.cpo.id`, `ocpi.module`, `http.method`, `ocpi.version`, `ocpi.status_code`, `http.status_code` |
+| `OCPI {method} {path}` | Inbound HTTP request | `ocpi.direction`, `ocpi.cpo.id`, `http.method`, `http.route`, `ocpi.version`, `ocpi.status_code`, `http.status_code` |
+| `OCPI Registration` | Registration handshake | `ocpi.cpo.id`, `ocpi.version`, `ocpi.status_code`, `http.status_code` |
 
 ### Zero-Cost When Disabled
 
@@ -130,7 +132,7 @@ builder.Services.AddOpenTelemetry()
 
 | Metric | Type | Tags | Description |
 |:-------|:-----|:-----|:------------|
-| `dotocpi.requests` | Counter | `direction`, `module`, `version`, `status_code` | Total OCPI requests |
+| `dotocpi.requests.total` | Counter | `direction`, `module`, `version`, `status` | Total OCPI requests |
 | `dotocpi.request.duration` | Histogram | `direction`, `module`, `version` | Request duration (seconds) |
 | `dotocpi.connections.active` | UpDownCounter | `status` | Active CPO connections |
 | `dotocpi.auth.failures` | Counter | `reason` | Authentication failures |
@@ -138,7 +140,7 @@ builder.Services.AddOpenTelemetry()
 ### Usage in Grafana/Prometheus
 
 ```promql
-# Request rate by module
+# Request rate by module (metric: dotocpi.requests.total)
 rate(dotocpi_requests_total{direction="inbound"}[5m])
 
 # Average request duration
@@ -159,12 +161,12 @@ DotOcpi provides ASP.NET Core health checks:
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddCheck<OcpiRegistryHealthCheck>("ocpi-registry")
-    .AddCheck<OcpiTokenStoreHealthCheck>("ocpi-token-store");
+    .AddOcpiRegistryHealthCheck()
+    .AddOcpiTokenStoreHealthCheck();
 
 // Per-CPO health check
 builder.Services.AddHealthChecks()
-    .AddCheck<OcpiCpoHealthCheck>("ocpi-cpo-DE:CPO");
+    .AddOcpiCpoHealthCheck("DE:CPO");
 ```
 
 ### Health Check Types
@@ -185,7 +187,7 @@ builder.Services.AddHealthChecks()
       "status": "Healthy",
       "description": "3 CPOs connected, 0 offline"
     },
-    "ocpi-token-store": {
+    "ocpi-tokens": {
       "status": "Healthy"
     }
   }

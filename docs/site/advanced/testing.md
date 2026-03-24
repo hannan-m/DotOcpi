@@ -327,3 +327,129 @@ builder.Services.AddTestCpoServer(config =>
 ```
 
 This registers `OcpiCpoSimulator` as a singleton and starts it automatically.
+
+There is also an async variant:
+
+```csharp
+await builder.Services.AddTestCpoServerAsync(config =>
+{
+    config.Locations = [new { id = "LOC1", name = "Test" }];
+});
+```
+
+## Testing Push Scenarios
+
+To test how your eMSP handles incoming pushes from a CPO, send requests directly to your endpoints:
+
+```csharp
+[Fact]
+public async Task LocationPush_Stores_Location()
+{
+    // Arrange: register a CPO first
+    await RegisterTestCpoAsync();
+
+    var client = _factory.CreateClient();
+
+    // The auth token must match a stored Token B
+    var tokenB = _cpo.GetIssuedTokenB();
+
+    // Act: simulate CPO pushing a location
+    var request = new HttpRequestMessage(HttpMethod.Put,
+        "/ocpi/locations/DE/CPO/LOC001");
+    request.Headers.Authorization = new AuthenticationHeaderValue("Token", tokenB);
+    request.Headers.Add("X-Request-ID", Guid.NewGuid().ToString());
+    request.Headers.Add("X-Correlation-ID", Guid.NewGuid().ToString());
+    request.Content = JsonContent.Create(new
+    {
+        id = "LOC001",
+        name = "Pushed Location",
+        address = "456 Test Ave",
+        city = "Munich",
+        country = "DEU",
+        coordinates = new { latitude = "48.1351", longitude = "11.5820" },
+        last_updated = DateTimeOffset.UtcNow,
+    });
+
+    var response = await client.SendAsync(request);
+
+    // Assert
+    response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+    var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+    body.GetProperty("status_code").GetInt32().Should().Be(1000);
+}
+```
+
+## Testing Error Scenarios
+
+### Handler Returns Failure
+
+```csharp
+[Fact]
+public async Task Returns_2003_When_Location_Not_Found()
+{
+    await RegisterTestCpoAsync();
+    var client = _factory.CreateClient();
+    var tokenB = _cpo.GetIssuedTokenB();
+
+    var request = new HttpRequestMessage(HttpMethod.Get,
+        "/ocpi/locations/DE/CPO/NONEXISTENT");
+    request.Headers.Authorization = new AuthenticationHeaderValue("Token", tokenB);
+    request.Headers.Add("X-Request-ID", Guid.NewGuid().ToString());
+    request.Headers.Add("X-Correlation-ID", Guid.NewGuid().ToString());
+
+    var response = await client.SendAsync(request);
+
+    var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+    body.GetProperty("status_code").GetInt32().Should().Be(2003);
+}
+```
+
+### Invalid Token
+
+```csharp
+[Fact]
+public async Task Returns_401_For_Invalid_Token()
+{
+    var client = _factory.CreateClient();
+
+    var request = new HttpRequestMessage(HttpMethod.Get, "/ocpi/locations");
+    request.Headers.Authorization = new AuthenticationHeaderValue("Token", "invalid-token");
+    request.Headers.Add("X-Request-ID", Guid.NewGuid().ToString());
+    request.Headers.Add("X-Correlation-ID", Guid.NewGuid().ToString());
+
+    var response = await client.SendAsync(request);
+
+    response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+}
+```
+
+### CPO Failure During Sync
+
+```csharp
+[Fact]
+public async Task PullSync_Handles_CpoFailure()
+{
+    var server = await OcpiCpoSimulator.CreateAsync(config =>
+    {
+        config.ForceStatusCode = new OcpiStatusCode(3000);
+    });
+
+    // Sync should complete without throwing, with IsSuccess = false
+    var syncService = _factory.Services.GetRequiredService<IOcpiSyncService>();
+    var result = await syncService.SyncModuleFromCpoAsync("DE:CPO", "locations");
+
+    result.IsSuccess.Should().BeFalse();
+    result.ItemCount.Should().Be(0);
+
+    await server.DisposeAsync();
+}
+```
+
+## Testing Tips
+
+- Use `IAsyncLifetime` for test setup/teardown — the simulator is async
+- Each test should create its own simulator to avoid shared state
+- Use `FakeTimeProvider` to test time-dependent behavior without real delays
+- Tag security tests with `[Trait("Category", "Security")]` for filtered CI runs
+- The simulator uses a random port — always use `_server.BaseUrl` instead of hardcoding

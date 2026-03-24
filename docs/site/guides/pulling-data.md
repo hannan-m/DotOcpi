@@ -155,6 +155,8 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
 | `DefaultInterval` | `TimeSpan` | 1 hour | Time between sync cycles |
 | `EnabledModules` | `List<string>` | `["locations", "tariffs"]` | Modules to sync |
 | `MaxJitter` | `TimeSpan` | 5 min | Random delay added to prevent all CPOs syncing at once |
+| `ModuleOverrides` | `Dictionary<string, ModuleSyncOptions>` | empty | Per-module interval overrides |
+| `CpoOverrides` | `Dictionary<string, CpoSyncOptions>` | empty | Per-CPO sync overrides |
 
 ### Custom Sync State
 
@@ -249,3 +251,10 @@ builder.Services.ConfigureHttpClientDefaults(b =>
     });
 });
 ```
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/guides/receiving-data/">Receiving Data</a></div>
+  <div><a href="/DotOcpi/guides/sending-commands/">Sending Commands</a> →</div>
+</div>

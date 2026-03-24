@@ -213,7 +213,7 @@ public async Task<OcpiResult> OnLocationPutAsync(
     OcpiRequestContext context, string locationId, object data, CancellationToken ct)
 {
     // Who sent this?
-    var cpoId = context.CpoId;                     // "DE:CPO"
+    var cpoId = context.CpoId;                     // "DE_CPO" (underscore-separated)
     var cpoIdentity = context.CpoIdentity;          // PartyIdentity("DE", "CPO")
 
     // Which eMSP identity is this for?
@@ -276,3 +276,10 @@ DotOcpi automatically handles version differences:
 | Model types | Version-specific namespace | Version-specific namespace |
 
 You don't need to handle URL routing differences — DotOcpi maps both patterns to the same handler.
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/guides/registration/">Registration</a></div>
+  <div><a href="/DotOcpi/guides/pulling-data/">Pulling Data</a> →</div>
+</div>

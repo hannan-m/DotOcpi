@@ -271,16 +271,56 @@ Context passed to every module handler with request details.
 ```csharp
 public sealed class OcpiRequestContext
 {
-    public CpoConnection Connection { get; }
-    public string RequestId { get; }            // X-Request-ID
-    public string CorrelationId { get; }        // X-Correlation-ID
-    public string CpoId { get; }                // "DE:CPO"
-    public PartyIdentity CpoIdentity { get; }
-    public PartyIdentity EmspIdentity { get; }
-    public OcpiVersion NegotiatedVersion { get; }
-    public string ModuleId { get; }             // "locations", "sessions", etc.
+    public required CpoConnection Connection { get; init; }
+    public required string RequestId { get; init; }            // X-Request-ID
+    public required string CorrelationId { get; init; }        // X-Correlation-ID
+    public required string CpoId { get; init; }                // "DE_CPO" (underscore-separated)
+    public required PartyIdentity CpoIdentity { get; init; }
+    public required PartyIdentity EmspIdentity { get; init; }
+    public required OcpiVersion NegotiatedVersion { get; init; }
+    public required string ModuleId { get; init; }             // "locations", "sessions", etc.
 
     public static bool IsFieldNotAvailable(string? value);  // Check for "#NA" sentinel
+}
+```
+
+---
+
+## OcpiRegistrationContext
+
+Context for initial registration requests (`POST /credentials` with Token A). Used instead of `OcpiRequestContext` because no `CpoConnection` exists yet — the connection is created *as a result* of the registration.
+
+```csharp
+public sealed class OcpiRegistrationContext
+{
+    public required string RequestId { get; init; }          // X-Request-ID
+    public required string CorrelationId { get; init; }      // X-Correlation-ID
+    public required OcpiVersion Version { get; init; }       // Version from URL path
+    public required TokenEntry TokenAEntry { get; init; }    // Validated Token A hash + party ID
+}
+```
+
+### When it's used
+
+Only `ICredentialsHandler.OnCredentialsPostAsync` receives `OcpiRegistrationContext`. All other handler methods receive `OcpiRequestContext` (which includes the established `CpoConnection`).
+
+```csharp
+public class MyCredentialsHandler : ICredentialsHandler
+{
+    public Task<OcpiResult<object>> OnCredentialsPostAsync(
+        OcpiRegistrationContext context,  // ← No CpoConnection yet
+        object credentials,
+        CancellationToken ct)
+    {
+        // context.TokenAEntry.PartyId tells you who this Token A belongs to
+        // context.Version tells you which OCPI version the CPO chose
+    }
+
+    public Task<OcpiResult<object>> OnCredentialsPutAsync(
+        OcpiRequestContext context,       // ← Has CpoConnection
+        object credentials,
+        CancellationToken ct)
+    { }
 }
 ```
 

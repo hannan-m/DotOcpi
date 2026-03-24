@@ -53,13 +53,17 @@ var token = TokenGenerator.Generate();
 
 ### Storage
 
-Raw tokens are **never stored**. Only SHA-256 hashes are persisted:
+**Token B (inbound):** Only SHA-256 hashes are stored. Raw tokens are never persisted:
 
 ```csharp
 // DotOcpi stores this hash, not the raw token
 var hash = TokenHasher.Hash(rawToken);
 // Example: "a3f2b8c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1"
 ```
+
+**Token C (outbound):** Stored encrypted at rest via `ITokenProtector`, then persisted in `ITokenStore`. The library stores and retrieves Token C automatically during registration and rotation — no consumer action required.
+
+In ASP.NET Core deployments, `AddAspNetCoreServer()` registers a Data Protection-backed `ITokenProtector` automatically. For custom encryption, use `AddTokenProtector<T>()`.
 
 ### Validation
 
@@ -90,9 +94,22 @@ The `ITokenStore` interface abstracts token hash storage:
 ```csharp
 public interface ITokenStore
 {
-    ValueTask StoreAsync(string tokenHash, TokenPurpose purpose, string partyId, CancellationToken ct);
-    ValueTask<TokenEntry?> FindAsync(string tokenHash, CancellationToken ct);
-    ValueTask<bool> RemoveAsync(string tokenHash, CancellationToken ct);
+    // Inbound token hash storage (Token B)
+    ValueTask StoreAsync(string tokenHash, TokenPurpose purpose, string partyId,
+        CancellationToken cancellationToken = default);
+    ValueTask<TokenEntry?> FindAsync(string tokenHash, CancellationToken cancellationToken = default);
+    ValueTask<bool> RemoveAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    // Atomic rotation: stores new hash, then removes old (has default implementation)
+    ValueTask RotateTokenAsync(string oldTokenHash, string newTokenHash, TokenPurpose purpose,
+        string partyId, CancellationToken cancellationToken = default);
+
+    // Outbound CPO token storage (Token C) — protected via ITokenProtector
+    // Default implementations are no-op; override for persistent storage
+    ValueTask StoreCpoTokenAsync(string cpoId, string protectedToken,
+        CancellationToken cancellationToken = default);
+    ValueTask<string?> GetCpoTokenAsync(string cpoId, CancellationToken cancellationToken = default);
+    ValueTask<bool> RemoveCpoTokenAsync(string cpoId, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -129,12 +146,12 @@ var result = await registrationClient.RotateCredentialsAsync(new CredentialRotat
 
 The rotation flow:
 
-1. Generate a new Token C
-2. `PUT /credentials` to the CPO with Token C
-3. CPO validates the request using the current Token B
-4. CPO responds with a new Token B
-5. Old Token B hash is removed from storage
-6. New Token B hash is stored
+1. Generate a new Token B (replacing the current one)
+2. `PUT /credentials` to the CPO with the new Token B
+3. CPO validates the request using the current Token C
+4. CPO responds with a new Token C
+5. New Token B hash is stored, registry updated, old hash removed
+6. New Token C is protected via `ITokenProtector` and stored in `ITokenStore`
 
 ## Pushing Tokens to CPOs
 
@@ -215,3 +232,10 @@ public class MyTokensSender : ITokensSender
     }
 }
 ```
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/guides/sending-commands/">Sending Commands</a></div>
+  <div><a href="/DotOcpi/guides/multi-version/">Multi-Version Support</a> →</div>
+</div>

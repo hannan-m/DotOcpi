@@ -49,7 +49,7 @@ builder.Services.AddDotOcpi(options =>
 
 | Property | Type | Default | Description |
 |:---------|:-----|:--------|:------------|
-| `SupportedVersions` | `IReadOnlyList<OcpiVersion>` | — | OCPI versions your eMSP supports |
+| `SupportedVersions` | `IReadOnlyList<OcpiVersion>` | `[V2_2_1]` | OCPI versions your eMSP supports |
 | `DefaultEmspIdentity` | `PartyIdentity?` | — | Default country_code/party_id |
 | `BaseUrl` | `Uri?` | — | Public base URL for OCPI endpoints |
 | `EnableHealthMonitoring` | `bool` | `true` | Enable background CPO health probing |
@@ -107,6 +107,9 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
     // CPO registry
     .AddInMemoryCpoRegistry()             // Development only
     // .AddCpoRegistryStore<MyStore>()    // Production: your ICpoRegistryStore
+
+    // Token protector (optional — AddAspNetCoreServer() provides Data Protection by default)
+    // .AddTokenProtector<MyCustomProtector>()
 
     // Server endpoints (requires DotOcpi.AspNetCore)
     .AddAspNetCoreServer()
@@ -247,11 +250,18 @@ See [Observability](/DotOcpi/api-reference/observability/) for the full list of 
 
 ## Startup Validation
 
-DotOcpi validates your configuration at startup:
+DotOcpi validates your configuration at startup via `IValidateOptions<DotOcpiOptions>`:
 
 - `SupportedVersions` must not be empty
-- `BaseUrl` must use HTTPS (except in Development environment)
-- `DefaultEmspIdentity` must be set
-- Required module handler interfaces must be registered
+- `BaseUrl` must use HTTPS (if set)
+- `HealthMonitoringInterval` must be positive
+- `StaleConnectionThreshold` must be positive
 
-If validation fails, you get a clear `OcpiConfigurationException` at startup with a specific message explaining what to fix.
+If validation fails, you get an `OptionsValidationException` at startup with a specific message explaining what to fix.
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/getting-started/quick-start/">Quick Start</a></div>
+  <div></div>
+</div>

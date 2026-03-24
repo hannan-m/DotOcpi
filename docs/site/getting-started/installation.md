@@ -103,3 +103,10 @@ dotnet add package DotOcpi.Client
 ## Next Steps
 
 [Quick Start](/DotOcpi/getting-started/quick-start/){: .btn .btn-primary }
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div></div>
+  <div><a href="/DotOcpi/getting-started/quick-start/">Quick Start</a> →</div>
+</div>

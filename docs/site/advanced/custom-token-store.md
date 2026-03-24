@@ -25,19 +25,33 @@ The built-in `InMemoryTokenStore` loses all tokens on restart. For production, i
 ```csharp
 public interface ITokenStore
 {
+    // Inbound token hash storage (Token B)
     ValueTask StoreAsync(
-        string tokenHash, TokenPurpose purpose, string partyId, CancellationToken ct);
-
+        string tokenHash, TokenPurpose purpose, string partyId,
+        CancellationToken cancellationToken = default);
     ValueTask<TokenEntry?> FindAsync(
-        string tokenHash, CancellationToken ct);
-
+        string tokenHash, CancellationToken cancellationToken = default);
     ValueTask<bool> RemoveAsync(
-        string tokenHash, CancellationToken ct);
+        string tokenHash, CancellationToken cancellationToken = default);
+
+    // Atomic rotation (has default implementation — override for transactional behavior)
+    ValueTask RotateTokenAsync(
+        string oldTokenHash, string newTokenHash, TokenPurpose purpose, string partyId,
+        CancellationToken cancellationToken = default);
+
+    // Outbound CPO token storage (Token C) — protected via ITokenProtector before storage
+    // Default implementations are no-op; override for persistent storage
+    ValueTask StoreCpoTokenAsync(
+        string cpoId, string protectedToken, CancellationToken cancellationToken = default);
+    ValueTask<string?> GetCpoTokenAsync(
+        string cpoId, CancellationToken cancellationToken = default);
+    ValueTask<bool> RemoveCpoTokenAsync(
+        string cpoId, CancellationToken cancellationToken = default);
 }
 ```
 
 {: .important }
-> `ITokenStore` stores **hashes**, not raw tokens. The raw token is never passed to or returned from the store.
+> The inbound methods store **SHA-256 hashes** of Token B — raw tokens are never passed to the store. The outbound methods store **protected** (encrypted) Token C values — the library calls `ITokenProtector.Protect()` before storing and `ITokenProtector.Unprotect()` after retrieval. The CPO token methods have no-op default implementations; override them to enable automatic outbound token management.
 
 ## Example: SQL Server
 
@@ -140,6 +154,49 @@ public class KeyVaultTokenStore : ITokenStore
 }
 ```
 
+## Adding CPO Token Storage (SQL Example)
+
+The CPO token methods have default no-op implementations. Override them for persistent storage:
+
+```csharp
+// Add to your SqlTokenStore class:
+public async ValueTask StoreCpoTokenAsync(
+    string cpoId, string protectedToken, CancellationToken ct)
+{
+    using var db = await _dbFactory.CreateConnectionAsync(ct);
+    await db.ExecuteAsync(
+        """
+        MERGE INTO OcpiCpoTokens AS target
+        USING (SELECT @CpoId AS CpoId) AS source
+        ON target.CpoId = source.CpoId
+        WHEN MATCHED THEN UPDATE SET ProtectedToken = @Token, UpdatedAt = GETUTCDATE()
+        WHEN NOT MATCHED THEN INSERT (CpoId, ProtectedToken, CreatedAt, UpdatedAt)
+            VALUES (@CpoId, @Token, GETUTCDATE(), GETUTCDATE());
+        """,
+        new { CpoId = cpoId, Token = protectedToken });
+}
+
+public async ValueTask<string?> GetCpoTokenAsync(string cpoId, CancellationToken ct)
+{
+    using var db = await _dbFactory.CreateConnectionAsync(ct);
+    return await db.QuerySingleOrDefaultAsync<string>(
+        "SELECT ProtectedToken FROM OcpiCpoTokens WHERE CpoId = @CpoId",
+        new { CpoId = cpoId });
+}
+
+public async ValueTask<bool> RemoveCpoTokenAsync(string cpoId, CancellationToken ct)
+{
+    using var db = await _dbFactory.CreateConnectionAsync(ct);
+    var rows = await db.ExecuteAsync(
+        "DELETE FROM OcpiCpoTokens WHERE CpoId = @CpoId",
+        new { CpoId = cpoId });
+    return rows > 0;
+}
+```
+
+{: .note }
+> The `protectedToken` parameter is already encrypted by `ITokenProtector` before reaching the store. In ASP.NET Core deployments, this uses the Data Protection API by default. The store just persists the opaque string — no additional encryption is needed at the storage layer unless you want defense in depth.
+
 ## Registration
 
 ```csharp
@@ -150,6 +207,11 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
 builder.Services.AddDotOcpi(options => { /* ... */ })
     .AddTokenStore<KeyVaultTokenStore>();
 
+// Custom token protector (optional — AddAspNetCoreServer() provides Data Protection by default)
+builder.Services.AddDotOcpi(options => { /* ... */ })
+    .AddTokenStore<SqlTokenStore>()
+    .AddTokenProtector<MyCustomProtector>();
+
 // The store is registered as Singleton
 ```
 
@@ -159,3 +221,4 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
 - Use `ValueTask` (not `Task`) — the interface requires it for cache-friendly returns
 - Consider adding a local cache with short TTL for frequently accessed hashes
 - Use connection pooling for database implementations
+- `GetCpoTokenAsync` is cached by `CpoConnectionContextProvider` — called once per CPO until invalidated

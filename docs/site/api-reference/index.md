@@ -17,3 +17,5 @@ Detailed reference for all public types, interfaces, and configuration options.
 - [Security](/DotOcpi/api-reference/security/) — Token generation, hashing, and authentication
 - [CPO Registry](/DotOcpi/api-reference/registry/) — Connection management and lookup
 - [Observability](/DotOcpi/api-reference/observability/) — Logging, metrics, and tracing
+- [Sync](/DotOcpi/api-reference/sync/) — Pull sync service, handler, and configuration
+- [Validation](/DotOcpi/api-reference/validation/) — Model validation pipeline and custom validators

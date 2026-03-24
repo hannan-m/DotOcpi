@@ -28,7 +28,7 @@ Monitors the overall state of the CPO registry:
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddCheck<OcpiRegistryHealthCheck>("ocpi-registry");
+    .AddOcpiRegistryHealthCheck();
 ```
 
 | Status | Condition |
@@ -43,7 +43,7 @@ Verifies the token store is operational:
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddCheck<OcpiTokenStoreHealthCheck>("ocpi-token-store");
+    .AddOcpiTokenStoreHealthCheck();
 ```
 
 ### OcpiCpoHealthCheck
@@ -52,16 +52,16 @@ Checks a specific CPO connection:
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddCheck<OcpiCpoHealthCheck>("ocpi-cpo-DE:CPO");
+    .AddOcpiCpoHealthCheck("DE:CPO");
 ```
 
 ## Full Setup
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddCheck<OcpiRegistryHealthCheck>("ocpi-registry",
+    .AddOcpiRegistryHealthCheck(
         tags: ["ocpi", "ready"])
-    .AddCheck<OcpiTokenStoreHealthCheck>("ocpi-token-store",
+    .AddOcpiTokenStoreHealthCheck(
         tags: ["ocpi", "ready"]);
 
 var app = builder.Build();
@@ -92,18 +92,19 @@ builder.Services.AddDotOcpi(options =>
 
 The `CpoHealthMonitor` background service:
 
-1. Every `HealthMonitoringInterval`, checks for CPOs with no activity for `StaleConnectionThreshold`
-2. Sends a `GET /versions` probe to the CPO
-3. If the probe fails, marks the connection as `Offline`
+1. Every `HealthMonitoringInterval`, probes all non-pending/non-unregistered CPO connections
+2. Sends a `GET /versions` probe to the CPO's versions endpoint
+3. After `maxConsecutiveFailures` (default: 3) consecutive failures, marks the connection as `Offline`
 4. If a previously offline CPO responds, marks it as `Connected`
 
 ```mermaid
 flowchart TD
-    A[Timer fires] --> B{Any stale CPOs?}
-    B -->|No| A
-    B -->|Yes| C[GET /versions]
-    C -->|Success| D[Status: Connected]
-    C -->|Failure| E[Status: Offline]
+    A[Timer fires] --> B[Probe all active CPOs]
+    B --> C[GET /versions]
+    C -->|Success| D[Reset failure count]
+    C -->|Failure| E{Consecutive failures >= max?}
+    E -->|No| A
+    E -->|Yes| F[Status: Offline]
     D --> A
-    E --> A
+    F --> A
 ```

@@ -157,7 +157,7 @@ builder.Services.AddSingleton<ICommandsCallback, MyCommandsCallback>();
 
 ## Callback Store
 
-DotOcpi tracks pending command callbacks using `ICallbackStore`:
+DotOcpi tracks pending command callbacks using `ICallbackStore` (internal interface, registered automatically by `AddClient()`):
 
 ```csharp
 // The built-in InMemoryCallbackStore is registered automatically
@@ -200,3 +200,10 @@ else
     Console.WriteLine($"Rejected: {result.StatusMessage}");
 }
 ```
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/guides/pulling-data/">Pulling Data</a></div>
+  <div><a href="/DotOcpi/guides/token-management/">Token Management</a> →</div>
+</div>

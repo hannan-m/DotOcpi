@@ -20,18 +20,15 @@ nav_order: 7
 
 The Commands module lets your eMSP send charging commands to CPOs. Commands follow an asynchronous pattern: your eMSP sends a command, the CPO acknowledges it, then calls back with the final result.
 
-{: .note }
-> Commands are not supported in OCPI 2.0. Available from OCPI 2.1.1 onwards.
-
 ## Available Commands
 
 | Command | Description | Available |
 |:--------|:------------|:----------|
-| `StartSession` | Start a charging session | 2.1.1+ |
-| `StopSession` | Stop an active charging session | 2.1.1+ |
-| `ReserveNow` | Reserve a specific EVSE/connector | 2.1.1+ |
-| `UnlockConnector` | Remotely unlock a connector | 2.1.1+ |
-| `CancelReservation` | Cancel an existing reservation | 2.2.1 only |
+| `StartSession` | Start a charging session | 2.0+ |
+| `StopSession` | Stop an active charging session | 2.0+ |
+| `ReserveNow` | Reserve a specific EVSE/connector | 2.0+ |
+| `UnlockConnector` | Remotely unlock a connector | 2.0+ |
+| `CancelReservation` | Cancel an existing reservation | 2.2+ |
 
 ## Sending Commands
 
@@ -127,8 +124,8 @@ public class MyCommandsCallback : ICommandsCallback
 
 ## Version Differences
 
-| Feature | 2.1.1 | 2.2 | 2.2.1 |
-|:--------|:------|:----|:------|
-| CancelReservation | - | - | Yes |
-| `reservation_id` type | `int` | `string` | `string` |
-| CommandResponse/Result split | Combined | Separate types | Separate types |
+| Feature | 2.0 | 2.1.1 | 2.2 | 2.2.1 |
+|:--------|:----|:------|:----|:------|
+| CancelReservation | - | - | Yes | Yes |
+| `reservation_id` type | `int` | `int` | `string` | `string` |
+| CommandResponse/Result split | Combined | Combined | Separate types | Separate types |

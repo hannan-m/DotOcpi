@@ -76,6 +76,14 @@ dotOcpiBuilder.AddAspNetCoreServer();
 dotOcpiBuilder.AddClient();
 ```
 
+### Token Protector
+
+```csharp
+// Custom token protector for encrypting outbound CPO tokens at rest
+// (AddAspNetCoreServer() provides a Data Protection-backed one by default)
+dotOcpiBuilder.AddTokenProtector<MyCustomProtector>();
+```
+
 ### Pull Sync
 
 ```csharp
@@ -86,6 +94,9 @@ dotOcpiBuilder.AddPullSync(options =>
     options.EnabledModules = ["locations", "tariffs"];
     options.MaxJitter = TimeSpan.FromMinutes(5);
 });
+
+// Register a sync handler to receive pulled data
+dotOcpiBuilder.AddSyncHandler<MySyncHandler>();
 ```
 
 ## Full Registration Example
@@ -138,10 +149,32 @@ group.MapLocationsEndpoints();         // Add only the modules you need
 group.MapSessionsEndpoints();
 ```
 
+### Rate Limiting
+
+Pass `OcpiRateLimitOptions` to enable per-CPO rate limiting:
+
+```csharp
+app.MapAllOcpiEndpoints(rateLimitOptions: new OcpiRateLimitOptions
+{
+    MaxRequestsPerWindow = 100,   // Requests per CPO per window
+    Window = TimeSpan.FromMinutes(1),
+});
+```
+
+| Property | Type | Default | Description |
+|:---------|:-----|:--------|:------------|
+| `MaxRequestsPerWindow` | `int` | 100 | Maximum requests allowed per CPO within the time window |
+| `Window` | `TimeSpan` | 1 minute | The fixed time window for rate limiting |
+
+When a CPO exceeds the limit, they receive HTTP 429 with a `Retry-After` header and OCPI status 2000.
+
+{: .note }
+> Rate limiting is partitioned by CPO connection key. Each CPO has its own independent rate limit bucket. Without passing `rateLimitOptions`, no rate limiting is applied.
+
 `MapAllOcpiEndpoints()` registers:
 - Middleware pipeline (request IDs, security headers, exception handling)
-- Auth + rate limiting + metrics filters
-- Module endpoints for all registered handlers (locations, sessions, CDRs, tariffs, tokens, commands, charging profiles)
+- Auth + metrics filters (rate limiting only when `rateLimitOptions` is passed)
+- Module endpoints for all registered handlers (credentials, locations, sessions, CDRs, tariffs, tokens, commands, charging profiles)
 
 Both URL patterns are registered:
 - `/{module}/{object_id}` for OCPI 2.0/2.1.1
@@ -149,16 +182,25 @@ Both URL patterns are registered:
 
 ## Services Registered
 
-After calling `AddDotOcpi()`, these services are available via DI:
+### By `AddDotOcpi()`
+
+| Service | Lifetime | Description |
+|:--------|:---------|:------------|
+| `DotOcpiOptions` | Options | Configuration (via `IOptions<DotOcpiOptions>`) |
+| `OcpiMetrics` | Singleton | Metrics instrumentation |
+| `ITokenProtector` | Singleton | Token encryption (default: `PlaintextTokenProtector`) |
+| `TimeProvider` | Singleton | Enables deterministic time in tests |
+| `ICpoRegistry` | Singleton | CPO connection registry (after `AddInMemoryCpoRegistry()`) |
+| `ITokenStore` | Singleton | Token hash storage (after `AddInMemoryTokenStore()`) |
+
+### By `AddClient()`
 
 | Service | Lifetime | Description |
 |:--------|:---------|:------------|
 | `IRegistrationClient` | Singleton | Full registration orchestrator |
 | `IVersionDiscovery` | Singleton | Version discovery |
 | `ICredentialsClient` | Singleton | Low-level credentials operations |
-| `ICpoRegistry` | Singleton | CPO connection registry |
-| `ITokenStore` | Singleton | Token hash storage |
-| `IOutboundTokenProvider` | *Consumer-provided* | Retrieves raw Token B for outbound CPO requests. Consumers must register their own implementation. |
+| `IOutboundTokenProvider` | Singleton | Retrieves Token B for outbound CPO requests (default: reads from `ITokenStore`) |
 | `IOcpiClient` | Singleton | Client facade |
 | `ILocationsClient` | Singleton | Locations pull client |
 | `ISessionsClient` | Singleton | Sessions pull client |
@@ -170,10 +212,10 @@ After calling `AddDotOcpi()`, these services are available via DI:
 
 ## Startup Validation
 
-DotOcpi validates configuration at startup. Missing or invalid configuration throws `OcpiConfigurationException` with a clear message:
+DotOcpi validates configuration at startup using `IValidateOptions<DotOcpiOptions>`. Invalid configuration throws `OptionsValidationException` with a clear message:
 
 ```
-DotOcpi configuration error: SupportedVersions must contain at least one version.
-DotOcpi configuration error: BaseUrl must use HTTPS scheme.
-DotOcpi configuration error: No ILocationsReceiver registered. Register an implementation or remove the locations module.
+At least one supported OCPI version must be configured.
+BaseUrl must use HTTPS. Got: http
+HealthMonitoringInterval must be positive.
 ```

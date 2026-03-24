@@ -226,3 +226,10 @@ public async Task Registration_Succeeds_ForAllVersions(OcpiVersion version)
     // Test registration against each version
 }
 ```
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/guides/token-management/">Token Management</a></div>
+  <div><a href="/DotOcpi/guides/working-with-data/">Working with Data</a> →</div>
+</div>

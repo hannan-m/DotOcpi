@@ -62,10 +62,12 @@ When a CPO initiates registration with your eMSP, DotOcpi handles the credential
 public class MyCredentialsHandler : ICredentialsHandler
 {
     public async Task<OcpiResult<object>> OnCredentialsPostAsync(
-        OcpiRequestContext context, object credentials, CancellationToken ct)
+        OcpiRegistrationContext context, object credentials, CancellationToken ct)
     {
-        // Called when a CPO POSTs credentials to register
-        // Return your eMSP's credentials
+        // Called when a CPO POSTs credentials to register (Token A auth).
+        // No CpoConnection exists yet — context.TokenAEntry gives you
+        // the validated Token A hash and associated party ID.
+        // Return your eMSP's credentials.
         return OcpiResult<object>.Success(new
         {
             token = TokenGenerator.Generate(),
@@ -86,25 +88,27 @@ public class MyCredentialsHandler : ICredentialsHandler
     public async Task<OcpiResult<object>> OnCredentialsPutAsync(
         OcpiRequestContext context, object credentials, CancellationToken ct)
     {
-        // Called when a CPO PUTs credentials to rotate
+        // Called when a CPO PUTs credentials to rotate (Token B auth)
         return OcpiResult<object>.Success(/* new credentials */);
     }
 
     public async Task<OcpiResult> OnCredentialsDeleteAsync(
         OcpiRequestContext context, CancellationToken ct)
     {
-        // Called when a CPO DELETEs credentials to unregister
+        // Called when a CPO DELETEs credentials to unregister (Token B auth)
         return OcpiResult.Success();
     }
 
     public async Task<OcpiResult<object>> GetCredentialsAsync(
         OcpiRequestContext context, CancellationToken ct)
     {
-        // Called when a CPO GETs your credentials
+        // Called when a CPO GETs your credentials (Token B auth)
         return OcpiResult<object>.Success(/* your credentials */);
     }
 }
 ```
+
+Note that `OnCredentialsPostAsync` receives `OcpiRegistrationContext` (not `OcpiRequestContext`) because initial registration uses Token A and no CPO connection exists yet. The other methods receive `OcpiRequestContext` which includes the established `CpoConnection`.
 
 ## Version Differences
 
@@ -121,9 +125,7 @@ public class MyCredentialsHandler : ICredentialsHandler
 {
   "token": "abc123...",
   "url": "https://emsp.com/ocpi/versions",
-  "business_details": {
-    "name": "My eMSP"
-  },
+  "business_name": "My eMSP",
   "party_id": "MSP",
   "country_code": "NL"
 }

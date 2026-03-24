@@ -201,3 +201,10 @@ if (result.IsSuccess)
 - [Registration Guide](/DotOcpi/guides/registration/) — understand the full registration flow
 - [Module Guides](/DotOcpi/modules/) — deep dive into each OCPI module
 - [Testing Guide](/DotOcpi/advanced/testing/) — test against a fake CPO server
+
+---
+
+<div style="display: flex; justify-content: space-between; margin-top: 2rem;">
+  <div>← <a href="/DotOcpi/getting-started/installation/">Installation</a></div>
+  <div><a href="/DotOcpi/getting-started/configuration/">Configuration</a> →</div>
+</div>
