@@ -24,6 +24,7 @@ public class CredentialRotationTests
             _credentialsClient,
             _registry,
             _tokenStore,
+            new PlaintextTokenProtector(),
             TimeProvider.System
         );
     }
@@ -299,5 +300,43 @@ public class CredentialRotationTests
         var act = () => _orchestrator.UnregisterAsync(new UnregisterRequest("DE:ALL", "token"));
 
         await act.Should().ThrowAsync<OcpiRegistrationException>().WithMessage("*no stored versions URL*");
+    }
+
+    [Fact]
+    public async Task RotateCredentials_StoresCpoTokenProtected()
+    {
+        var existing = CreateExistingConnection();
+        SetupRotationHappyPath(existing);
+
+        var result = await _orchestrator.RotateCredentialsAsync(
+            new CredentialRotationRequest("DE:ALL", "token", "eMSP")
+        );
+
+        await _tokenStore
+            .Received(1)
+            .StoreCpoTokenAsync(result.Connection.ConnectionKey, "cpo-new-token", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Unregister_RemovesCpoToken()
+    {
+        var existing = CreateExistingConnection();
+        _registry.FindByConnectionKey("DE:ALL").Returns(existing);
+
+        _discovery
+            .GetVersionDetailAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(
+                new VersionDetailInfo(
+                    "2.2.1",
+                    new List<EndpointInfo>
+                    {
+                        new("credentials", "SENDER", "https://cpo.example.com/ocpi/2.2.1/credentials"),
+                    }
+                )
+            );
+
+        await _orchestrator.UnregisterAsync(new UnregisterRequest("DE:ALL", "current-cpo-token"));
+
+        await _tokenStore.Received(1).RemoveCpoTokenAsync("DE:ALL", Arg.Any<CancellationToken>());
     }
 }

@@ -24,6 +24,7 @@ public class RegistrationOrchestratorTests
             _credentialsClient,
             _registry,
             _tokenStore,
+            new PlaintextTokenProtector(),
             TimeProvider.System
         );
     }
@@ -318,5 +319,30 @@ public class RegistrationOrchestratorTests
         var after = DateTimeOffset.UtcNow;
         result.Connection.CreatedAt.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
         result.Connection.UpdatedAt.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_RegistryConflict_CleansUpOrphanedHash()
+    {
+        SetupHappyPath();
+        _registry.AddOrUpdate(Arg.Any<CpoConnection>()).Returns(false);
+
+        var act = () => _orchestrator.RegisterAsync(CreateRequest());
+
+        await act.Should().ThrowAsync<OcpiRegistrationException>();
+        await _tokenStore.Received(1).RemoveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RegisterAsync_StoresCpoTokenProtected()
+    {
+        SetupHappyPath();
+
+        var result = await _orchestrator.RegisterAsync(CreateRequest());
+
+        // PlaintextTokenProtector returns input unchanged, so the stored value equals the raw CPO token
+        await _tokenStore
+            .Received(1)
+            .StoreCpoTokenAsync(result.Connection.ConnectionKey, "cpo-token-b", Arg.Any<CancellationToken>());
     }
 }

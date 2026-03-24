@@ -5,6 +5,8 @@ using DotOcpi.Registry;
 using DotOcpi.Security;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
@@ -22,7 +24,7 @@ public class OcpiAuthFilterTests
     {
         _tokenValidator = new OcpiTokenValidator(_tokenStore);
         var metrics = new OcpiMetrics(new TestMeterFactory());
-        _filter = new OcpiAuthFilter(_tokenValidator, _registry, metrics);
+        _filter = new OcpiAuthFilter(_tokenValidator, _registry, metrics, new NullLogger<OcpiAuthFilter>());
     }
 
     private static CpoConnection CreateConnection() =>

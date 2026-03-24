@@ -10,7 +10,7 @@ public interface ITokenStore
     /// Stores a token hash with its purpose and associated party identity.
     /// </summary>
     /// <param name="tokenHash">The SHA-256 hash of the token.</param>
-    /// <param name="purpose">The token's purpose (A, B, or C).</param>
+    /// <param name="purpose">The token's purpose (A or B).</param>
     /// <param name="partyId">The party identity this token is associated with (e.g. "NL:TNM").</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     ValueTask StoreAsync(

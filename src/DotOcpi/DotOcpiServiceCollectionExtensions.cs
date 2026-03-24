@@ -1,4 +1,5 @@
 using DotOcpi.Observability;
+using DotOcpi.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -41,6 +42,10 @@ public static class DotOcpiServiceCollectionExtensions
         // TimeProvider enables deterministic time in tests. TryAdd so consumers
         // can register FakeTimeProvider before calling AddDotOcpi.
         services.TryAddSingleton(TimeProvider.System);
+
+        // PlaintextTokenProtector is the default — stores outbound tokens unencrypted.
+        // AddAspNetCoreServer() replaces this with a Data Protection-backed implementation.
+        services.TryAddSingleton<ITokenProtector, PlaintextTokenProtector>();
 
         return new DotOcpiBuilder(services);
     }

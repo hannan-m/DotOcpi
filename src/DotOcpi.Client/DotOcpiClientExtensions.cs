@@ -2,7 +2,9 @@ using DotOcpi.Client.Internal;
 using DotOcpi.Client.Sync;
 using DotOcpi.Registration;
 using DotOcpi.Registry;
+using DotOcpi.Security;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,11 +17,21 @@ public static class DotOcpiClientExtensions
 {
     /// <summary>
     /// Adds the OCPI HTTP client, all module clients, and supporting infrastructure.
-    /// Consumers must also register an <see cref="IOutboundTokenProvider"/> implementation.
+    /// A default <see cref="IOutboundTokenProvider"/> backed by <see cref="ITokenStore"/>
+    /// is registered automatically. Consumers can override by registering their own
+    /// <see cref="IOutboundTokenProvider"/> before calling this method.
     /// </summary>
     public static DotOcpiBuilder AddClient(this DotOcpiBuilder builder)
     {
         var httpClientBuilder = OcpiHttpClientConfiguration.AddOcpiHttpClient(builder.Services);
+
+        // Default outbound token provider reads from ITokenStore and unprotects
+        // via ITokenProtector. Consumer-registered IOutboundTokenProvider takes
+        // precedence because TryAdd only registers if no prior registration exists.
+        builder.Services.TryAddSingleton<IOutboundTokenProvider>(sp => new TokenStoreOutboundTokenProvider(
+            sp.GetRequiredService<ITokenStore>(),
+            sp.GetRequiredService<ITokenProtector>()
+        ));
 
         // Connection context cache — resolves and caches CpoConnection + token
         // per CPO so module clients never hit the registry or token provider

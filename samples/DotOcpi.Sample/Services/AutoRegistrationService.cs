@@ -16,7 +16,7 @@ public sealed partial class AutoRegistrationService(
     ICredentialsClient credentialsClient,
     ICpoRegistry registry,
     ITokenStore tokenStore,
-    SampleTokenProvider tokenProvider,
+    ITokenProtector tokenProtector,
     IOcpiSyncService syncService,
     ILogger<AutoRegistrationService> logger
 ) : BackgroundService
@@ -89,7 +89,9 @@ public sealed partial class AutoRegistrationService(
         };
 
         registry.AddOrUpdate(connection);
-        tokenProvider.StoreToken(connection.ConnectionKey, cpoResponse.Token);
+        await tokenStore
+            .StoreCpoTokenAsync(connection.ConnectionKey, tokenProtector.Protect(cpoResponse.Token), ct)
+            .ConfigureAwait(false);
         LogRegistered(connection.ConnectionKey, negotiated.ToVersionString());
 
         await syncService.SyncFromCpoAsync(connection.ConnectionKey, cancellationToken: ct).ConfigureAwait(false);

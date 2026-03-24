@@ -1,7 +1,9 @@
 using DotOcpi.AspNetCore.Middleware;
+using DotOcpi.AspNetCore.Security;
 using DotOcpi.Security;
 using DotOcpi.Validation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DotOcpi.AspNetCore;
 
@@ -18,6 +20,12 @@ public static class DotOcpiAspNetCoreExtensions
     {
         builder.Services.AddSingleton<OcpiExceptionMiddleware>();
         builder.Services.AddSingleton<OcpiTokenValidator>();
+
+        // Replace the default PlaintextTokenProtector with Data Protection-backed
+        // encryption for outbound CPO token storage. Consumers can override with
+        // AddTokenProtector<T>() if they need a different implementation.
+        builder.Services.RemoveAll<ITokenProtector>();
+        builder.Services.AddSingleton<ITokenProtector, DataProtectionTokenProtector>();
 
         // Protocol-level model validators — resolved by EndpointHelper at runtime.
         // Each validator implements IOcpiValidator<T> for all four OCPI version model types,

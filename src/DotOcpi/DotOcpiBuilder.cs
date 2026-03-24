@@ -60,4 +60,16 @@ public sealed class DotOcpiBuilder
         Services.AddSingleton<ICpoRegistryStore, TStore>();
         return this;
     }
+
+    /// <summary>
+    /// Registers a custom <see cref="ITokenProtector"/> implementation for encrypting
+    /// outbound CPO tokens at rest. Overrides the default <see cref="PlaintextTokenProtector"/>
+    /// (and the Data Protection-backed implementation registered by <c>AddAspNetCoreServer()</c>).
+    /// </summary>
+    public DotOcpiBuilder AddTokenProtector<TProtector>()
+        where TProtector : class, ITokenProtector
+    {
+        Services.AddSingleton<ITokenProtector, TProtector>();
+        return this;
+    }
 }

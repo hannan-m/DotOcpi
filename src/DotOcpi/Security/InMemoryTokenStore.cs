@@ -10,6 +10,7 @@ namespace DotOcpi.Security;
 public sealed class InMemoryTokenStore : ITokenStore
 {
     private readonly ConcurrentDictionary<string, TokenEntry> _tokens = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> _cpoTokens = new(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public ValueTask StoreAsync(
@@ -35,6 +36,31 @@ public sealed class InMemoryTokenStore : ITokenStore
     public ValueTask<bool> RemoveAsync(string tokenHash, CancellationToken cancellationToken = default)
     {
         var removed = _tokens.TryRemove(tokenHash, out _);
+        return ValueTask.FromResult(removed);
+    }
+
+    /// <inheritdoc />
+    public ValueTask StoreCpoTokenAsync(
+        string cpoId,
+        string protectedToken,
+        CancellationToken cancellationToken = default
+    )
+    {
+        _cpoTokens[cpoId] = protectedToken;
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public ValueTask<string?> GetCpoTokenAsync(string cpoId, CancellationToken cancellationToken = default)
+    {
+        _cpoTokens.TryGetValue(cpoId, out var token);
+        return ValueTask.FromResult(token);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<bool> RemoveCpoTokenAsync(string cpoId, CancellationToken cancellationToken = default)
+    {
+        var removed = _cpoTokens.TryRemove(cpoId, out _);
         return ValueTask.FromResult(removed);
     }
 }

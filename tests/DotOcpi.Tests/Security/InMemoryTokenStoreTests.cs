@@ -123,4 +123,65 @@ public class InMemoryTokenStoreTests
             entry.Should().NotBeNull();
         }
     }
+
+    // ── CPO token (outbound) storage ────────────────────────────────
+
+    [Fact]
+    public async Task StoreCpoToken_AndGet_ReturnsToken()
+    {
+        await _store.StoreCpoTokenAsync("DE:ALL", "protected-token");
+
+        var token = await _store.GetCpoTokenAsync("DE:ALL");
+
+        token.Should().Be("protected-token");
+    }
+
+    [Fact]
+    public async Task GetCpoToken_UnknownCpo_ReturnsNull()
+    {
+        var token = await _store.GetCpoTokenAsync("UNKNOWN");
+
+        token.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task StoreCpoToken_Overwrite_ReturnsLatest()
+    {
+        await _store.StoreCpoTokenAsync("DE:ALL", "token-v1");
+        await _store.StoreCpoTokenAsync("DE:ALL", "token-v2");
+
+        var token = await _store.GetCpoTokenAsync("DE:ALL");
+
+        token.Should().Be("token-v2");
+    }
+
+    [Fact]
+    public async Task RemoveCpoToken_Existing_ReturnsTrue()
+    {
+        await _store.StoreCpoTokenAsync("DE:ALL", "protected-token");
+
+        var removed = await _store.RemoveCpoTokenAsync("DE:ALL");
+
+        removed.Should().BeTrue();
+        var token = await _store.GetCpoTokenAsync("DE:ALL");
+        token.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RemoveCpoToken_Unknown_ReturnsFalse()
+    {
+        var removed = await _store.RemoveCpoTokenAsync("UNKNOWN");
+
+        removed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CpoTokenLookup_IsCaseInsensitive()
+    {
+        await _store.StoreCpoTokenAsync("DE:ALL", "protected-token");
+
+        var token = await _store.GetCpoTokenAsync("de:all");
+
+        token.Should().Be("protected-token");
+    }
 }

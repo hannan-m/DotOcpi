@@ -91,10 +91,6 @@ builder.Services.AddSingleton<ITokensSender, SampleTokensSender>();
 builder.Services.AddSingleton<ICommandsCallback, SampleCommandsCallback>();
 builder.Services.AddSingleton<IChargingProfilesCallback, SampleChargingProfilesCallback>();
 
-// ── Outbound Token Provider ──────────────────────────────────
-builder.Services.AddSingleton<SampleTokenProvider>();
-builder.Services.AddSingleton<IOutboundTokenProvider>(sp => sp.GetRequiredService<SampleTokenProvider>());
-
 var app = builder.Build();
 
 // ── Static Files + Routing ───────────────────────────────────
@@ -164,7 +160,7 @@ app.MapPost(
         ICredentialsClient credentialsClient,
         ICpoRegistry registry,
         ITokenStore tokenStore,
-        SampleTokenProvider tokenProvider
+        ITokenProtector tokenProtector
     ) =>
     {
         var f = await ctx.Request.ReadFormAsync();
@@ -226,7 +222,7 @@ app.MapPost(
             };
 
             registry.AddOrUpdate(connection);
-            tokenProvider.StoreToken(connection.ConnectionKey, cpoResponse.Token);
+            await tokenStore.StoreCpoTokenAsync(connection.ConnectionKey, tokenProtector.Protect(cpoResponse.Token));
 
             return Results.Content(
                 $"<span class='badge badge-success'>Registered {connection.ConnectionKey} (OCPI {negotiated.Value.ToVersionString()})</span>",
