@@ -100,7 +100,6 @@ builder.Services.AddDotOcpi(options =>
 {
     options.EnableHealthMonitoring = true;
     options.HealthMonitoringInterval = TimeSpan.FromMinutes(5);
-    options.StaleConnectionThreshold = TimeSpan.FromHours(24);
 });
 ```
 

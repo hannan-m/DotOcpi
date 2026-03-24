@@ -69,12 +69,10 @@ Target: **< 1 microsecond** per validation.
 The OCPI client uses optimized HTTP settings:
 
 ```csharp
-// Configured automatically by AddClient()
-// Default settings:
-HttpVersion.Version20
-MaxConnectionsPerServer = 10
+// Configured automatically by AddClient() via SocketsHttpHandler:
+MaxConnectionsPerServer = 20
 PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+// ConnectCallback validates resolved IPs against SSRF guard
 ```
 
 ### Stream-Based Responses

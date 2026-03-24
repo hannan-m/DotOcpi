@@ -172,6 +172,8 @@ This registers all OCPI module endpoints with the correct URL patterns for each 
 You must register implementations for the module interfaces you want to handle. Missing registrations produce a clear startup error:
 
 ```csharp
+using DotOcpi.Modules;
+
 // Required for receiving location pushes
 builder.Services.AddSingleton<ILocationsReceiver, MyLocationsReceiver>();
 

@@ -133,6 +133,32 @@ public async Task<OcpiResult> OnLocationPatchAsync(
 
     return OcpiResult.Success();
 }
+
+public async Task<OcpiResult> OnEvsePatchAsync(
+    OcpiRequestContext context, string locationId, string evseUid,
+    JsonElement patch, CancellationToken ct)
+{
+    var existing = await _db.GetEvseJsonAsync(context.CpoId, locationId, evseUid, ct);
+    if (existing is null)
+        return OcpiResult.Failure(new OcpiStatusCode(2003), "EVSE not found");
+
+    var merged = ApplyJsonMergePatch(existing.Value, patch);
+    await _db.SaveEvseJsonAsync(context.CpoId, locationId, evseUid, merged, ct);
+    return OcpiResult.Success();
+}
+
+public async Task<OcpiResult> OnConnectorPatchAsync(
+    OcpiRequestContext context, string locationId, string evseUid,
+    string connectorId, JsonElement patch, CancellationToken ct)
+{
+    var existing = await _db.GetConnectorJsonAsync(context.CpoId, locationId, evseUid, connectorId, ct);
+    if (existing is null)
+        return OcpiResult.Failure(new OcpiStatusCode(2003), "Connector not found");
+
+    var merged = ApplyJsonMergePatch(existing.Value, patch);
+    await _db.SaveConnectorJsonAsync(context.CpoId, locationId, evseUid, connectorId, merged, ct);
+    return OcpiResult.Success();
+}
 ```
 
 ## Pulling Locations

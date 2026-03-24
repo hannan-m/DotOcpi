@@ -71,6 +71,7 @@ Create handlers for the data you want to receive from CPOs. At minimum, implemen
 ```csharp
 using System.Text.Json;
 using DotOcpi;
+using DotOcpi.Modules;
 
 public class MyLocationsReceiver : ILocationsReceiver
 {

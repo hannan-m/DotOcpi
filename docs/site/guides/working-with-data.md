@@ -87,7 +87,7 @@ var json = JsonSerializer.Serialize(locationObject, options);
 // {"id":"LOC001","name":"Downtown Station","country_code":"DE",...}
 
 // Deserialize from wire format
-var location = JsonSerializer.Deserialize<Models.V2_2_1.Location>(json, options);
+var location = JsonSerializer.Deserialize<DotOcpi.Models.V2_2_1.Location>(json, options);
 ```
 
 Each version's options include:
@@ -155,8 +155,8 @@ public Task<OcpiResult> OnLocationPatchAsync(
     // Deserialize merged JSON back to the correct model type
     var updatedLocation = context.NegotiatedVersion switch
     {
-        OcpiVersion.V2_2_1 => (object)merged.Deserialize<Models.V2_2_1.Location>(options)!,
-        OcpiVersion.V2_1_1 => merged.Deserialize<Models.V2_1_1.Location>(options)!,
+        OcpiVersion.V2_2_1 => (object)merged.Deserialize<DotOcpi.Models.V2_2_1.Location>(options)!,
+        OcpiVersion.V2_1_1 => merged.Deserialize<DotOcpi.Models.V2_1_1.Location>(options)!,
         // ... other versions
         _ => throw new InvalidOperationException()
     };

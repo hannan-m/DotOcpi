@@ -127,7 +127,7 @@ DotOcpi.Models.V2_2_1/
 | CDR end time | `stop_date_time` | `stop_date_time` | `end_date_time` | `end_date_time` |
 | Session location | Embedded | Embedded | `location_id` | `location_id` |
 | Tariff PATCH | Yes | Yes | No (405) | No (405) |
-| `CancelReservation` | - | - | - | Yes |
+| `CancelReservation` | - | - | Yes | Yes |
 
 ## Version Selection at Runtime
 
