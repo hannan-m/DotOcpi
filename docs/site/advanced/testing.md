@@ -225,77 +225,14 @@ public async Task FullRegistrationHandshake()
 }
 ```
 
-## Testing with WebApplicationFactory
-
-```csharp
-public class MyAppTests : IAsyncLifetime
-{
-    private OcpiCpoSimulator _cpo = null!;
-    private WebApplicationFactory<Program> _factory = null!;
-
-    public async Task InitializeAsync()
-    {
-        _cpo = await OcpiCpoSimulator.CreateAsync(c =>
-        {
-            c.Locations = [new { id = "LOC1", name = "Test" }];
-        });
-
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureServices(services =>
-                {
-                    services.AddDotOcpi(options =>
-                    {
-                        options.SupportedVersions = [OcpiVersion.V2_2_1];
-                        options.DefaultEmspIdentity = new PartyIdentity("NL", "MSP");
-                        options.BaseUrl = new Uri("https://test.example.com/ocpi");
-                    })
-                    .AddInMemoryTokenStore()
-                    .AddInMemoryCpoRegistry()
-                    .AddClient();
-                });
-            });
-    }
-
-    public async Task DisposeAsync()
-    {
-        _factory.Dispose();
-        await _cpo.DisposeAsync();
-    }
-
-    [Fact]
-    public async Task CanRegisterAndPullLocations()
-    {
-        using var scope = _factory.Services.CreateScope();
-        var registrationClient = scope.ServiceProvider.GetRequiredService<IRegistrationClient>();
-
-        var result = await registrationClient.RegisterAsync(new RegistrationRequest(
-            VersionsUrl: $"{_cpo.BaseUrl}ocpi/versions",
-            TokenA: _cpo.TokenA,
-            EmspCountryCode: "NL",
-            EmspPartyId: "MSP",
-            EmspVersionsUrl: "https://test.example.com/ocpi/versions",
-            EmspBusinessName: "Test eMSP"));
-
-        result.Connection.Status.Should().Be(ConnectionStatus.Connected);
-    }
-}
-```
-
 ## Multi-Version Testing
 
 ```csharp
-public static IEnumerable<object[]> AllVersions =>
-[
-    [OcpiVersion.V2_0],
-    [OcpiVersion.V2_1_1],
-    [OcpiVersion.V2_2],
-    [OcpiVersion.V2_2_1],
-];
-
 [Theory]
-[MemberData(nameof(AllVersions))]
+[InlineData(OcpiVersion.V2_0)]
+[InlineData(OcpiVersion.V2_1_1)]
+[InlineData(OcpiVersion.V2_2)]
+[InlineData(OcpiVersion.V2_2_1)]
 public async Task Registration_Works_ForAllVersions(OcpiVersion version)
 {
     var server = await OcpiCpoSimulator.CreateAsync(c =>

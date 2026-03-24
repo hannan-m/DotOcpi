@@ -168,6 +168,9 @@ public class SqlCpoRegistryStore : ICpoRegistryStore
 
 ## Multi-Instance Support
 
+{: .warning }
+> These interfaces are defined as extension points but are **not yet integrated** into any built-in component. Registering implementations has no effect until a future release wires them in.
+
 For deployments with multiple application instances:
 
 ### ICacheInvalidationNotifier
@@ -217,7 +220,10 @@ public class RedisCacheInvalidationNotifier : ICacheInvalidationNotifier
 
 ## Health Monitoring
 
-Enable background health probing for stale connections:
+{: .warning }
+> `CpoHealthMonitor` exists but is **not yet registered as a hosted service**. These options configure thresholds but do not start background probing. Consumers can manually register it via `builder.Services.AddHostedService<CpoHealthMonitor>()` if needed.
+
+Configure health probing thresholds for stale connections:
 
 ```csharp
 builder.Services.AddDotOcpi(options =>

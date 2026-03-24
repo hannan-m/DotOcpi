@@ -124,7 +124,7 @@ flowchart LR
 | Scenario | Return |
 |:---------|:-------|
 | Session stored successfully | `OcpiResult.Success()` |
-| Unknown session (GET) | `OcpiResult<object>.Failure(OcpiStatusCode.UnknownLocation, "Session not found")` |
+| Unknown session (GET) | `OcpiResult<object>.Failure(new OcpiStatusCode(2003), "Session not found")` |
 | Charging preferences not supported (2.0/2.1.1) | The endpoint is not mapped for pre-2.2 versions |
 
 {: .tip }

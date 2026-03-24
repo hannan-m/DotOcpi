@@ -135,5 +135,5 @@ A tariff contains pricing elements with restrictions:
 |:---------|:-------|
 | Tariff stored/updated | `OcpiResult.Success()` |
 | Tariff deleted | `OcpiResult.Success()` |
-| Unknown tariff (GET/PATCH/DELETE) | `OcpiResult.Failure(OcpiStatusCode.UnknownLocation, "Tariff not found")` |
+| Unknown tariff (GET/PATCH/DELETE) | `OcpiResult.Failure(new OcpiStatusCode(2003), "Tariff not found")` |
 | PATCH on 2.2+ (not supported) | DotOcpi returns HTTP 405 automatically |

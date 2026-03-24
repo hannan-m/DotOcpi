@@ -224,11 +224,13 @@ public class MyTokensSender : ITokensSender
         // Query your token database with pagination
         var tokens = await QueryTokensAsync(dateFrom, dateTo, offset, limit, ct);
 
-        return new PaginatedResult<object>(
-            Items: tokens,
-            TotalCount: await CountTokensAsync(dateFrom, dateTo, ct),
-            Offset: offset,
-            Limit: limit);
+        return new PaginatedResult<object>
+        {
+            Items = tokens,
+            TotalCount = await CountTokensAsync(dateFrom, dateTo, ct),
+            Offset = offset,
+            Limit = limit,
+        };
     }
 }
 ```

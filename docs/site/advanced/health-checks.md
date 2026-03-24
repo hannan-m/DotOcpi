@@ -79,7 +79,10 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 ## Background Health Monitoring
 
-DotOcpi can automatically probe stale CPO connections:
+{: .warning }
+> `CpoHealthMonitor` exists in the library but is **not yet registered as a hosted service**. Enabling these options configures the thresholds but does not start background probing. This will be wired in a future release. For now, consumers can manually instantiate and register `CpoHealthMonitor` as a hosted service if needed.
+
+DotOcpi can be configured to probe stale CPO connections:
 
 ```csharp
 builder.Services.AddDotOcpi(options =>

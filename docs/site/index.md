@@ -54,10 +54,10 @@ All eMSP-side OCPI modules: Locations, Sessions, CDRs, Tariffs, Tokens, Commands
 
 | Package | Description |
 |:--------|:------------|
-| [`DotOcpi`](#) | Core: models, interfaces, token management, version negotiation |
-| [`DotOcpi.AspNetCore`](#) | ASP.NET Core server: middleware, endpoint routing, auth pipeline |
-| [`DotOcpi.Client`](#) | HttpClient-based OCPI client for CPO endpoints |
-| [`DotOcpi.Simulator`](#) | In-memory test CPO server for integration tests |
+| [`DotOcpi`](https://github.com/hannan-m/DotOcpi/tree/main/src/DotOcpi) | Core: models, interfaces, token management, version negotiation |
+| [`DotOcpi.AspNetCore`](https://github.com/hannan-m/DotOcpi/tree/main/src/DotOcpi.AspNetCore) | ASP.NET Core server: middleware, endpoint routing, auth pipeline |
+| [`DotOcpi.Client`](https://github.com/hannan-m/DotOcpi/tree/main/src/DotOcpi.Client) | HttpClient-based OCPI client for CPO endpoints |
+| [`DotOcpi.Simulator`](https://github.com/hannan-m/DotOcpi/tree/main/src/DotOcpi.Simulator) | In-memory test CPO server for integration tests |
 
 ## Quick Example
 
@@ -71,6 +71,7 @@ services.AddDotOcpi(options =>
 })
 .AddInMemoryTokenStore()
 .AddInMemoryCpoRegistry()
+.AddAspNetCoreServer()
 .AddClient();
 
 // 2. Register with a CPO

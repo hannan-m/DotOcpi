@@ -26,10 +26,10 @@ builder.Services.AddDotOcpi(options =>
     // Required: which OCPI versions your eMSP supports
     options.SupportedVersions = [OcpiVersion.V2_2_1, OcpiVersion.V2_1_1];
 
-    // Required: your default eMSP identity
+    // Recommended: your default eMSP identity (can also be set per-CPO during registration)
     options.DefaultEmspIdentity = new PartyIdentity("NL", "MSP");
 
-    // Required: your eMSP's public base URL (must be HTTPS in production)
+    // Recommended: your eMSP's public base URL (must be HTTPS if set)
     options.BaseUrl = new Uri("https://my-emsp.com/ocpi");
 
     // Optional: health monitoring

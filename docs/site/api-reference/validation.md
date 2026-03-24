@@ -96,12 +96,13 @@ DotOcpi includes validators for every OCPI module. Each validates all supported 
 
 ### Validation Pipeline
 
-The `OcpiValidationFilter<T>` endpoint filter runs automatically on incoming requests:
+Validation runs inline via `EndpointHelper.DeserializeOrRejectAsync()` at the start of each endpoint handler:
 
 ```
-Request → Deserialization → OcpiValidationFilter<T> → Your Handler
-                                    ↓ (if invalid)
-                           HTTP 400 + OCPI 2001
+Request → EndpointHelper.DeserializeOrRejectAsync() → Your Handler
+              ↓ JSON parse      ↓ DataAnnotations + IOcpiValidator<T>
+              ↓ (if invalid)    ↓ (if invalid)
+              HTTP 400 + OCPI 2001
 ```
 
 If validation fails, the CPO receives:

@@ -199,7 +199,7 @@ public class MyBackgroundService : BackgroundService
 
         // Pull data
         await foreach (var loc in _ocpiClient.Locations.GetAllLocationsAsync(
-            reg.Connection.ConnectionKey, ct: stoppingToken))
+            reg.Connection.ConnectionKey, cancellationToken: stoppingToken))
         {
             // Process location
         }
@@ -221,7 +221,7 @@ All client methods accept `CancellationToken`:
 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
 await foreach (var location in _ocpiClient.Locations.GetAllLocationsAsync(
-    "DE:CPO", ct: cts.Token))
+    "DE:CPO", cancellationToken: cts.Token))
 {
     // Cancellation stops pagination and disposes the HTTP response
 }

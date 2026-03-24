@@ -121,7 +121,7 @@ try
         EmspBusinessName: "My eMSP"
     ));
 
-    _logger.LogInformation("Registered with {Cpo} on {Version}", result.ConnectionKey, result.Version);
+    _logger.LogInformation("Registered with {Cpo} on {Version}", result.Connection.ConnectionKey, result.Connection.Version);
 }
 catch (OcpiRegistrationException ex)
 {

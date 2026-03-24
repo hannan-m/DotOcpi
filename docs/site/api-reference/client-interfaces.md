@@ -57,7 +57,7 @@ public class MyService
 
     public async Task DoWork(CancellationToken ct)
     {
-        await foreach (var loc in _ocpi.Locations.GetAllLocationsAsync("DE:CPO", ct: ct))
+        await foreach (var loc in _ocpi.Locations.GetAllLocationsAsync("DE:CPO", cancellationToken: ct))
         {
             // ...
         }
@@ -75,13 +75,13 @@ Orchestrates the OCPI credentials handshake.
 public interface IRegistrationClient
 {
     Task<RegistrationResult> RegisterAsync(
-        RegistrationRequest request, CancellationToken ct = default);
+        RegistrationRequest request, CancellationToken cancellationToken = default);
 
     Task<RegistrationResult> RotateCredentialsAsync(
-        CredentialRotationRequest request, CancellationToken ct = default);
+        CredentialRotationRequest request, CancellationToken cancellationToken = default);
 
     Task UnregisterAsync(
-        UnregisterRequest request, CancellationToken ct = default);
+        UnregisterRequest request, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -121,10 +121,10 @@ Low-level version and endpoint discovery.
 public interface IVersionDiscovery
 {
     Task<IReadOnlyList<VersionInfo>> GetVersionsAsync(
-        string versionsUrl, string token, CancellationToken ct = default);
+        string versionsUrl, string token, CancellationToken cancellationToken = default);
 
     Task<VersionDetailInfo> GetVersionDetailAsync(
-        string versionDetailUrl, string token, CancellationToken ct = default);
+        string versionDetailUrl, string token, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -149,10 +149,10 @@ public interface ILocationsClient
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken ct = default);
+        CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> GetLocationAsync(
-        string cpoId, string locationId, CancellationToken ct = default);
+        string cpoId, string locationId, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -189,10 +189,10 @@ public interface ISessionsClient
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken ct = default);
+        CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> PutChargingPreferencesAsync(
-        string cpoId, string sessionId, object preferences, CancellationToken ct = default);
+        string cpoId, string sessionId, object preferences, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -209,7 +209,7 @@ public interface ICdrsClient
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken ct = default);
+        CancellationToken cancellationToken = default);
 }
 ```
 
@@ -226,7 +226,7 @@ public interface ITariffsClient
         string cpoId,
         DateTimeOffset? dateFrom = null,
         DateTimeOffset? dateTo = null,
-        [EnumeratorCancellation] CancellationToken ct = default);
+        CancellationToken cancellationToken = default);
 }
 ```
 
@@ -240,10 +240,10 @@ Push EV driver tokens to CPOs.
 public interface ITokensClient
 {
     Task<OcpiResult> PushTokenAsync(
-        string cpoId, string tokenUid, object token, CancellationToken ct = default);
+        string cpoId, string tokenUid, object token, CancellationToken cancellationToken = default);
 
     Task<OcpiResult> PatchTokenAsync(
-        string cpoId, string tokenUid, JsonElement patch, CancellationToken ct = default);
+        string cpoId, string tokenUid, JsonElement patch, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -257,19 +257,19 @@ Send commands to CPOs.
 public interface ICommandsClient
 {
     Task<OcpiResult<object>> SendStartSessionAsync(
-        string cpoId, object command, CancellationToken ct = default);
+        string cpoId, object command, CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> SendStopSessionAsync(
-        string cpoId, object command, CancellationToken ct = default);
+        string cpoId, object command, CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> SendReserveNowAsync(
-        string cpoId, object command, CancellationToken ct = default);
+        string cpoId, object command, CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> SendUnlockConnectorAsync(
-        string cpoId, object command, CancellationToken ct = default);
+        string cpoId, object command, CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> SendCancelReservationAsync(
-        string cpoId, object command, CancellationToken ct = default);
+        string cpoId, object command, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -286,13 +286,13 @@ Manage charging profiles (2.2+ only).
 public interface IChargingProfilesClient
 {
     Task<OcpiResult<object>> SetChargingProfileAsync(
-        string cpoId, string sessionId, object profile, CancellationToken ct = default);
+        string cpoId, string sessionId, object profile, CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> DeleteChargingProfileAsync(
-        string cpoId, string sessionId, CancellationToken ct = default);
+        string cpoId, string sessionId, CancellationToken cancellationToken = default);
 
     Task<OcpiResult<object>> GetActiveChargingProfileAsync(
-        string cpoId, string sessionId, CancellationToken ct = default);
+        string cpoId, string sessionId, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -306,15 +306,15 @@ Low-level credentials operations. Used internally by `IRegistrationClient`.
 public interface ICredentialsClient
 {
     Task<CredentialsResponse> PostCredentialsAsync(
-        string url, string token, OcpiVersion version, object credentials,
-        CancellationToken ct = default);
+        string credentialsUrl, string token, OcpiVersion version, object ourCredentials,
+        CancellationToken cancellationToken = default);
 
     Task<CredentialsResponse> PutCredentialsAsync(
-        string url, string token, OcpiVersion version, object credentials,
-        CancellationToken ct = default);
+        string credentialsUrl, string token, OcpiVersion version, object ourCredentials,
+        CancellationToken cancellationToken = default);
 
     Task DeleteCredentialsAsync(
-        string url, string token, CancellationToken ct = default);
+        string credentialsUrl, string token, CancellationToken cancellationToken = default);
 }
 ```
 

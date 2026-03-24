@@ -117,6 +117,9 @@ builder.Services.AddDotOcpi(options => { /* ... */ })
 
 ## Multi-Instance Deployments
 
+{: .warning }
+> `ICacheInvalidationNotifier` and `IDistributedLockProvider` are defined as extension points but are **not yet integrated** into any built-in component. Registering implementations has no effect until a future release wires them into the registry and registration flows. The interfaces and examples below are provided for consumers who want to build their own coordination layer on top of these contracts.
+
 When running multiple application instances, you need cache invalidation to keep in-memory registries in sync.
 
 ### Implement ICacheInvalidationNotifier

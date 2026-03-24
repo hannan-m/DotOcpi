@@ -53,7 +53,7 @@ var result = await registrationClient.RegisterAsync(new RegistrationRequest(
 The orchestrator performs these steps:
 
 1. **Version Discovery** — `GET /versions` to discover the CPO's supported versions
-2. **Version Negotiation** — Select the highest mutually supported version (skipping deprecated 2.1 and 2.2)
+2. **Version Negotiation** — Select the highest mutually supported version (preferring 2.1.1 over 2.1, and 2.2.1 over 2.2)
 3. **Endpoint Discovery** — `GET /versions/{id}` to get the CPO's module endpoints
 4. **Credentials Exchange** — `POST /credentials` with Token A to register
 5. **Connection Storage** — Store the `CpoConnection` in the registry
@@ -68,7 +68,7 @@ The orchestrator performs these steps:
 | `EmspPartyId` | Yes | Your eMSP party ID (max 3 chars) |
 | `EmspVersionsUrl` | Yes | Your eMSP's versions endpoint URL |
 | `EmspBusinessName` | Yes | Your eMSP's business name |
-| `SupportedVersions` | No | Override which versions to offer (defaults to `DotOcpiOptions.SupportedVersions`) |
+| `SupportedVersions` | No | Override which versions to offer (if null, all versions are supported) |
 
 ### RegistrationResult
 
@@ -167,25 +167,27 @@ var credentialsUrl = detail.Endpoints
     .First(e => e.Identifier == "credentials")
     .Url;
 
+var ourCredentials = new DotOcpi.Models.V2_2_1.Credentials
+{
+    Token = TokenGenerator.Generate(),
+    Url = "https://my-emsp.com/ocpi/versions",
+    Roles =
+    [
+        new DotOcpi.Models.V2_2_1.CredentialsRole
+        {
+            Role = DotOcpi.Models.V2_2_1.Role.EMSP,
+            BusinessDetails = new DotOcpi.Models.V2_2_1.BusinessDetails { Name = "My eMSP" },
+            PartyId = new CiString("MSP"),
+            CountryCode = new CiString("NL"),
+        },
+    ],
+};
+
 var response = await credentialsClient.PostCredentialsAsync(
     credentialsUrl,
     tokenA,
     OcpiVersion.V2_2_1,
-    new
-    {
-        token = TokenGenerator.Generate(),
-        url = "https://my-emsp.com/ocpi/versions",
-        roles = new[]
-        {
-            new
-            {
-                role = "EMSP",
-                business_details = new { name = "My eMSP" },
-                party_id = "MSP",
-                country_code = "NL",
-            },
-        },
-    },
+    ourCredentials,
     cancellationToken);
 
 // response.Token is Token B from the CPO

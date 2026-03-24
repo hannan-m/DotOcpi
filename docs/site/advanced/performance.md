@@ -61,7 +61,6 @@ Target: **< 1 microsecond** per validation.
 | `readonly record struct` | `PartyIdentity`, `GeoLocation`, `OcpiStatusCode` |
 | `Span<T>` parsing | Authorization header, version strings |
 | `stackalloc` | SHA-256 output (32 bytes) |
-| `ArrayPool<byte>` | Temporary buffers for token hashing |
 | `static` lambdas | Endpoint handlers (no closures) |
 | `FrozenDictionary` | Module maps, version lookups (net8.0+) |
 
@@ -96,15 +95,6 @@ Large responses (paginated lists) are read as streams, not buffered:
 | `IAsyncEnumerable<T>` | Paginated results (yields without buffering) |
 | `[EnumeratorCancellation]` | All async enumerable parameters |
 | `CancellationToken` | Every public async method |
-
-## Response Compression
-
-```csharp
-// Enabled automatically for OCPI endpoints:
-// - Brotli + Gzip
-// - CompressionLevel.Fastest (latency over ratio)
-// - Skipped for small responses (< 1 KB)
-```
 
 ## GC Recommendations
 
