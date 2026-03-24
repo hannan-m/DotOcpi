@@ -305,13 +305,12 @@ public sealed class OcpiRequestContext
     public OcpiVersion NegotiatedVersion { get; init; }
     public CpoConnection Connection { get; init; }
     public string ModuleId { get; init; }
-    public HttpContext HttpContext { get; init; }
 
-    public bool IsFieldNotAvailable(string? value) => OcpiSentinel.IsNotAvailable(value);
+    public static bool IsFieldNotAvailable(string? value) => OcpiSentinel.IsNotAvailable(value);
 }
 ```
 
-> Note: `OcpiRequestContext` depends on `CpoConnection` (Phase 7). Create the class shell in Phase 2 with just the primitive properties; add `Connection` and `HttpContext` once Phases 7 and 9 are complete.
+> Note: `OcpiRequestContext` depends on `CpoConnection` (Phase 7). Create the class shell in Phase 2 with just the primitive properties; add `Connection` once Phase 7 is complete.
 
 #### 2.11 — PaginatedResult\<T\>
 
@@ -496,17 +495,15 @@ Test that:
 ```csharp
 // src/DotOcpi/Serialization/
 ├── OcpiDateTimeConverter.cs        // ISO 8601 / RFC 3339, UTC required
-├── CiStringJsonConverter.cs        // Preserves case on write, case-insensitive on read
-├── OcpiStatusEnumConverter.cs      // e.g., OUTOFORDER (no underscore)
-├── GeoLocationConverter.cs         // String lat/lon (not numbers)
-└── PriceConverter.cs               // 2.2+ Price object (excl_vat, incl_vat)
+├── CiStringConverter.cs             // Preserves case on write, case-insensitive on read
+└── GeoLocationConverter.cs         // String lat/lon (not numbers)
 ```
 
 Rules:
 - DateTime always serialized as UTC RFC 3339 (`2026-03-13T12:00:00Z`)
-- Enums serialize as uppercase OCPI strings
+- Enums serialize as uppercase OCPI strings via `UseStringEnumConverter = true` on the `JsonSerializerContext`
 - For enums where C# name differs from OCPI wire value, use per-enum custom converters
-- Where C# name matches OCPI value, use `JsonStringEnumConverter<TEnum>`
+- Where C# name matches OCPI value, the source-gen string enum converter handles it
 
 #### 4.2 — Per-Version JsonSerializerContext
 
@@ -515,7 +512,8 @@ Rules:
 ├── OcpiJsonContext_V2_0.cs
 ├── OcpiJsonContext_V2_1_1.cs
 ├── OcpiJsonContext_V2_2.cs
-└── OcpiJsonContext_V2_2_1.cs
+├── OcpiJsonContext_V2_2_1.cs
+└── OcpiRegistrationJsonContext.cs   // Shared context for registration/version types
 ```
 
 Each context:
@@ -554,14 +552,15 @@ tests/DotOcpi.Tests/Serialization/
 ├── DateTimeSerializationTests.cs     // RFC 3339 UTC
 ├── CiStringSerializationTests.cs     // Case preservation
 ├── NullHandlingTests.cs              // Optional fields omitted when null
-└── Fixtures/
-    ├── ocpi-spec-location-2.0.json
-    ├── ocpi-spec-location-2.1.1.json
-    ├── ocpi-spec-location-2.2.json
-    └── ocpi-spec-location-2.2.1.json
+└── Fixtures/Json/
+    ├── location-v2_2_1.json
+    ├── session-v2_2_1.json
+    ├── tariff-v2_2_1.json
+    ├── token-v2_2_1.json
+    └── connector-v2_2_1.json
 ```
 
-Fixture-based tests: deserialize known-good JSON from the OCPI spec examples.
+Fixture-based tests: deserialize known-good JSON from the OCPI spec examples. Only V2_2_1 fixtures are needed since it is the reference version with all fields.
 
 ### Acceptance Criteria
 
@@ -587,9 +586,9 @@ Fixture-based tests: deserialize known-good JSON from the OCPI spec examples.
 
 ```csharp
 // src/DotOcpi/Validation/IOcpiValidator.cs
-public interface IOcpiValidator<T>
+public interface IOcpiValidator<in T> : IOcpiValidator
 {
-    OcpiValidationResult Validate(T model, OcpiVersion version);
+    OcpiValidationResult Validate(T model);
 }
 
 public sealed class OcpiValidationResult
@@ -668,7 +667,7 @@ Each test file: valid model passes, each invalid condition produces the correct 
 #### 6.1 — TokenGenerator
 
 ```csharp
-// src/DotOcpi/TokenManagement/TokenGenerator.cs
+// src/DotOcpi/Security/TokenGenerator.cs
 public static class TokenGenerator
 {
     public static string Generate(int byteLength = 64);  // CSPRNG, base64url
@@ -678,10 +677,10 @@ public static class TokenGenerator
 #### 6.2 — TokenHasher
 
 ```csharp
-// src/DotOcpi/TokenManagement/TokenHasher.cs
-internal static class TokenHasher
+// src/DotOcpi/Security/TokenHasher.cs
+public static class TokenHasher
 {
-    public static string ComputeHash(ReadOnlySpan<char> rawToken);  // SHA-256, stackalloc
+    public static string Hash(string token);  // SHA-256, stackalloc
 }
 ```
 
@@ -690,29 +689,30 @@ Per [performance.md #5](performance.md#5-token-validation-hot-path): use `stacka
 #### 6.3 — ITokenStore
 
 ```csharp
-// src/DotOcpi/TokenManagement/ITokenStore.cs
+// src/DotOcpi/Security/ITokenStore.cs
 public interface ITokenStore
 {
-    Task StoreTokenAsync(string cpoId, string tokenHash, TokenPurpose purpose, CancellationToken ct);
-    Task<string?> GetTokenAsync(string cpoId, TokenPurpose purpose, CancellationToken ct);
-    Task RemoveTokenAsync(string cpoId, TokenPurpose purpose, CancellationToken ct);
+    ValueTask StoreAsync(string tokenHash, TokenPurpose purpose, string partyId, CancellationToken ct);
+    ValueTask<TokenEntry?> FindAsync(string tokenHash, CancellationToken ct);
+    ValueTask<bool> RemoveAsync(string tokenHash, CancellationToken ct);
+    ValueTask RotateTokenAsync(string oldTokenHash, string newTokenHash, TokenPurpose purpose, string partyId, CancellationToken ct);
 }
 
-public enum TokenPurpose { TokenA, InboundTokenB, OutboundTokenC }
+public enum TokenPurpose { TokenA, TokenB, TokenC }
 ```
 
 #### 6.4 — InMemoryTokenStore
 
 ```csharp
-// src/DotOcpi/TokenManagement/InMemoryTokenStore.cs
+// src/DotOcpi/Security/InMemoryTokenStore.cs
 public sealed class InMemoryTokenStore : ITokenStore { ... }  // ConcurrentDictionary
 ```
 
-#### 6.5 — TokenValidator
+#### 6.5 — OcpiTokenValidator
 
 ```csharp
-// src/DotOcpi/TokenManagement/TokenValidator.cs
-internal sealed class TokenValidator
+// src/DotOcpi/Security/OcpiTokenValidator.cs
+internal sealed class OcpiTokenValidator
 {
     public ValueTask<TokenValidationResult> ValidateAsync(
         StringValues authHeader, CancellationToken ct);
@@ -738,10 +738,10 @@ public static class AuthorizationHeaderParser
 ### Tests
 
 ```
-tests/DotOcpi.Tests/TokenManagement/
+tests/DotOcpi.Tests/Security/
 ├── TokenGeneratorTests.cs         // Length, format, uniqueness, CSPRNG
 ├── TokenHasherTests.cs            // Consistency, different inputs
-├── TokenValidatorTests.cs         // Valid/missing/invalid token paths
+├── OcpiTokenValidatorTests.cs     // Valid/missing/invalid token paths
 ├── InMemoryTokenStoreTests.cs     // CRUD lifecycle
 └── AuthorizationHeaderParserTests.cs  // Edge cases
 ```
@@ -755,7 +755,7 @@ Security tests (`[Trait("Category", "Security")]`):
 
 - [ ] TokenGenerator produces 64+ byte, base64url tokens
 - [ ] TokenHasher uses SHA-256
-- [ ] TokenValidator uses `FixedTimeEquals` — never `==` or `.Equals()`
+- [ ] OcpiTokenValidator uses `FixedTimeEquals` — never `==` or `.Equals()`
 - [ ] InMemoryTokenStore is thread-safe
 - [ ] All security tests pass
 - [ ] Zero allocation on cache-hit path (token validation)
@@ -774,21 +774,23 @@ Security tests (`[Trait("Category", "Security")]`):
 
 ```csharp
 // src/DotOcpi/Registry/CpoConnection.cs
-public sealed class CpoConnection
+public sealed record CpoConnection
 {
-    public string Id { get; init; }
-    public PartyIdentity CpoIdentity { get; init; }
-    public PartyIdentity EmspIdentity { get; init; }
-    public OcpiVersion NegotiatedVersion { get; init; }
-    public IReadOnlyDictionary<string, Uri> ModuleEndpoints { get; init; }
-    public string InboundTokenHash { get; init; }
-    public string OutboundTokenHash { get; init; }
-    public ConnectionStatus Status { get; set; }
-    public BusinessDetails? BusinessDetails { get; init; }
-    public long Version { get; set; }
-    public DateTimeOffset LastActivity { get; set; }
-    public DateTimeOffset LastUpdated { get; set; }
-    public DateTimeOffset CreatedAt { get; init; }
+    public required string CpoCountryCode { get; init; }
+    public required string CpoPartyId { get; init; }
+    public required string EmspCountryCode { get; init; }
+    public required string EmspPartyId { get; init; }
+    public required OcpiVersion Version { get; init; }
+    public required IReadOnlyDictionary<string, string> ModuleEndpoints { get; init; }
+    public required string TokenBHash { get; init; }
+    public required ConnectionStatus Status { get; init; }
+    public required DateTimeOffset CreatedAt { get; init; }
+    public required DateTimeOffset UpdatedAt { get; init; }
+    public string? CpoVersionsUrl { get; init; }
+    public string? EmspVersionsUrl { get; init; }
+    public DateTimeOffset? LastHealthCheckAt { get; init; }
+    public long ConcurrencyVersion { get; init; }
+    public string ConnectionKey => $"{CpoCountryCode}:{CpoPartyId}";
 }
 ```
 
@@ -1023,7 +1025,7 @@ Cached in `HttpContext.Items` — built once by the auth filter, available to al
 
 Endpoint filter that runs on every OCPI endpoint:
 1. Extract `Authorization: Token <base64>` header
-2. Validate via `TokenValidator`
+2. Validate via `OcpiTokenValidator`
 3. On success: build `OcpiRequestContext`, store in `HttpContext.Items`
 4. On failure: return `401` with OCPI status 2002
 
@@ -1052,21 +1054,53 @@ Per [strategies.md #5](strategies.md#5-rate-limiting-strategy):
 // src/DotOcpi.AspNetCore/Filters/OcpiRateLimitFilter.cs
 ```
 
-Endpoint filter (enabled via `AddRateLimiting()` in Phase 13). Implemented as a filter rather than middleware because it needs access to the authenticated `CpoConnection`. Uses ASP.NET Core's built-in rate limiting with per-CPO partitioning:
+Endpoint filter (enabled by passing `OcpiRateLimitOptions` to `MapOcpiEndpoints()`). Implemented as a filter rather than middleware because it needs access to the authenticated `CpoConnection`. Uses ASP.NET Core's built-in rate limiting with per-CPO partitioning:
 - Partition key: CPO ID from `OcpiRequestContext`
 - Returns HTTP 429 with `Retry-After` header and OCPI status 2000
 - Default: sliding window, 100 requests/minute per CPO
 
 ```csharp
-// src/DotOcpi.AspNetCore/RateLimiting/OcpiRateLimitOptions.cs
+// src/DotOcpi.AspNetCore/Filters/OcpiRateLimitFilter.cs (OcpiRateLimitOptions defined in same file)
 public sealed class OcpiRateLimitOptions
 {
-    public int DefaultPermitLimit { get; set; } = 100;
-    public TimeSpan DefaultWindow { get; set; } = TimeSpan.FromMinutes(1);
+    public int MaxRequestsPerWindow { get; set; } = 100;
+    public TimeSpan Window { get; set; } = TimeSpan.FromMinutes(1);
 }
 ```
 
-#### 9.6 — OcpiExceptionMiddleware
+#### 9.6 — OcpiContextFilter
+
+```csharp
+// src/DotOcpi.AspNetCore/Filters/OcpiContextFilter.cs
+```
+
+Endpoint filter that builds and attaches `OcpiRequestContext` to the request pipeline, making it available to downstream handlers.
+
+#### 9.7 — OcpiBodySizeLimitFilter
+
+```csharp
+// src/DotOcpi.AspNetCore/Filters/OcpiBodySizeLimitFilter.cs
+```
+
+Endpoint filter that enforces maximum request body sizes per HTTP method (PUT: 256 KB, POST: 1 MB, PATCH: 64 KB, etc.). Prevents OOM from oversized payloads.
+
+#### 9.8 — OcpiMetricsFilter
+
+```csharp
+// src/DotOcpi.AspNetCore/Filters/OcpiMetricsFilter.cs
+```
+
+Endpoint filter that records OCPI-specific metrics (request counts, durations, auth failures) using `OcpiMetrics`.
+
+#### 9.9 — OcpiSecurityHeadersMiddleware
+
+```csharp
+// src/DotOcpi.AspNetCore/Middleware/OcpiSecurityHeadersMiddleware.cs
+```
+
+Middleware that adds security response headers to all OCPI responses: `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `X-Frame-Options: DENY`.
+
+#### 9.10 — OcpiExceptionMiddleware
 
 Middleware that catches unhandled exceptions and converts to OCPI response envelope:
 - `OcpiSerializationException` → 400 + OCPI 2001
@@ -1152,50 +1186,40 @@ tests/DotOcpi.AspNetCore.Tests/
 
 Consumer interfaces were declared in Phase 2 (core package). In this phase, implement the **server-side handlers** that deserialize, validate, and invoke them.
 
-#### 10.2 — Version-Dispatched Handlers
+#### 10.2 — ModuleHandlerFactory and ModuleHandler\<T\>
 
-For each receiver module, create an internal handler per version:
+Instead of per-version handler files, a consolidated `ModuleHandlerFactory` with generic `ModuleHandler<T>` handles version dispatch:
 
 ```
 src/DotOcpi.AspNetCore/Handlers/
+├── ModuleHandlerFactory.cs          # Resolves handler by module ID + version
+├── ModuleHandler.cs                 # Generic handler: deserialize → validate → invoke consumer
+├── IModuleHandler.cs                # Handler interface
+├── EndpointHelper.cs                # Shared endpoint utilities
 ├── Locations/
-│   ├── LocationsHandler_V2_0.cs
-│   ├── LocationsHandler_V2_1_1.cs
-│   ├── LocationsHandler_V2_2.cs
-│   └── LocationsHandler_V2_2_1.cs
+│   └── LocationsEndpoints.cs
 ├── Sessions/
-│   └── ...
+│   └── SessionsEndpoints.cs
 ├── Cdrs/
-│   └── ...
+│   └── CdrsEndpoints.cs
 ├── Tariffs/
-│   └── ...
+│   └── TariffsEndpoints.cs
 ├── Tokens/
-│   └── ...
+│   └── TokensEndpoints.cs
 ├── Commands/
-│   └── ...
+│   └── CommandsEndpoints.cs
 ├── ChargingProfiles/
-│   └── ...
+│   └── ChargingProfilesEndpoints.cs
 └── Credentials/
-    └── CredentialsHandler.cs       # Uses RegistrationOrchestrator from Phase 8
+    └── CredentialsEndpoints.cs      # Uses RegistrationOrchestrator from Phase 8
 ```
 
-Each handler:
-1. Deserializes request body using version-specific `JsonSerializerContext`
-2. Validates using version-specific `IOcpiValidator<T>`
-3. Invokes consumer interface method (passing `object` for version-dispatched models)
-4. Returns OCPI response envelope
-
-#### 10.3 — Module Handler Factory
-
-```csharp
-// src/DotOcpi.AspNetCore/Handlers/ModuleHandlerFactory.cs
-internal sealed class ModuleHandlerFactory
-{
-    public IModuleHandler GetHandler(string moduleId, OcpiVersion version);
-}
-```
-
-Uses strategy pattern to select correct handler based on negotiated version from `OcpiRequestContext`.
+Each endpoint delegates to `ModuleHandlerFactory`, which:
+1. Selects the correct `ModuleHandler<T>` based on negotiated version from `OcpiRequestContext`
+2. Deserializes request body using version-specific `JsonSerializerContext`
+3. Validates using version-specific `IOcpiValidator<T>`
+4. Invokes consumer interface method (passing `object` for version-dispatched models)
+5. Returns OCPI response envelope
 
 Per [strategies.md #3](strategies.md#3-minimal-api-integration): Add OpenAPI metadata (`Accepts<T>`, `Produces<T>`, `WithTags`, `WithName`) to all registered endpoints for API documentation.
 
