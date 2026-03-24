@@ -73,6 +73,11 @@ public sealed partial class CpoHealthMonitor : BackgroundService
     private async Task CheckAllConnectionsAsync(CancellationToken cancellationToken)
     {
         var connections = _registry.GetAll();
+        var checked_ = 0;
+        var healthy_ = 0;
+        var failed_ = 0;
+        var restored_ = 0;
+        var markedOffline_ = 0;
 
         foreach (var connection in connections)
         {
@@ -82,14 +87,17 @@ public sealed partial class CpoHealthMonitor : BackgroundService
             if (connection.Status is ConnectionStatus.Unregistered or ConnectionStatus.Pending)
                 continue;
 
+            checked_++;
             var healthy = await CheckCpoHealthAsync(connection, cancellationToken).ConfigureAwait(false);
 
             if (healthy)
             {
+                healthy_++;
                 _failureCounts.TryRemove(connection.ConnectionKey, out _);
 
                 if (connection.Status == ConnectionStatus.Offline)
                 {
+                    restored_++;
                     var restored = connection with
                     {
                         Status = ConnectionStatus.Connected,
@@ -105,15 +113,17 @@ public sealed partial class CpoHealthMonitor : BackgroundService
                     _registry.AddOrUpdate(updated);
                 }
 
-                LogHealthCheck(_logger, connection.ConnectionKey, connection.Version);
+                LogHealthCheck(_logger, connection.ConnectionKey, connection.Version, connection.Status);
             }
             else
             {
+                failed_++;
                 var failures = _failureCounts.AddOrUpdate(connection.ConnectionKey, 1, (_, c) => c + 1);
                 LogHealthCheckFailed(_logger, connection.ConnectionKey, failures, _maxFailures);
 
                 if (failures >= _maxFailures && connection.Status == ConnectionStatus.Connected)
                 {
+                    markedOffline_++;
                     var offline = connection with
                     {
                         Status = ConnectionStatus.Offline,
@@ -123,6 +133,11 @@ public sealed partial class CpoHealthMonitor : BackgroundService
                     LogCpoMarkedOffline(_logger, connection.ConnectionKey, failures);
                 }
             }
+        }
+
+        if (checked_ > 0)
+        {
+            LogHealthCycleSummary(_logger, checked_, healthy_, failed_, restored_, markedOffline_);
         }
     }
 
@@ -153,8 +168,26 @@ public sealed partial class CpoHealthMonitor : BackgroundService
     [LoggerMessage(Level = LogLevel.Error, Message = "CPO health check cycle failed")]
     private static partial void LogHealthCheckCycleFailed(ILogger logger, Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Health check passed for {ConnectionKey} ({Version})")]
-    private static partial void LogHealthCheck(ILogger logger, string connectionKey, OcpiVersion version);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Health check passed for {ConnectionKey} ({Version}, {Status})")]
+    private static partial void LogHealthCheck(
+        ILogger logger,
+        string connectionKey,
+        OcpiVersion version,
+        ConnectionStatus status
+    );
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Health check cycle: {TotalChecked} checked, {TotalHealthy} healthy, {TotalFailed} failed, {TotalRestored} restored, {TotalMarkedOffline} marked offline"
+    )]
+    private static partial void LogHealthCycleSummary(
+        ILogger logger,
+        int totalChecked,
+        int totalHealthy,
+        int totalFailed,
+        int totalRestored,
+        int totalMarkedOffline
+    );
 
     [LoggerMessage(
         Level = LogLevel.Warning,

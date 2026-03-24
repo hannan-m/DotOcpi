@@ -35,38 +35,46 @@ public sealed class OcpiRegistryHealthCheck : IHealthCheck
 
         var connected = 0;
         var total = 0;
+        var data = new Dictionary<string, object>();
 
         foreach (var connection in connections)
         {
             if (connection.Status is ConnectionStatus.Unregistered)
-            {
                 continue;
-            }
 
             total++;
             if (connection.Status is ConnectionStatus.Connected)
-            {
                 connected++;
-            }
+
+            data[connection.ConnectionKey] = new
+            {
+                status = connection.Status.ToString(),
+                version = connection.Version.ToVersionString(),
+                lastHealthCheck = connection.LastHealthCheckAt?.ToString("o"),
+            };
         }
 
         if (total == 0)
         {
-            return Task.FromResult(HealthCheckResult.Unhealthy("No active CPO connections."));
+            return Task.FromResult(HealthCheckResult.Unhealthy("No active CPO connections.", data: data));
         }
 
         if (connected == total)
         {
-            return Task.FromResult(HealthCheckResult.Healthy($"All {connected} CPO connections are active."));
+            return Task.FromResult(
+                HealthCheckResult.Healthy($"All {connected} CPO connections are active.", data: data)
+            );
         }
 
         if (connected == 0)
         {
             return Task.FromResult(
-                HealthCheckResult.Unhealthy($"All {total} CPO connections are offline or suspended.")
+                HealthCheckResult.Unhealthy($"All {total} CPO connections are offline or suspended.", data: data)
             );
         }
 
-        return Task.FromResult(HealthCheckResult.Degraded($"{connected}/{total} CPO connections are active."));
+        return Task.FromResult(
+            HealthCheckResult.Degraded($"{connected}/{total} CPO connections are active.", data: data)
+        );
     }
 }

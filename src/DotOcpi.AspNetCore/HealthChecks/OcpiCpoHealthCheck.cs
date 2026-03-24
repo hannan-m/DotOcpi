@@ -35,14 +35,41 @@ public sealed class OcpiCpoHealthCheck : IHealthCheck
             return Task.FromResult(HealthCheckResult.Unhealthy($"CPO '{_connectionKey}' not found in registry."));
         }
 
+        var data = new Dictionary<string, object>
+        {
+            ["connectionKey"] = connection.ConnectionKey,
+            ["status"] = connection.Status.ToString(),
+            ["version"] = connection.Version.ToVersionString(),
+            ["cpoIdentity"] = $"{connection.CpoCountryCode}:{connection.CpoPartyId}",
+        };
+        if (connection.LastHealthCheckAt.HasValue)
+            data["lastHealthCheck"] = connection.LastHealthCheckAt.Value.ToString("o");
+        if (connection.CpoVersionsUrl is not null)
+            data["versionsUrl"] = connection.CpoVersionsUrl;
+
         var result = connection.Status switch
         {
-            ConnectionStatus.Connected => HealthCheckResult.Healthy($"CPO '{_connectionKey}' is connected."),
-            ConnectionStatus.Offline => HealthCheckResult.Degraded($"CPO '{_connectionKey}' is offline."),
-            ConnectionStatus.Pending => HealthCheckResult.Degraded($"CPO '{_connectionKey}' registration is pending."),
-            ConnectionStatus.Suspended => HealthCheckResult.Unhealthy($"CPO '{_connectionKey}' is suspended."),
-            ConnectionStatus.Unregistered => HealthCheckResult.Unhealthy($"CPO '{_connectionKey}' is unregistered."),
-            _ => HealthCheckResult.Unhealthy($"CPO '{_connectionKey}' has unknown status: {connection.Status}."),
+            ConnectionStatus.Connected => HealthCheckResult.Healthy(
+                $"CPO '{_connectionKey}' is connected.",
+                data: data
+            ),
+            ConnectionStatus.Offline => HealthCheckResult.Degraded($"CPO '{_connectionKey}' is offline.", data: data),
+            ConnectionStatus.Pending => HealthCheckResult.Degraded(
+                $"CPO '{_connectionKey}' registration is pending.",
+                data: data
+            ),
+            ConnectionStatus.Suspended => HealthCheckResult.Unhealthy(
+                $"CPO '{_connectionKey}' is suspended.",
+                data: data
+            ),
+            ConnectionStatus.Unregistered => HealthCheckResult.Unhealthy(
+                $"CPO '{_connectionKey}' is unregistered.",
+                data: data
+            ),
+            _ => HealthCheckResult.Unhealthy(
+                $"CPO '{_connectionKey}' has unknown status: {connection.Status}.",
+                data: data
+            ),
         };
 
         return Task.FromResult(result);
